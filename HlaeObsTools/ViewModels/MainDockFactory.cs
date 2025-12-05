@@ -60,7 +60,7 @@ public class MainDockFactory : Factory
         var topCenter = new VideoDisplayDockViewModel { Id = "TopCenter", Title = "Video Stream" };
         var topRight = new NetConsoleDockViewModel { Id = "TopRight", Title = "Console" };
         var bottomLeft = new PlaceholderDockViewModel { Id = "BottomLeft", Title = "Events" };
-        var bottomRight = new PlaceholderDockViewModel { Id = "BottomRight", Title = "Timeline" };
+        var bottomRight = new CampathsDockViewModel { Id = "BottomRight", Title = "Campaths" };
 
         // Inject WebSocket and UDP services into video display
         topCenter.SetWebSocketClient(_webSocketClient);

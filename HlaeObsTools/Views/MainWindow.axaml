@@ -23,6 +23,11 @@
             <vd:VideoDisplayDockView />
         </DataTemplate>
 
+        <!-- Data template for CampathsDockViewModel -->
+        <DataTemplate DataType="vmd:CampathsDockViewModel">
+            <vd:CampathsDockView />
+        </DataTemplate>
+
         <!-- Data template for NetConsoleDockViewModel -->
         <DataTemplate DataType="vmd:NetConsoleDockViewModel">
             <vd:NetConsoleDockView />

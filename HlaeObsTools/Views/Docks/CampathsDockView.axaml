@@ -1,0 +1,203 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HlaeObsTools.ViewModels.Docks"
+             xmlns:c="using:HlaeObsTools.Converters"
+             x:Class="HlaeObsTools.Views.Docks.CampathsDockView"
+             x:CompileBindings="False">
+
+  <UserControl.Resources>
+    <c:ScaleToWidthConverter x:Key="ScaleToWidthConverter" BaseWidth="260"/>
+    <c:ScaleToHeightConverter x:Key="ScaleToHeightConverter" BaseWidth="260" AspectRatio="1.7777777778"/>
+  </UserControl.Resources>
+
+  <!-- Root layout: only columns, no rows -->
+  <Grid ColumnDefinitions="220,*">
+    <!-- Groups panel (left) -->
+    <Border Grid.Column="0"
+            Background="#1A1A1A"
+            BorderBrush="#2E2E2E"
+            BorderThickness="0,0,1,0"
+            Padding="10"
+            Focusable="True">
+      <!-- Internal layout for groups -->
+      <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+        <TextBlock Grid.Row="0"
+                   Text="Groups"
+                   FontWeight="SemiBold"
+                   Foreground="#E0E0E0"/>
+
+        <Button Grid.Row="1"
+                Content="Add Group"
+                Command="{Binding AddGroupCommand}" />
+
+        <ListBox Grid.Row="2"
+                 ItemsSource="{Binding SelectedProfile.Groups}"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 SelectionMode="Single"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Border Background="#222"
+                      Padding="8"
+                      Margin="0,0,0,8"
+                      DragDrop.AllowDrop="True"
+                      DragDrop.DragOver="OnGroupDragOver"
+                      DragDrop.Drop="OnGroupDrop"
+                      PointerPressed="OnGroupPointerPressed">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="6" Grid.Column="0">
+                    <TextBlock Text="{Binding Name}"
+                               Foreground="#E0E0E0"
+                               FontWeight="SemiBold"
+                               FontSize="30"/>
+                  </StackPanel>
+
+                  <Viewbox Grid.Column="1"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           Stretch="Uniform"
+                           StretchDirection="Both">
+                    <StackPanel Spacing="6" Width="50">
+                      <Button Content="Del"
+                              Command="{Binding DataContext.DeleteGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              CommandParameter="{Binding}" />
+                      <Button Content="{Binding Mode}"
+                              Command="{Binding DataContext.ToggleGroupModeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              CommandParameter="{Binding}" />
+                      <Button Content="View"
+                              Command="{Binding DataContext.ViewGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              CommandParameter="{Binding}" />
+                    </StackPanel>
+                  </Viewbox>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+    <!-- Main body (right) -->
+    <DockPanel Grid.Column="1"
+               Margin="10,0,0,0"
+               Focusable="True">
+
+      <!-- Top controls -->
+      <StackPanel DockPanel.Dock="Top"
+                  Orientation="Horizontal"
+                  Spacing="8"
+                  Margin="0,0,0,8">
+        <Button Content="Add Profile" Command="{Binding AddProfileCommand}" />
+        <Button Content="Add Campath" Command="{Binding AddCampathCommand}" />
+        <Button Content="Populate from Folder" Command="{Binding PopulateFromFolderCommand}" />
+
+        <ComboBox Width="180"
+                  Padding="10,6"
+                  VerticalAlignment="Center"
+                  ItemsSource="{Binding Profiles}"
+                  SelectedItem="{Binding SelectedProfile}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Name}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <Button Content="Remove Profile" Command="{Binding RemoveProfileCommand}" />
+
+        <StackPanel Orientation="Horizontal"
+                    Spacing="4"
+                    VerticalAlignment="Center">
+          <TextBlock Text="Scale"
+                     Foreground="#E0E0E0"
+                     VerticalAlignment="Center"/>
+          <Slider Width="120"
+                  Minimum="0.5"
+                  Maximum="2.0"
+                  Value="{Binding Scale}" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Scrollable campaths area -->
+      <ScrollViewer x:Name="CampathScrollViewer"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding SelectedProfile.Campaths}"
+                      VerticalAlignment="Top"
+                      HorizontalAlignment="Left">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel HorizontalAlignment="Left"
+                         Width="{Binding ElementName=CampathScrollViewer, Path=Viewport.Width}" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Background="#222"
+                      BorderBrush="#2E2E2E"
+                      BorderThickness="1"
+                      Padding="0"
+                      Margin="6"
+                      DragDrop.AllowDrop="True"
+                      DragDrop.Drop="OnCampathDrop"
+                      DragDrop.DragOver="OnCampathDragOver"
+                      PointerPressed="OnCampathPointerPressed"
+                      Width="{Binding DataContext.Scale, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ScaleToWidthConverter}}"
+                      Height="{Binding DataContext.Scale, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ScaleToHeightConverter}}">
+                <Grid>
+                  <Image Source="{Binding Thumbnail}"
+                         Stretch="UniformToFill" />
+
+                  <Border Background="Transparent" Padding="8">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <Grid.Effect>
+                        <DropShadowEffect Color="#AA000000"
+                                          BlurRadius="6"
+                                          OffsetX="0"
+                                          OffsetY="0" />
+                      </Grid.Effect>
+
+                      <TextBlock Grid.Column="0"
+                                 Text="{Binding Name}"
+                                 Foreground="#E0E0E0"
+                                 FontWeight="SemiBold"
+                                 FontSize="20"
+                                 VerticalAlignment="Top"
+                                 HorizontalAlignment="Left"/>
+
+                      <Viewbox Grid.Column="1"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               Stretch="Uniform"
+                               StretchDirection="Both">
+                        <StackPanel Spacing="6" Width="80">
+                          <Button Content="Remove"
+                                  Command="{Binding DataContext.RemoveCampathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="Rename"
+                                  Command="{Binding DataContext.RenameCampathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="Browse"
+                                  Command="{Binding DataContext.BrowseCampathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="Image"
+                                  Command="{Binding DataContext.BrowseImageCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="Screen"
+                                  Command="{Binding DataContext.ScreenShotCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </Viewbox>
+                    </Grid>
+                  </Border>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </DockPanel>
+  </Grid>
+</UserControl>
