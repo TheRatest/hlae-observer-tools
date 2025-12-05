@@ -19,6 +19,15 @@ public partial class CampathsDockView : UserControl
 
     private const string CampathDragFormat = "campath-item";
     private const string GroupDragFormat = "group-item";
+    private const double CampathDragThreshold = 4.0;
+    private CampathItemViewModel? _campathPressedItem;
+    private Point? _campathPressPoint;
+    private bool _campathDragInitiated;
+    private IPointer? _campathPointer;
+    private CampathGroupViewModel? _groupPressed;
+    private Point? _groupPressPoint;
+    private bool _groupDragInitiated;
+    private IPointer? _groupPointer;
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
@@ -64,6 +73,9 @@ public partial class CampathsDockView : UserControl
         cancelButton.Click += (_, _) => dialog.Close(false);
 
         var host = TopLevel.GetTopLevel(this) as Window;
+        if (host == null)
+            return null;
+
         await dialog.ShowDialog<bool?>(host);
         return result;
     }
@@ -76,6 +88,8 @@ public partial class CampathsDockView : UserControl
             AllowMultiple = false
         };
         var host = TopLevel.GetTopLevel(this) as Window;
+        if (host == null)
+            return null;
         var result = await dlg.ShowAsync(host);
         return result?.FirstOrDefault();
     }
@@ -87,6 +101,8 @@ public partial class CampathsDockView : UserControl
             Title = title
         };
         var host = TopLevel.GetTopLevel(this) as Window;
+        if (host == null)
+            return null;
         return await dlg.ShowAsync(host);
     }
 
@@ -96,19 +112,83 @@ public partial class CampathsDockView : UserControl
             return;
 
         var host = TopLevel.GetTopLevel(this) as Window;
-        var window = new CampathGroupViewWindow(vm, group);
-        window.Show(host);
+        if (host != null)
+        {
+            var window = new CampathGroupViewWindow(vm, group);
+            window.Show(host);
+        }
     }
 
-    private async void OnCampathPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void OnCampathPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed &&
             sender is Control control &&
             control.DataContext is CampathItemViewModel campathVm)
         {
+            _campathPressedItem = campathVm;
+            _campathPressPoint = e.GetPosition(this);
+            _campathDragInitiated = false;
+            _campathPointer = e.Pointer;
+            _campathPointer.Capture(control);
+            e.Handled = true;
+        }
+    }
+
+    private async void OnCampathPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_campathPressedItem == null || _campathDragInitiated || !_campathPressPoint.HasValue)
+            return;
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            ResetCampathPointerState(sender as Control);
+            return;
+        }
+
+        var current = e.GetPosition(this);
+        var delta = current - _campathPressPoint.Value;
+        var distance = Math.Sqrt(delta.X * delta.X + delta.Y * delta.Y);
+
+        if (distance < CampathDragThreshold)
+            return;
+
+        if (sender is Control control && control.DataContext is CampathItemViewModel campathVm && ReferenceEquals(campathVm, _campathPressedItem))
+        {
+            _campathDragInitiated = true;
             var data = new DataObject();
             data.Set(CampathDragFormat, campathVm);
             await DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
+            ResetCampathPointerState(control);
+        }
+    }
+
+    private async void OnCampathPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton == MouseButton.Left && _campathPressedItem != null && !_campathDragInitiated)
+        {
+            if (DataContext is CampathsDockViewModel vm)
+            {
+                await vm.PlayCampathAsync(_campathPressedItem);
+            }
+        }
+
+        ResetCampathPointerState(sender as Control);
+    }
+
+    private void OnCampathPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        ResetCampathPointerState(sender as Control);
+    }
+
+    private void ResetCampathPointerState(Control? control = null)
+    {
+        _campathPressedItem = null;
+        _campathPressPoint = null;
+        _campathDragInitiated = false;
+        if (_campathPointer != null)
+        {
+            _campathPointer.Capture(null);
+            _campathPointer = null;
         }
     }
 
@@ -178,15 +258,76 @@ public partial class CampathsDockView : UserControl
         }
     }
 
-    private async void OnGroupPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void OnGroupPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed &&
             sender is Control control &&
             control.DataContext is CampathGroupViewModel groupVm)
         {
+            _groupPressed = groupVm;
+            _groupPressPoint = e.GetPosition(this);
+            _groupDragInitiated = false;
+            _groupPointer = e.Pointer;
+            _groupPointer.Capture(control);
+            e.Handled = true;
+        }
+    }
+
+    private async void OnGroupPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_groupPressed == null || _groupDragInitiated || !_groupPressPoint.HasValue)
+            return;
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            ResetGroupPointerState(sender as Control);
+            return;
+        }
+
+        var current = e.GetPosition(this);
+        var delta = current - _groupPressPoint.Value;
+        var distance = Math.Sqrt(delta.X * delta.X + delta.Y * delta.Y);
+
+        if (distance < CampathDragThreshold)
+            return;
+
+        if (sender is Control control && control.DataContext is CampathGroupViewModel groupVm && ReferenceEquals(groupVm, _groupPressed))
+        {
+            _groupDragInitiated = true;
             var data = new DataObject();
             data.Set(GroupDragFormat, groupVm);
             await DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
+            ResetGroupPointerState(control);
+        }
+    }
+
+    private async void OnGroupPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton == MouseButton.Left && _groupPressed != null && !_groupDragInitiated)
+        {
+            if (DataContext is CampathsDockViewModel vm)
+            {
+                await vm.PlayCampathGroupAsync(_groupPressed);
+            }
+        }
+
+        ResetGroupPointerState(sender as Control);
+    }
+
+    private void OnGroupPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        ResetGroupPointerState(sender as Control);
+    }
+
+    private void ResetGroupPointerState(Control? control = null)
+    {
+        _groupPressed = null;
+        _groupPressPoint = null;
+        _groupDragInitiated = false;
+        if (_groupPointer != null)
+        {
+            _groupPointer.Capture(null);
+            _groupPointer = null;
         }
     }
 }

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Dock.Model.Mvvm.Controls;
 using HlaeObsTools.Services.Campaths;
+using HlaeObsTools.Services.WebSocket;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -25,6 +27,9 @@ public class CampathsDockViewModel : Tool
     private readonly DelegateCommand _deleteGroupCommand;
     private readonly DelegateCommand _toggleGroupModeCommand;
     private readonly DelegateCommand _viewGroupCommand;
+    private HlaeWebSocketClient? _webSocketClient;
+    private readonly Dictionary<Guid, int> _groupPlaybackIndex = new();
+    private readonly Random _random = new();
 
     private ObservableCollection<CampathProfileViewModel> _profiles = new();
     private CampathProfileViewModel? _selectedProfile;
@@ -200,6 +205,12 @@ public class CampathsDockViewModel : Tool
     public Func<string, Task<string?>> BrowseFolderAsync { get; set; } = _ => Task.FromResult<string?>(null);
 
     public event EventHandler<CampathGroupViewModel?>? ViewGroupRequested;
+    public HlaeWebSocketClient? WebSocketClient => _webSocketClient;
+
+    public void SetWebSocketClient(HlaeWebSocketClient client)
+    {
+        _webSocketClient = client;
+    }
 
     public void RemoveCampath(CampathItemViewModel? item)
     {
@@ -318,6 +329,69 @@ public class CampathsDockViewModel : Tool
 
         group.AddCampath(campath.Id);
         Save();
+    }
+
+    public async Task PlayCampathAsync(CampathItemViewModel? campath)
+    {
+        if (campath == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(campath.FilePath))
+        {
+            Console.WriteLine($"Campath '{campath.Name}' has no file path set.");
+            return;
+        }
+
+        if (_webSocketClient == null)
+        {
+            Console.WriteLine("WebSocket client not available for campath playback.");
+            return;
+        }
+
+        await _webSocketClient.SendCampathPlayAsync(campath.FilePath);
+    }
+
+    public async Task PlayCampathGroupAsync(CampathGroupViewModel? group)
+    {
+        if (group == null || SelectedProfile == null)
+            return;
+
+        if (_webSocketClient == null)
+        {
+            Console.WriteLine("WebSocket client not available for campath playback.");
+            return;
+        }
+
+        var campathLookup = SelectedProfile.Campaths.ToDictionary(c => c.Id, c => c);
+        var available = group.CampathIds
+            .Select(id => campathLookup.TryGetValue(id, out var c) ? c : null)
+            .Where(c => c != null && !string.IsNullOrWhiteSpace(c.FilePath))
+            .Cast<CampathItemViewModel>()
+            .ToList();
+
+        if (available.Count == 0)
+        {
+            Console.WriteLine($"Group '{group.Name}' has no playable campaths.");
+            return;
+        }
+
+        CampathItemViewModel selected;
+        if (group.Mode == CampathGroupMode.Seq)
+        {
+            var nextIndex = 0;
+            if (_groupPlaybackIndex.TryGetValue(group.Id, out var lastIndex))
+            {
+                nextIndex = (lastIndex + 1) % available.Count;
+            }
+            _groupPlaybackIndex[group.Id] = nextIndex;
+            selected = available[nextIndex];
+        }
+        else
+        {
+            selected = available[_random.Next(available.Count)];
+        }
+
+        await _webSocketClient.SendCampathPlayAsync(selected.FilePath!);
     }
 
     public void MoveGroup(CampathGroupViewModel source, CampathGroupViewModel? target)

@@ -44,7 +44,10 @@
                       DragDrop.AllowDrop="True"
                       DragDrop.DragOver="OnGroupDragOver"
                       DragDrop.Drop="OnGroupDrop"
-                      PointerPressed="OnGroupPointerPressed">
+                      PointerPressed="OnGroupPointerPressed"
+                      PointerMoved="OnGroupPointerMoved"
+                      PointerReleased="OnGroupPointerReleased"
+                      PointerCaptureLost="OnGroupPointerCaptureLost">
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel Spacing="6" Grid.Column="0">
                     <TextBlock Text="{Binding Name}"
@@ -144,6 +147,9 @@
                       DragDrop.Drop="OnCampathDrop"
                       DragDrop.DragOver="OnCampathDragOver"
                       PointerPressed="OnCampathPointerPressed"
+                      PointerMoved="OnCampathPointerMoved"
+                      PointerReleased="OnCampathPointerReleased"
+                      PointerCaptureLost="OnCampathPointerCaptureLost"
                       Width="{Binding DataContext.Scale, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ScaleToWidthConverter}}"
                       Height="{Binding DataContext.Scale, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ScaleToHeightConverter}}">
                 <Grid>

@@ -65,6 +65,7 @@ public class MainDockFactory : Factory
         // Inject WebSocket and UDP services into video display
         topCenter.SetWebSocketClient(_webSocketClient);
         topCenter.SetInputSender(_inputSender);
+        bottomRight.SetWebSocketClient(_webSocketClient);
 
         // Wrap tools in ToolDocks for proper docking behavior
         // Top-left: Controls - 1:1 aspect ratio (roughly square)

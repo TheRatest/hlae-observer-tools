@@ -97,12 +97,40 @@ public class HlaeWebSocketClient : IDisposable
     {
         var command = new
         {
-            type = "cmd",
+            type = "command",
             name = commandName,
             args = args
         };
 
         await SendJsonAsync(command);
+    }
+
+    /// <summary>
+    /// Execute a console command on the HLAE side.
+    /// </summary>
+    public async Task SendExecCommandAsync(string command)
+    {
+        var message = new
+        {
+            type = "exec_cmd",
+            cmd = command
+        };
+
+        await SendJsonAsync(message);
+    }
+
+    /// <summary>
+    /// Request campath playback on the HLAE side.
+    /// </summary>
+    public async Task SendCampathPlayAsync(string campathPath)
+    {
+        var message = new
+        {
+            type = "campath_play",
+            cmd = campathPath
+        };
+
+        await SendJsonAsync(message);
     }
 
     /// <summary>
