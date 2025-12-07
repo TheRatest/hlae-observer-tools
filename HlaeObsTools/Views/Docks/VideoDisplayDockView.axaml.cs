@@ -8,6 +8,9 @@ using System;
 using WebViewControl;
 using System.ComponentModel;
 using Avalonia.Threading;
+using Avalonia.Controls.Shapes;
+using Avalonia.Media;
+using System.Linq;
 
 namespace HlaeObsTools.Views.Docks;
 
@@ -19,6 +22,7 @@ public partial class VideoDisplayDockView : UserControl
     private DispatcherTimer? _hudCssTimer;
     private INotifyPropertyChanged? _currentVmNotifier;
     private bool _cursorHidden;
+    private bool _isShiftPressed;
 
     public VideoDisplayDockView()
     {
@@ -36,12 +40,19 @@ public partial class VideoDisplayDockView : UserControl
             VideoContainer.SizeChanged += (_, _) => UpdateSharedTextureAspectSize();
         }
         this.AttachedToVisualTree += (_, _) => UpdateSharedTextureAspectSize();
+        if (SpeedScaleCanvas != null)
+        {
+            SpeedScaleCanvas.SizeChanged += (_, _) => UpdateSpeedScale();
+        }
 
         if (SharedTextureHost != null)
         {
             SharedTextureHost.RightButtonDown += SharedTextureHost_RightButtonDown;
             SharedTextureHost.RightButtonUp += SharedTextureHost_RightButtonUp;
         }
+
+        KeyDown += OnKeyDown;
+        KeyUp += OnKeyUp;
 
         DataContextChanged += OnDataContextChanged;
     }
@@ -192,6 +203,40 @@ public partial class VideoDisplayDockView : UserControl
         EndFreecam();
     }
 
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
+        {
+            if (!_isShiftPressed)
+            {
+                _isShiftPressed = true;
+                UpdateSpeedScale();
+
+                if (DataContext is VideoDisplayDockViewModel vm)
+                {
+                    vm.ApplySpeedMultiplier(2.0);
+                }
+            }
+        }
+    }
+
+    private void OnKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
+        {
+            if (_isShiftPressed)
+            {
+                _isShiftPressed = false;
+                UpdateSpeedScale();
+
+                if (DataContext is VideoDisplayDockViewModel vm)
+                {
+                    vm.ApplySpeedMultiplier(1.0);
+                }
+            }
+        }
+    }
+
     private void UpdateSharedTextureAspectSize()
     {
         if (SharedTextureAspect == null || VideoContainer == null) return;
@@ -286,6 +331,8 @@ public partial class VideoDisplayDockView : UserControl
             notifier.PropertyChanged += OnViewModelPropertyChanged;
         }
 
+        UpdateSpeedScale();
+
         SyncHudState();
 
         if (DataContext is VideoDisplayDockViewModel vm)
@@ -336,6 +383,10 @@ public partial class VideoDisplayDockView : UserControl
                     vm.StopStream();
                 }
             }
+        }
+        else if (e.PropertyName == nameof(VideoDisplayDockViewModel.FreecamSpeed))
+        {
+            UpdateSpeedScale();
         }
     }
 
@@ -428,5 +479,106 @@ public partial class VideoDisplayDockView : UserControl
         {
             // ignore injection errors
         }
+    }
+
+    private void UpdateSpeedScale()
+    {
+        if (SpeedScaleCanvas == null || DataContext is not VideoDisplayDockViewModel vm)
+            return;
+
+        var height = SpeedScaleCanvas.Bounds.Height;
+        if (height <= 0 || vm.SpeedTicks == null || vm.SpeedTicks.Count == 0)
+            return;
+
+        SpeedScaleCanvas.Children.Clear();
+
+        const double marginTop = 12;
+        const double marginBottom = 12;
+        const double lineX = 12;
+        const double tickLong = 14;
+        const double tickShort = 10;
+        double usableHeight = Math.Max(0, height - marginTop - marginBottom);
+
+        // Main ruler line
+        var spine = new Line
+        {
+            StartPoint = new Point(lineX, marginTop),
+            EndPoint = new Point(lineX, height - marginBottom),
+            Stroke = Brushes.White,
+            StrokeThickness = 3,
+            StrokeLineCap = PenLineCap.Round
+        };
+        SpeedScaleCanvas.Children.Add(spine);
+
+        // Tick marks
+        var ticks = vm.SpeedTicks.ToList();
+        for (int i = 0; i < ticks.Count; i++)
+        {
+            var value = ticks[i];
+            double norm = (value - vm.SpeedMin) / (vm.SpeedMax - vm.SpeedMin);
+            double y = marginTop + usableHeight * (1 - norm);
+            double len = i % 2 == 0 ? tickLong : tickShort;
+
+            var tick = new Line
+            {
+                StartPoint = new Point(lineX, y),
+                EndPoint = new Point(lineX + len, y),
+                Stroke = Brushes.White,
+                StrokeThickness = 2,
+                StrokeLineCap = PenLineCap.Square
+            };
+            SpeedScaleCanvas.Children.Add(tick);
+        }
+
+        // Top/bottom labels
+        var topLabel = CreateLabel(vm.SpeedMax.ToString("0"), lineX + tickLong + 6, marginTop - 2, 12, FontWeight.SemiBold);
+        var bottomLabel = CreateLabel(vm.SpeedMin.ToString("0"), lineX + tickLong + 6, height - marginBottom - 14, 12, FontWeight.SemiBold);
+        SpeedScaleCanvas.Children.Add(topLabel);
+        SpeedScaleCanvas.Children.Add(bottomLabel);
+
+        // Current speed indicator
+        double speedMultiplier = _isShiftPressed ? 2.0 : 1.0;
+        var effectiveSpeed = vm.FreecamSpeed * speedMultiplier;
+        var clampedSpeed = Math.Clamp(effectiveSpeed, vm.SpeedMin, vm.SpeedMax);
+        double currentNorm = (clampedSpeed - vm.SpeedMin) / (vm.SpeedMax - vm.SpeedMin);
+        double arrowY = marginTop + usableHeight * (1 - currentNorm);
+
+        var arrow = new Polygon
+        {
+            Fill = _isShiftPressed ? Brushes.Yellow : Brushes.White,
+            Points = new Points(new[]
+            {
+                new Point(lineX + tickLong + 8, arrowY),
+                new Point(lineX + tickLong + 36, arrowY - 7),
+                new Point(lineX + tickLong + 36, arrowY + 7)
+            })
+        };
+        SpeedScaleCanvas.Children.Add(arrow);
+
+        var speedText = _isShiftPressed ? $"{effectiveSpeed:F1}" : vm.FreecamSpeedText;
+        var speedLabel = CreateLabel(speedText, 0, 0, 14, FontWeight.Bold);
+        if (_isShiftPressed)
+        {
+            speedLabel.Foreground = Brushes.Yellow;
+        }
+        speedLabel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var labelSize = speedLabel.DesiredSize;
+        Canvas.SetLeft(speedLabel, lineX + tickLong + 8 - labelSize.Width - 8);
+        Canvas.SetTop(speedLabel, arrowY - labelSize.Height / 2);
+        SpeedScaleCanvas.Children.Add(speedLabel);
+    }
+
+    private TextBlock CreateLabel(string text, double left, double top, double fontSize, FontWeight weight)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            Foreground = Brushes.White,
+            FontSize = fontSize,
+            FontWeight = weight
+        };
+        Canvas.SetLeft(label, left);
+        Canvas.SetTop(label, top);
+        return label;
     }
 }

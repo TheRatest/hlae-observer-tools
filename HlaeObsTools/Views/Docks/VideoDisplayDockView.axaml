@@ -53,6 +53,15 @@
                             HorizontalAlignment="Stretch"
                             VerticalAlignment="Stretch"
                             IsHitTestVisible="False"/>
+
+                    <!-- Freecam speed scale overlay -->
+                    <Canvas x:Name="SpeedScaleCanvas"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Stretch"
+                            Width="90"
+                            Margin="0,16,16,16"
+                            IsHitTestVisible="False"
+                            Panel.ZIndex="5"/>
                 </Grid>
             </Border>
 

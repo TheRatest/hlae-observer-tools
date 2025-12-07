@@ -26,11 +26,15 @@ public class RawInputHandler : IDisposable
     private bool _mouseLeftButton;
     private bool _mouseRightButton;
     private bool _mouseMiddleButton;
+    private bool _mouseButton4;
+    private bool _mouseButton5;
 
     // Previous button state to detect changes
     private bool _prevMouseLeftButton;
     private bool _prevMouseRightButton;
     private bool _prevMouseMiddleButton;
+    private bool _prevMouseButton4;
+    private bool _prevMouseButton5;
 
     // Track keyboard state changes between flushes
     private bool _keysDirty;
@@ -153,6 +157,16 @@ public class RawInputHandler : IDisposable
             if ((mouse.usButtonFlags & 0x0020) != 0) // RI_MOUSE_MIDDLE_BUTTON_UP
                 _mouseMiddleButton = false;
 
+            if ((mouse.usButtonFlags & 0x0040) != 0) // RI_MOUSE_BUTTON_4_DOWN
+                _mouseButton4 = true;
+            if ((mouse.usButtonFlags & 0x0080) != 0) // RI_MOUSE_BUTTON_4_UP
+                _mouseButton4 = false;
+
+            if ((mouse.usButtonFlags & 0x0100) != 0) // RI_MOUSE_BUTTON_5_DOWN
+                _mouseButton5 = true;
+            if ((mouse.usButtonFlags & 0x0200) != 0) // RI_MOUSE_BUTTON_5_UP
+                _mouseButton5 = false;
+
             // Mouse wheel
             if ((mouse.usButtonFlags & 0x0400) != 0) // RI_MOUSE_WHEEL
             {
@@ -164,7 +178,15 @@ public class RawInputHandler : IDisposable
 
     private void ProcessKeyboardInput(ref RAWKEYBOARD keyboard)
     {
-        var key = (Keys)keyboard.VKey;
+        ushort vKey = keyboard.VKey;
+        if (vKey == 0 || vKey > byte.MaxValue)
+            return;
+
+        // 0xFF (VK__none_) is sent for overrun conditions; ignore to avoid false positives
+        if (vKey == 0xFF)
+            return;
+
+        var key = (Keys)vKey;
         bool isKeyDown = (keyboard.Flags & 0x01) == 0; // RI_KEY_MAKE = 0, RI_KEY_BREAK = 1
 
         lock (_lockObject)
@@ -197,6 +219,7 @@ public class RawInputHandler : IDisposable
 
         int dx, dy, wheel;
         bool left, right, middle;
+        bool button4, button5;
         Keys[] keys;
         bool buttonChanged;
         bool hasMovement;
@@ -207,7 +230,9 @@ public class RawInputHandler : IDisposable
             buttonChanged =
                 _mouseLeftButton != _prevMouseLeftButton ||
                 _mouseRightButton != _prevMouseRightButton ||
-                _mouseMiddleButton != _prevMouseMiddleButton;
+                _mouseMiddleButton != _prevMouseMiddleButton ||
+                _mouseButton4 != _prevMouseButton4 ||
+                _mouseButton5 != _prevMouseButton5;
 
             hasMovement = _mouseDx != 0 || _mouseDy != 0 || _mouseWheel != 0;
 
@@ -224,6 +249,8 @@ public class RawInputHandler : IDisposable
             left = _mouseLeftButton;
             right = _mouseRightButton;
             middle = _mouseMiddleButton;
+            button4 = _mouseButton4;
+            button5 = _mouseButton5;
 
             keys = new Keys[_currentlyPressedKeys.Count];
             _currentlyPressedKeys.CopyTo(keys);
@@ -236,12 +263,14 @@ public class RawInputHandler : IDisposable
             _prevMouseLeftButton = _mouseLeftButton;
             _prevMouseRightButton = _mouseRightButton;
             _prevMouseMiddleButton = _mouseMiddleButton;
+            _prevMouseButton4 = _mouseButton4;
+            _prevMouseButton5 = _mouseButton5;
             _keysDirty = false;
         }
 
         // Push into UDP sender outside of lock
         _inputSender.UpdateMouse(dx, dy, wheel);
-        _inputSender.UpdateMouseButtons(left, right, middle);
+        _inputSender.UpdateMouseButtons(left, right, middle, button4, button5);
         _inputSender.UpdateKeys(keys);
     }
 

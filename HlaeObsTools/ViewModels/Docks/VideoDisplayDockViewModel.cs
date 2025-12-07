@@ -11,6 +11,8 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using System.ComponentModel;
 using HlaeObsTools.Services.Video.Shared;
+using System.Collections.Generic;
+using System.Text.Json;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -41,6 +43,10 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     private BrowserSourcesSettings? _browserSettings;
     private bool _useSharedTextureCpu;
     private bool _useD3DHost;
+    private double _freecamSpeed;
+    private HlaeWebSocketClient? _speedWebSocketClient;
+    private readonly IReadOnlyList<double> _speedTicks;
+    private double _speedMultiplier = 1.0;
 
     public bool ShowNoSignal => !_isStreaming && !_useSharedTextureCpu && !_useD3DHost;
     public bool CanStart => !_isStreaming && !_useSharedTextureCpu && !_useD3DHost;
@@ -106,6 +112,7 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         CanClose = false;
         CanFloat = true;
         CanPin = true;
+        _speedTicks = BuildTicks();
     }
 
     /// <summary>
@@ -114,6 +121,9 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     public void SetWebSocketClient(HlaeWebSocketClient client)
     {
         _webSocketClient = client;
+        _speedWebSocketClient = client;
+        _speedWebSocketClient.MessageReceived -= OnWebSocketMessage;
+        _speedWebSocketClient.MessageReceived += OnWebSocketMessage;
     }
 
     /// <summary>
@@ -383,6 +393,10 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
 
     public void Dispose()
     {
+        if (_speedWebSocketClient != null)
+        {
+            _speedWebSocketClient.MessageReceived -= OnWebSocketMessage;
+        }
         StopStream();
     }
 
@@ -422,5 +436,71 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         StatusText = $"Shared texture ({receiver.Dimensions.Width}x{receiver.Dimensions.Height})";
         _lastFrameTime = DateTime.Now;
         _frameCount = 0;
+    }
+
+    public double FreecamSpeed
+    {
+        get => _freecamSpeed;
+        private set
+        {
+            var clamped = Math.Clamp(value, SpeedMin, SpeedMax);
+            if (Math.Abs(clamped - _freecamSpeed) < 0.001) return;
+            _freecamSpeed = clamped;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(FreecamSpeedText));
+        }
+    }
+
+    public string FreecamSpeedText => ((int)Math.Round(FreecamSpeed)).ToString();
+    public double SpeedMin => 10.0;
+    public double SpeedMax => 1000.0;
+    public IReadOnlyList<double> SpeedTicks => _speedTicks;
+
+    private IReadOnlyList<double> BuildTicks()
+    {
+        var ticks = new List<double>();
+        const int tickCount = 12; // includes min/max
+        double step = (SpeedMax - SpeedMin) / (tickCount - 1);
+        for (int i = 0; i < tickCount; i++)
+        {
+            ticks.Add(SpeedMax - i * step);
+        }
+        return ticks;
+    }
+
+    private void OnWebSocketMessage(object? sender, string message)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(message);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("type", out var typeProp) &&
+                typeProp.GetString() == "freecam_speed" &&
+                root.TryGetProperty("speed", out var speedProp) &&
+                speedProp.TryGetDouble(out var speed))
+            {
+                Dispatcher.UIThread.Post(() => FreecamSpeed = speed, DispatcherPriority.Background);
+            }
+        }
+        catch
+        {
+            // Ignore malformed messages
+        }
+    }
+
+    /// <summary>
+    /// Apply a speed multiplier (e.g., 2.0 when Shift is held)
+    /// </summary>
+    public async void ApplySpeedMultiplier(double multiplier)
+    {
+        if (_webSocketClient == null)
+            return;
+
+        _speedMultiplier = multiplier;
+        var effectiveSpeed = _freecamSpeed * _speedMultiplier;
+
+        // Send the modified speed to HLAE
+        var command = $"freecam_speed {effectiveSpeed:F1}";
+        await _webSocketClient.SendCommandAsync(command);
     }
 }

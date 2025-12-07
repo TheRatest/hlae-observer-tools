@@ -32,7 +32,9 @@ public class HlaeInputSender : IDisposable
     private bool _mouseLeft;
     private bool _mouseRight;
     private bool _mouseMiddle;
-    private ulong _keysDown;
+    private bool _mouseButton4;
+    private bool _mouseButton5;
+    private readonly byte[] _keyBitmap = new byte[InputPacket.KeyBitmapSize];
 
     private readonly object _inputLock = new();
 
@@ -105,13 +107,15 @@ public class HlaeInputSender : IDisposable
     /// <summary>
     /// Update mouse buttons
     /// </summary>
-    public void UpdateMouseButtons(bool left, bool right, bool middle)
+    public void UpdateMouseButtons(bool left, bool right, bool middle, bool button4, bool button5)
     {
         lock (_inputLock)
         {
             _mouseLeft = left;
             _mouseRight = right;
             _mouseMiddle = middle;
+            _mouseButton4 = button4;
+            _mouseButton5 = button5;
         }
     }
 
@@ -120,79 +124,23 @@ public class HlaeInputSender : IDisposable
     /// </summary>
     public void UpdateKeys(Keys[] keysDown)
     {
-        ulong keyBits = 0;
+        Span<byte> bitmap = stackalloc byte[InputPacket.KeyBitmapSize];
+        bitmap.Clear();
 
         foreach (var key in keysDown)
         {
-            switch (key)
-            {
-                case Keys.W:
-                    keyBits |= (1UL << KeyBits.W);
-                    break;
-                case Keys.A:
-                    keyBits |= (1UL << KeyBits.A);
-                    break;
-                case Keys.S:
-                    keyBits |= (1UL << KeyBits.S);
-                    break;
-                case Keys.D:
-                    keyBits |= (1UL << KeyBits.D);
-                    break;
-                case Keys.Space:
-                    keyBits |= (1UL << KeyBits.Space);
-                    break;
-                case Keys.ControlKey:
-                case Keys.LControlKey:
-                case Keys.RControlKey:
-                    keyBits |= (1UL << KeyBits.Ctrl);
-                    break;
-                case Keys.ShiftKey:
-                case Keys.LShiftKey:
-                case Keys.RShiftKey:
-                    keyBits |= (1UL << KeyBits.Shift);
-                    break;
-                case Keys.Q:
-                    keyBits |= (1UL << KeyBits.Q);
-                    break;
-                case Keys.E:
-                    keyBits |= (1UL << KeyBits.E);
-                    break;
-                case Keys.D1:
-                    keyBits |= (1UL << KeyBits.Key1);
-                    break;
-                case Keys.D2:
-                    keyBits |= (1UL << KeyBits.Key2);
-                    break;
-                case Keys.D3:
-                    keyBits |= (1UL << KeyBits.Key3);
-                    break;
-                case Keys.D4:
-                    keyBits |= (1UL << KeyBits.Key4);
-                    break;
-                case Keys.D5:
-                    keyBits |= (1UL << KeyBits.Key5);
-                    break;
-                case Keys.D6:
-                    keyBits |= (1UL << KeyBits.Key6);
-                    break;
-                case Keys.D7:
-                    keyBits |= (1UL << KeyBits.Key7);
-                    break;
-                case Keys.D8:
-                    keyBits |= (1UL << KeyBits.Key8);
-                    break;
-                case Keys.D9:
-                    keyBits |= (1UL << KeyBits.Key9);
-                    break;
-                case Keys.D0:
-                    keyBits |= (1UL << KeyBits.Key0);
-                    break;
-            }
+            int vk = ((int)key) & 0xFF; // Keys enum maps to VK codes in low byte
+            if (vk <= 0 || vk >= 256)
+                continue;
+
+            int byteIndex = vk >> 3;
+            int bitIndex = vk & 0x07;
+            bitmap[byteIndex] |= (byte)(1 << bitIndex);
         }
 
         lock (_inputLock)
         {
-            _keysDown = keyBits;
+            bitmap.CopyTo(_keyBitmap);
         }
     }
 
@@ -223,6 +171,9 @@ public class HlaeInputSender : IDisposable
                 InputPacket packet;
                 lock (_inputLock)
                 {
+                    var keyBitmapSnapshot = new byte[InputPacket.KeyBitmapSize];
+                    Array.Copy(_keyBitmap, keyBitmapSnapshot, InputPacket.KeyBitmapSize);
+
                     packet = new InputPacket
                     {
                         Sequence = _sequence++,
@@ -232,9 +183,11 @@ public class HlaeInputSender : IDisposable
                         MouseButtons = (byte)(
                             (_mouseLeft ? 0x01 : 0x00) |
                             (_mouseRight ? 0x02 : 0x00) |
-                            (_mouseMiddle ? 0x04 : 0x00)
+                            (_mouseMiddle ? 0x04 : 0x00) |
+                            (_mouseButton4 ? 0x08 : 0x00) |
+                            (_mouseButton5 ? 0x10 : 0x00)
                         ),
-                        KeysDown = _keysDown,
+                        KeyBitmap = keyBitmapSnapshot,
                         Timestamp = (ulong)_stopwatch.Elapsed.TotalMicroseconds
                     };
 
