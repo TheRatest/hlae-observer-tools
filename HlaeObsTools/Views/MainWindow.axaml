@@ -10,7 +10,10 @@
         Width="1600"
         Height="900"
         MinWidth="800"
-        MinHeight="600">
+        MinHeight="600"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="40">
 
     <Window.DataTemplates>
         <!-- Data template for VideoDisplayDockViewModel -->
@@ -44,7 +47,110 @@
         </DataTemplate>
     </Window.DataTemplates>
 
-    <Grid>
-        <dock:DockControl Layout="{Binding Layout}" />
+    <Grid RowDefinitions="Auto,*">
+        <!-- Custom Title Bar -->
+        <Border Grid.Row="0"
+                Background="#2D2D2D"
+                IsHitTestVisible="True"
+                Height="40"
+                PointerPressed="OnTitleBarPointerPressed"
+                DoubleTapped="OnTitleBarDoubleTapped">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <!-- Menu Bar -->
+                <Menu Grid.Column="0"
+                      VerticalAlignment="Center"
+                      Background="Transparent"
+                      Margin="10,0,0,0"
+                      DoubleTapped="OnMenuDoubleTapped">
+                    <MenuItem Header="File" Padding="12,6">
+                        <MenuItem Header="Exit" InputGesture="Alt+F4" />
+                    </MenuItem>
+                    <MenuItem Header="View" Padding="12,6">
+                        <MenuItem Header="Video Display" />
+                        <MenuItem Header="Radar" />
+                        <MenuItem Header="Browser Source" />
+                        <MenuItem Header="Settings" />
+                        <MenuItem Header="Campaths" />
+                        <MenuItem Header="Net Console" />
+                    </MenuItem>
+                    <MenuItem Header="Help" Padding="12,6">
+                        <MenuItem Header="Documentation" />
+                        <MenuItem Header="About" />
+                    </MenuItem>
+                </Menu>
+
+                <!-- Window Title -->
+                <TextBlock Grid.Column="1"
+                           Text="HLAE Observer Tools"
+                           Foreground="#E0E0E0"
+                           FontSize="13"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Center"
+                           IsHitTestVisible="False" />
+
+                <!-- Window Controls -->
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            Spacing="0">
+                    <Button Content="―"
+                            Width="46"
+                            Height="40"
+                            Background="Transparent"
+                            Foreground="#E0E0E0"
+                            BorderThickness="0"
+                            FontSize="14"
+                            Padding="0"
+                            Click="MinimizeWindow"
+                            VerticalAlignment="Center"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center">
+                        <Button.Styles>
+                            <Style Selector="Button:pointerover">
+                                <Setter Property="Background" Value="#3F3F3F" />
+                            </Style>
+                        </Button.Styles>
+                    </Button>
+                    <Button Content="□"
+                            Width="46"
+                            Height="40"
+                            Background="Transparent"
+                            Foreground="#E0E0E0"
+                            BorderThickness="0"
+                            FontSize="14"
+                            Padding="0"
+                            Click="MaximizeWindow"
+                            VerticalAlignment="Center"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center">
+                        <Button.Styles>
+                            <Style Selector="Button:pointerover">
+                                <Setter Property="Background" Value="#3F3F3F" />
+                            </Style>
+                        </Button.Styles>
+                    </Button>
+                    <Button Content="✕"
+                            Width="46"
+                            Height="40"
+                            Background="Transparent"
+                            Foreground="#E0E0E0"
+                            BorderThickness="0"
+                            FontSize="14"
+                            Padding="0"
+                            Click="CloseWindow"
+                            VerticalAlignment="Center"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center">
+                        <Button.Styles>
+                            <Style Selector="Button:pointerover">
+                                <Setter Property="Background" Value="#E81123" />
+                            </Style>
+                        </Button.Styles>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <dock:DockControl Grid.Row="1" Layout="{Binding Layout}" />
     </Grid>
 </Window>

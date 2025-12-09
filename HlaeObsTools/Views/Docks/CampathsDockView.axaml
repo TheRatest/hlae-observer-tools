@@ -84,7 +84,8 @@
     <!-- Main body (right) -->
     <DockPanel Grid.Column="1"
                Margin="10,0,0,0"
-               Focusable="True">
+               Focusable="True"
+               Background="rgba(16, 16, 17, 1)">
 
       <!-- Top controls -->
       <StackPanel DockPanel.Dock="Top"
