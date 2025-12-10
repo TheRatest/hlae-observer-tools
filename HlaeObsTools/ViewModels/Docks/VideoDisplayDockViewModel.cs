@@ -16,6 +16,7 @@ using HlaeObsTools.Services.Gsi;
 using HlaeObsTools.ViewModels.Hud;
 using Avalonia.Media;
 using System.Linq;
+using HlaeObsTools.Views;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -60,6 +61,7 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     private string _mapName = string.Empty;
     private readonly Dictionary<string, HudWeaponViewModel> _weaponCache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HudPlayerCardViewModel> _hudPlayerCache = new(StringComparer.Ordinal);
+    private HudOverlayWindow? _hudOverlayWindow;
     private static readonly HashSet<string> PrimaryWeaponTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "Machine Gun",
@@ -664,6 +666,114 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
             : new SolidColorBrush(Color.Parse("#2E1E15"));
     }
 
+    /// <summary>
+    /// Show the HUD overlay window (called when using D3DHost mode)
+    /// </summary>
+    public void ShowHudOverlay()
+    {
+        if (_hudOverlayWindow == null)
+        {
+            _hudOverlayWindow = new HudOverlayWindow
+            {
+                DataContext = this
+            };
+
+            // Subscribe to canvas size changes for speed scale updates
+            var canvas = _hudOverlayWindow.GetSpeedScaleCanvas();
+            if (canvas != null)
+            {
+                canvas.SizeChanged += (_, _) => OnPropertyChanged(nameof(FreecamSpeed));
+            }
+
+            // Subscribe to mouse events for freecam control
+            _hudOverlayWindow.RightButtonDown += OnOverlayRightButtonDown;
+            _hudOverlayWindow.RightButtonUp += OnOverlayRightButtonUp;
+
+            // Subscribe to keyboard events for shift key detection
+            _hudOverlayWindow.ShiftKeyChanged += OnOverlayShiftKeyChanged;
+        }
+
+        if (!_hudOverlayWindow.IsVisible)
+        {
+            // Show with main window as owner so the overlay is only topmost relative to it
+            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                _hudOverlayWindow.Show(desktop.MainWindow);
+            }
+            else
+            {
+                _hudOverlayWindow.Show();
+            }
+        }
+    }
+
+    private void OnOverlayRightButtonDown(object? sender, EventArgs e)
+    {
+        RaiseOverlayRightButtonDown();
+    }
+
+    private void OnOverlayRightButtonUp(object? sender, EventArgs e)
+    {
+        RaiseOverlayRightButtonUp();
+    }
+
+    /// <summary>
+    /// Event raised when right button is pressed on the overlay
+    /// </summary>
+    public event EventHandler? OverlayRightButtonDown;
+
+    /// <summary>
+    /// Event raised when right button is released on the overlay
+    /// </summary>
+    public event EventHandler? OverlayRightButtonUp;
+
+    /// <summary>
+    /// Event raised when shift key state changes on the overlay
+    /// </summary>
+    public event EventHandler<bool>? OverlayShiftKeyChanged;
+
+    private void RaiseOverlayRightButtonDown()
+    {
+        OverlayRightButtonDown?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void RaiseOverlayRightButtonUp()
+    {
+        OverlayRightButtonUp?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnOverlayShiftKeyChanged(object? sender, bool isPressed)
+    {
+        OverlayShiftKeyChanged?.Invoke(this, isPressed);
+    }
+
+    /// <summary>
+    /// Hide the HUD overlay window
+    /// </summary>
+    public void HideHudOverlay()
+    {
+        if (_hudOverlayWindow != null && _hudOverlayWindow.IsVisible)
+        {
+            _hudOverlayWindow.Hide();
+        }
+    }
+
+    /// <summary>
+    /// Update the HUD overlay window position and size to match the shared texture bounds
+    /// </summary>
+    public void UpdateHudOverlayBounds(PixelPoint position, PixelSize size)
+    {
+        _hudOverlayWindow?.UpdatePositionAndSize(position, size);
+    }
+
+    /// <summary>
+    /// Get the SpeedScaleCanvas from the overlay window (for rendering speed scale in D3DHost mode)
+    /// </summary>
+    public Avalonia.Controls.Canvas? GetOverlaySpeedScaleCanvas()
+    {
+        return _hudOverlayWindow?.GetSpeedScaleCanvas();
+    }
+
     public void Dispose()
     {
         if (_speedWebSocketClient != null)
@@ -674,6 +784,8 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         {
             _gsiServer.GameStateUpdated -= OnHudGameStateUpdated;
         }
+        _hudOverlayWindow?.Close();
+        _hudOverlayWindow = null;
         StopStream();
     }
 

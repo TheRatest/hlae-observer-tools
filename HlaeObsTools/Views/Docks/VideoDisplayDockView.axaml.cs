@@ -23,6 +23,7 @@ public partial class VideoDisplayDockView : UserControl
     private bool _isRightButtonDown;
     private Point? _lastMousePosition;
     private INotifyPropertyChanged? _currentVmNotifier;
+    private VideoDisplayDockViewModel? _currentViewModel;
     private bool _cursorHidden;
     private bool _isShiftPressed;
     private double _currentArrowY;
@@ -33,6 +34,7 @@ public partial class VideoDisplayDockView : UserControl
     private double _lastFreecamSpeed;
     private double _lastCanvasHeight;
     private bool _lastShiftPressed;
+    private Window? _parentWindow;
 
     public VideoDisplayDockView()
     {
@@ -44,16 +46,28 @@ public partial class VideoDisplayDockView : UserControl
             {
                 UpdateSharedTextureAspectSize();
                 UpdateSpeedScaleRegionSize();
+                UpdateHudOverlayPosition();
             };
         }
         this.AttachedToVisualTree += (_, _) =>
         {
             UpdateSharedTextureAspectSize();
             UpdateSpeedScaleRegionSize();
+            UpdateHudOverlayPosition();
+            SubscribeToWindowEvents();
         };
-        if (SpeedScaleCanvas != null)
+        this.DetachedFromVisualTree += (_, _) =>
         {
-            SpeedScaleCanvas.SizeChanged += (_, _) => UpdateSpeedScale();
+            UnsubscribeFromWindowEvents();
+        };
+        var canvas = HudContent?.GetSpeedScaleCanvas();
+        if (canvas != null)
+        {
+            canvas.SizeChanged += (_, _) => UpdateSpeedScale();
+        }
+        if (SharedTextureAspect != null)
+        {
+            SharedTextureAspect.SizeChanged += (_, _) => UpdateHudOverlayPosition();
         }
 
         KeyDown += OnKeyDown;
@@ -62,13 +76,116 @@ public partial class VideoDisplayDockView : UserControl
         DataContextChanged += OnDataContextChanged;
     }
 
+    private void UpdateHudOverlayPosition()
+    {
+        if (DataContext is not VideoDisplayDockViewModel vm || SharedTextureAspect == null)
+            return;
+
+        // Only update if using D3DHost mode and HUD is enabled
+        if (!vm.UseD3DHost || !vm.ShowNativeHud)
+            return;
+
+        try
+        {
+            var bounds = SharedTextureAspect.Bounds;
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+                return;
+
+            // Get screen position of the SharedTextureAspect control
+            var topLeft = SharedTextureAspect.PointToScreen(new Point(0, 0));
+
+            var position = new PixelPoint((int)topLeft.X, (int)topLeft.Y);
+            var size = new PixelSize((int)bounds.Width, (int)bounds.Height);
+
+            vm.UpdateHudOverlayBounds(position, size);
+        }
+        catch
+        {
+            // Ignore positioning errors during initialization
+        }
+    }
+
+    private void SubscribeToWindowEvents()
+    {
+        if (_parentWindow != null) return;
+
+        _parentWindow = this.GetVisualRoot() as Window;
+        if (_parentWindow != null)
+        {
+            _parentWindow.PositionChanged += OnParentWindowPositionChanged;
+            _parentWindow.PropertyChanged += OnParentWindowPropertyChanged;
+        }
+    }
+
+    private void UnsubscribeFromWindowEvents()
+    {
+        if (_parentWindow != null)
+        {
+            _parentWindow.PositionChanged -= OnParentWindowPositionChanged;
+            _parentWindow.PropertyChanged -= OnParentWindowPropertyChanged;
+            _parentWindow = null;
+        }
+    }
+
+    private void SubscribeToOverlayEvents(VideoDisplayDockViewModel vm)
+    {
+        vm.OverlayRightButtonDown += OnOverlayRightButtonDown;
+        vm.OverlayRightButtonUp += OnOverlayRightButtonUp;
+        vm.OverlayShiftKeyChanged += OnOverlayShiftKeyChanged;
+    }
+
+    private void UnsubscribeFromOverlayEvents(VideoDisplayDockViewModel vm)
+    {
+        vm.OverlayRightButtonDown -= OnOverlayRightButtonDown;
+        vm.OverlayRightButtonUp -= OnOverlayRightButtonUp;
+        vm.OverlayShiftKeyChanged -= OnOverlayShiftKeyChanged;
+    }
+
+    private void OnOverlayRightButtonDown(object? sender, EventArgs e)
+    {
+        if (DataContext is VideoDisplayDockViewModel vm && vm.UseD3DHost)
+        {
+            _isRightButtonDown = true;
+            BeginFreecam();
+        }
+    }
+
+    private void OnOverlayRightButtonUp(object? sender, EventArgs e)
+    {
+        if (_isRightButtonDown)
+        {
+            _isRightButtonDown = false;
+            EndFreecam();
+        }
+    }
+
+    private void OnOverlayShiftKeyChanged(object? sender, bool isPressed)
+    {
+        _isShiftPressed = isPressed;
+        UpdateSpeedScale();
+    }
+
+    private void OnParentWindowPositionChanged(object? sender, PixelPointEventArgs e)
+    {
+        UpdateHudOverlayPosition();
+    }
+
+    private void OnParentWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property.Name == nameof(Window.WindowState))
+        {
+            // Delay update slightly to allow window to finish state transition
+            Dispatcher.UIThread.Post(UpdateHudOverlayPosition, DispatcherPriority.Background);
+        }
+    }
+
     private void StartButton_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is VideoDisplayDockViewModel vm)
         {
             if (vm.UseD3DHost)
             {
-                SharedTextureControl?.StartRenderer();
+                SharedTextureHost?.StartRenderer();
             }
             else
             {
@@ -82,7 +199,7 @@ public partial class VideoDisplayDockView : UserControl
         if (DataContext is VideoDisplayDockViewModel vm)
         {
             vm.StopStream();
-            SharedTextureControl?.StopRenderer();
+            SharedTextureHost?.StopRenderer();
         }
     }
 
@@ -237,26 +354,41 @@ public partial class VideoDisplayDockView : UserControl
 
     private void UpdateSpeedScaleRegionSize()
     {
-        if (SpeedScaleRegion == null || VideoContainer == null) return;
+        var speedScaleRegion = HudContent?.GetSpeedScaleRegion();
+        if (speedScaleRegion == null || VideoContainer == null) return;
 
         var bounds = VideoContainer.Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
 
         // Set region to 30% width and 40% height
-        SpeedScaleRegion.Width = bounds.Width * 0.3;
-        SpeedScaleRegion.Height = bounds.Height * 0.4;
+        speedScaleRegion.Width = bounds.Width * 0.3;
+        speedScaleRegion.Height = bounds.Height * 0.4;
     }
 
     private void BeginFreecam()
     {
-        if (DataContext is not VideoDisplayDockViewModel vm || VideoContainer == null)
+        if (DataContext is not VideoDisplayDockViewModel vm)
             return;
 
         vm.ActivateFreecam();
 
-        var containerBounds = VideoContainer.Bounds;
+        // Determine which control to use for cursor center calculation
+        Control? targetControl = null;
+        if (vm.UseD3DHost && SharedTextureAspect != null)
+        {
+            targetControl = SharedTextureAspect;
+        }
+        else if (VideoContainer != null)
+        {
+            targetControl = VideoContainer;
+        }
+
+        if (targetControl == null)
+            return;
+
+        var containerBounds = targetControl.Bounds;
         var centerPoint = new Point(containerBounds.Width / 2, containerBounds.Height / 2);
-        var screenCenterPixel = VideoContainer.PointToScreen(centerPoint);
+        var screenCenterPixel = targetControl.PointToScreen(centerPoint);
         var screenCenter = new Point(screenCenterPixel.X, screenCenterPixel.Y);
 
         _lockedCursorCenter = screenCenter;
@@ -309,27 +441,42 @@ public partial class VideoDisplayDockView : UserControl
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
+        // Unsubscribe from previous ViewModel
         if (_currentVmNotifier != null)
         {
             _currentVmNotifier.PropertyChanged -= OnViewModelPropertyChanged;
             _currentVmNotifier = null;
         }
 
+        if (_currentViewModel != null)
+        {
+            UnsubscribeFromOverlayEvents(_currentViewModel);
+            _currentViewModel = null;
+        }
+
+        // Subscribe to new ViewModel
         if (DataContext is INotifyPropertyChanged notifier)
         {
             _currentVmNotifier = notifier;
             notifier.PropertyChanged += OnViewModelPropertyChanged;
         }
 
-        UpdateSpeedScale();
-
         if (DataContext is VideoDisplayDockViewModel vm)
         {
+            _currentViewModel = vm;
+            SubscribeToOverlayEvents(vm);
+
             if (vm.UseD3DHost)
             {
-                SharedTextureControl?.StartRenderer();
+                SharedTextureHost?.StartRenderer();
+                if (vm.ShowNativeHud)
+                {
+                    vm.ShowHudOverlay();
+                }
             }
         }
+
+        UpdateSpeedScale();
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -340,12 +487,33 @@ public partial class VideoDisplayDockView : UserControl
             {
                 if (vm.UseD3DHost)
                 {
-                    SharedTextureControl?.StartRenderer();
+                    SharedTextureHost?.StartRenderer();
                     if (vm.IsStreaming) vm.StopStream();
+                    if (vm.ShowNativeHud)
+                    {
+                        vm.ShowHudOverlay();
+                        UpdateHudOverlayPosition();
+                    }
                 }
                 else
                 {
-                    SharedTextureControl?.StopRenderer();
+                    SharedTextureHost?.StopRenderer();
+                    vm.HideHudOverlay();
+                }
+            }
+        }
+        else if (e.PropertyName == nameof(VideoDisplayDockViewModel.ShowNativeHud))
+        {
+            if (DataContext is VideoDisplayDockViewModel vm)
+            {
+                if (vm.UseD3DHost && vm.ShowNativeHud)
+                {
+                    vm.ShowHudOverlay();
+                    UpdateHudOverlayPosition();
+                }
+                else if (vm.UseD3DHost && !vm.ShowNativeHud)
+                {
+                    vm.HideHudOverlay();
                 }
             }
         }
@@ -355,12 +523,24 @@ public partial class VideoDisplayDockView : UserControl
         }
     }
 
+    private Canvas? GetActiveSpeedScaleCanvas()
+    {
+        if (DataContext is VideoDisplayDockViewModel vm && vm.UseD3DHost)
+        {
+            // Get canvas from overlay window when using D3DHost
+            return vm.GetOverlaySpeedScaleCanvas();
+        }
+        // Use local canvas (from HudContent) when not using D3DHost
+        return HudContent?.GetSpeedScaleCanvas();
+    }
+
     private void UpdateSpeedScale()
     {
-        if (SpeedScaleCanvas == null || DataContext is not VideoDisplayDockViewModel vm)
+        var canvas = GetActiveSpeedScaleCanvas();
+        if (canvas == null || DataContext is not VideoDisplayDockViewModel vm)
             return;
 
-        var height = SpeedScaleCanvas.Bounds.Height;
+        var height = canvas.Bounds.Height;
         if (height <= 0 || vm.SpeedTicks == null || vm.SpeedTicks.Count == 0)
             return;
 
@@ -373,7 +553,7 @@ public partial class VideoDisplayDockView : UserControl
         double usableHeight = Math.Max(0, height - marginTop - marginBottom);
 
         // Set canvas width
-        SpeedScaleCanvas.Width = canvasWidth;
+        canvas.Width = canvasWidth;
 
         // Calculate target position
         double speedMultiplier = _isShiftPressed ? vm.SprintMultiplier : 1.0;
@@ -403,7 +583,7 @@ public partial class VideoDisplayDockView : UserControl
         _lastShiftPressed = _isShiftPressed;
 
         // Clear and rebuild static elements
-        SpeedScaleCanvas.Children.Clear();
+        canvas.Children.Clear();
 
         // Main ruler line
         var spine = new Line
@@ -414,7 +594,7 @@ public partial class VideoDisplayDockView : UserControl
             StrokeThickness = 3,
             StrokeLineCap = PenLineCap.Round
         };
-        SpeedScaleCanvas.Children.Add(spine);
+        canvas.Children.Add(spine);
 
         // Tick marks
         var ticks = vm.SpeedTicks.ToList();
@@ -433,14 +613,14 @@ public partial class VideoDisplayDockView : UserControl
                 StrokeThickness = 2,
                 StrokeLineCap = PenLineCap.Square
             };
-            SpeedScaleCanvas.Children.Add(tick);
+            canvas.Children.Add(tick);
         }
 
         // Top/bottom labels
         var topLabel = CreateLabel(vm.SpeedMax.ToString("0"), lineX + tickLong + 6, marginTop - 2, 12, FontWeight.SemiBold);
         var bottomLabel = CreateLabel(vm.SpeedMin.ToString("0"), lineX + tickLong + 6, height - marginBottom - 14, 12, FontWeight.SemiBold);
-        SpeedScaleCanvas.Children.Add(topLabel);
-        SpeedScaleCanvas.Children.Add(bottomLabel);
+        canvas.Children.Add(topLabel);
+        canvas.Children.Add(bottomLabel);
 
         // Create or update arrow and label
         if (_speedArrow == null)
@@ -463,8 +643,18 @@ public partial class VideoDisplayDockView : UserControl
         _speedLabel!.Text = speedText;
         _speedLabel.Foreground = _isShiftPressed ? Brushes.Yellow : Brushes.White;
 
-        SpeedScaleCanvas.Children.Add(_speedArrow);
-        SpeedScaleCanvas.Children.Add(_speedLabel);
+        // Remove from old parent if necessary before adding to new canvas
+        if (_speedArrow.Parent is Panel oldArrowParent)
+        {
+            oldArrowParent.Children.Remove(_speedArrow);
+        }
+        if (_speedLabel.Parent is Panel oldLabelParent)
+        {
+            oldLabelParent.Children.Remove(_speedLabel);
+        }
+
+        canvas.Children.Add(_speedArrow);
+        canvas.Children.Add(_speedLabel);
 
         // Decide whether to animate or snap
         if (heightChanged && !speedChanged && !shiftStateChanged)

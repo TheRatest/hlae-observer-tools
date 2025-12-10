@@ -401,7 +401,13 @@ public sealed class HudTeamViewModel : ViewModelBase
     public string Name
     {
         get => _name;
-        set => SetProperty(ref _name, value);
+        set
+        {
+            if (SetProperty(ref _name, value))
+            {
+                OnPropertyChanged(nameof(DisplayName));
+            }
+        }
     }
 
     public int Score
