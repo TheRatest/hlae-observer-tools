@@ -10,10 +10,13 @@
     <UserControl.Resources>
         <conv:BooleanToOpacityConverter x:Key="ActiveOpacityConverter"
                                         TrueOpacity="1"
-                                        FalseOpacity="0.55" />
+                                        FalseOpacity="0.25" />
         <conv:BooleanToOpacityConverter x:Key="AliveOpacityConverter"
                                         TrueOpacity="1"
                                         FalseOpacity="0.35" />
+        <conv:BooleanToOpacityConverter x:Key="FocusedGlowOpacityConverter"
+                                        TrueOpacity="0.9"
+                                        FalseOpacity="0" />
         <conv:HudScaleConverter x:Key="HudScaleConverter"
                                 BaseWidth="1600"
                                 BaseHeight="900"
@@ -42,11 +45,19 @@
             <Border Background="{Binding CardBackground}"
                     CornerRadius="8"
                     Padding="8"
-                    Margin="0,6"
-                    BorderBrush="#33FFFFFF"
-                    BorderThickness="1"
-                    Width="306"
+                    Margin="{Binding DisplayMargin}"
+                    BorderBrush="{Binding DisplayBorderBrush}"
+                    BorderThickness="{Binding DisplayBorderThickness}"
+                    Width="330"
                     Opacity="{Binding IsAlive, Converter={StaticResource AliveOpacityConverter}}">
+                <Border.Effect>
+                    <DropShadowEffect
+                        Color="#FFFFFFFF"
+                        BlurRadius="18"
+                        OffsetX="0"
+                        OffsetY="0"
+                        Opacity="{Binding IsFocused, Converter={StaticResource FocusedGlowOpacityConverter}}"/>
+                </Border.Effect>
                 <StackPanel Spacing="6">
                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
                         <Border Background="{Binding AccentBrush}"
@@ -64,7 +75,8 @@
                                    Text="{Binding Name}"
                                    FontWeight="SemiBold"
                                    Foreground="#E6E6E6"
-                                   TextTrimming="CharacterEllipsis" />
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
 
                         <TextBlock Grid.Column="2"
                                    Text="{Binding ActiveAmmoText}"
@@ -97,14 +109,126 @@
                                  Background="#303540"
                                  IsHitTestVisible="False" />
 
-                    <ItemsControl ItemsSource="{Binding WeaponsAndGrenades}"
-                                  ItemTemplate="{StaticResource WeaponChipTemplate}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <ItemsControl Grid.Column="0"
+                                      ItemsSource="{Binding WeaponsAndGrenades}"
+                                      ItemTemplate="{StaticResource WeaponChipTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+
+                        <Border Grid.Column="1"
+                                Padding="4"
+                                CornerRadius="4"
+                                BorderThickness="1"
+                                BorderBrush="{Binding AccentBrush}"
+                                Background="#32000000"
+                                Margin="2"
+                                Width="28"
+                                Height="28"
+                                IsVisible="{Binding HasDefuseKit}">
+                            <svg:Svg Path="{Binding DefuseKitIconPath}"
+                                     Width="20"
+                                     Height="20"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FocusedPlayerCardTemplate" x:DataType="hud:HudPlayerCardViewModel">
+            <Border Background="{Binding CardBackground}"
+                    CornerRadius="8"
+                    Padding="8"
+                    Margin="0,6"
+                    BorderBrush="#33FFFFFF"
+                    BorderThickness="1"
+                    Width="330"
+                    Opacity="{Binding IsAlive, Converter={StaticResource AliveOpacityConverter}}">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                        <Border Background="{Binding AccentBrush}"
+                                Padding="6,3"
+                                CornerRadius="4"
+                                Width="32"
+                                HorizontalAlignment="Left">
+                            <TextBlock Text="{Binding DisplaySlot}"
+                                       HorizontalAlignment="Center"
+                                       FontWeight="Bold"
+                                       Foreground="#0D1015" />
+                        </Border>
+
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding Name}"
+                                   FontWeight="SemiBold"
+                                   Foreground="#E6E6E6"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding ActiveAmmoText}"
+                                   Foreground="{Binding AccentBrush}"
+                                   FontWeight="Bold"
+                                   FontSize="12"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+
+                        <StackPanel Grid.Column="3"
+                                    Orientation="Horizontal"
+                                    Spacing="8"
+                                    VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <svg:Svg Path="{Binding HealthIconPath}" Width="16" Height="16" />
+                                <TextBlock Text="{Binding Health}" Foreground="#E6E6E6" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <svg:Svg Path="{Binding ArmorIconPath}" Width="16" Height="16" />
+                                <TextBlock Text="{Binding Armor}" Foreground="#E6E6E6" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
+                    <ProgressBar Minimum="0"
+                                 Maximum="100"
+                                 Value="{Binding Health}"
+                                 Height="6"
+                                 Foreground="{Binding AccentBrush}"
+                                 Background="#303540"
+                                 IsHitTestVisible="False" />
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <ItemsControl Grid.Column="0"
+                                      ItemsSource="{Binding WeaponsAndGrenades}"
+                                      ItemTemplate="{StaticResource WeaponChipTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+
+                        <Border Grid.Column="1"
+                                Padding="4"
+                                CornerRadius="4"
+                                BorderThickness="1"
+                                BorderBrush="{Binding AccentBrush}"
+                                Background="#32000000"
+                                Margin="2"
+                                Width="28"
+                                Height="28"
+                                IsVisible="{Binding HasDefuseKit}">
+                            <svg:Svg Path="{Binding DefuseKitIconPath}"
+                                     Width="20"
+                                     Height="20"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center" />
+                        </Border>
+                    </Grid>
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -144,7 +268,6 @@
 
         <!-- HUD content -->
         <Grid x:Name="HudOverlayHost"
-              Margin="8"
               IsHitTestVisible="False"
               ClipToBounds="True"
               ZIndex="10">
@@ -298,11 +421,10 @@
                 <ItemsControl Grid.Row="1"
                               Grid.Column="0"
                               ItemsSource="{Binding TeamCt.Players}"
-                              ItemTemplate="{StaticResource PlayerCardTemplate}"
-                              Margin="0,4,16,12">
+                              ItemTemplate="{StaticResource PlayerCardTemplate}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+                            <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12,0,18,12"/>
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
@@ -310,11 +432,10 @@
                 <ItemsControl Grid.Row="1"
                               Grid.Column="2"
                               ItemsSource="{Binding TeamT.Players}"
-                              ItemTemplate="{StaticResource PlayerCardTemplate}"
-                              Margin="16,4,0,12">
+                              ItemTemplate="{StaticResource PlayerCardTemplate}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+                            <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="18,0,12,12"/>
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
@@ -336,7 +457,7 @@
                                 Width="520"
                                 IsVisible="{Binding HasFocusedHudPlayer}"
                                 Content="{Binding FocusedHudPlayer}"
-                                ContentTemplate="{StaticResource PlayerCardTemplate}" />
+                                ContentTemplate="{StaticResource FocusedPlayerCardTemplate}" />
             </Grid>
         </ac:LayoutTransformControl>
         </Grid>

@@ -484,15 +484,16 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         RoundTimerText = FormatPhaseTimer(state.PhaseEndsIn);
         MapName = state.MapName ?? string.Empty;
 
-        TeamCt.SetPlayers(BuildTeamPlayers(state.Players, "CT"));
-        TeamT.SetPlayers(BuildTeamPlayers(state.Players, "T"));
+        var focusedSteamId = state.FocusedPlayerSteamId;
+        TeamCt.SetPlayers(BuildTeamPlayers(state.Players, "CT", focusedSteamId));
+        TeamT.SetPlayers(BuildTeamPlayers(state.Players, "T", focusedSteamId));
 
-        FocusedHudPlayer = FindFocusedPlayer(state.FocusedPlayerSteamId);
+        FocusedHudPlayer = FindFocusedPlayer(focusedSteamId);
 
         OnPropertyChanged(nameof(HasHudData));
     }
 
-    private IEnumerable<HudPlayerCardViewModel> BuildTeamPlayers(IEnumerable<GsiPlayer> players, string team)
+    private IEnumerable<HudPlayerCardViewModel> BuildTeamPlayers(IEnumerable<GsiPlayer> players, string team, string? focusedSteamId)
     {
         var ordered = players
             .Where(p => string.Equals(p.Team, team, StringComparison.OrdinalIgnoreCase))
@@ -506,13 +507,15 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         var result = new List<HudPlayerCardViewModel>();
         foreach (var player in ordered)
         {
-            result.Add(BuildHudPlayer(player));
+            var isFocused = !string.IsNullOrWhiteSpace(focusedSteamId) &&
+                           string.Equals(player.SteamId, focusedSteamId, StringComparison.Ordinal);
+            result.Add(BuildHudPlayer(player, isFocused));
         }
 
         return result;
     }
 
-    private HudPlayerCardViewModel BuildHudPlayer(GsiPlayer player)
+    private HudPlayerCardViewModel BuildHudPlayer(GsiPlayer player, bool isFocused = false)
     {
         var accent = CreateAccent(player.Team);
         var background = CreateCardBackground(player.Team);
@@ -550,7 +553,8 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
             grenades,
             active,
             accent,
-            background);
+            background,
+            isFocused);
 
         return vm;
     }

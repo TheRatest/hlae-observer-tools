@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using Avalonia;
 using Avalonia.Media;
 using HlaeObsTools.ViewModels;
 
@@ -160,6 +161,7 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
     private HudWeaponViewModel? _activeWeapon;
     private IBrush _accentBrush = Brushes.White;
     private IBrush _cardBackground = Brushes.Black;
+    private bool _isFocused;
 
     public HudPlayerCardViewModel(string steamId)
     {
@@ -285,6 +287,39 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
         private set => SetProperty(ref _cardBackground, value);
     }
 
+    public bool IsFocused
+    {
+        get => _isFocused;
+        private set
+        {
+            if (SetProperty(ref _isFocused, value))
+            {
+                OnPropertyChanged(nameof(DisplayBorderBrush));
+                OnPropertyChanged(nameof(DisplayBorderThickness));
+                OnPropertyChanged(nameof(DisplayMargin));
+            }
+        }
+    }
+
+    public IBrush DisplayBorderBrush => IsFocused
+        ? new SolidColorBrush(Color.FromArgb(255, 255, 255, 255))
+        : new SolidColorBrush(Color.FromArgb(51, 255, 255, 255));
+
+    public Thickness DisplayBorderThickness => IsFocused
+        ? new Thickness(3)
+        : new Thickness(1);
+
+    public Thickness DisplayMargin
+    {
+        get
+        {
+            const double baseMarginVertical = 6;
+            const double baseBorderThickness = 1;
+            double marginVertical = baseMarginVertical + baseBorderThickness - DisplayBorderThickness.Top;
+            return new Thickness(0, marginVertical);
+        }
+    }
+
     public string DisplaySlot => ObserverSlot >= 0 && ObserverSlot <= 9
         ? ((ObserverSlot + 1) % 10).ToString()
         : string.Empty;
@@ -294,6 +329,8 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
         : "avares://HlaeObsTools/Assets/hud/icons/armor.svg";
 
     public string HealthIconPath => "avares://HlaeObsTools/Assets/hud/icons/health.svg";
+
+    public string DefuseKitIconPath => "avares://HlaeObsTools/Assets/hud/weapons/defuser.svg";
 
     public string ActiveAmmoText => ActiveWeapon != null && (ActiveWeapon.AmmoClip > 0 || ActiveWeapon.AmmoReserve > 0)
         ? $"{ActiveWeapon.AmmoClip}/{ActiveWeapon.AmmoReserve}"
@@ -317,7 +354,8 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
         IEnumerable<HudWeaponViewModel> grenades,
         HudWeaponViewModel? activeWeapon,
         IBrush accentBrush,
-        IBrush cardBackground)
+        IBrush cardBackground,
+        bool isFocused = false)
     {
         Name = name;
         Team = team;
@@ -334,6 +372,7 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
         ActiveWeapon = activeWeapon;
         AccentBrush = accentBrush;
         CardBackground = cardBackground;
+        IsFocused = isFocused;
 
         var row = BuildRow(primary, secondary, knife, bomb).ToList();
         var grenadesList = grenades.ToList();
