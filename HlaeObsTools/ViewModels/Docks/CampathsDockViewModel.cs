@@ -30,6 +30,7 @@ public class CampathsDockViewModel : Tool
     private HlaeWebSocketClient? _webSocketClient;
     private readonly Dictionary<Guid, int> _groupPlaybackIndex = new();
     private readonly Random _random = new();
+    private CampathItemViewModel? _currentlyPlayingCampath;
 
     private ObservableCollection<CampathProfileViewModel> _profiles = new();
     private CampathProfileViewModel? _selectedProfile;
@@ -348,6 +349,24 @@ public class CampathsDockViewModel : Tool
             return;
         }
 
+        // Stop the currently playing campath if any
+        _currentlyPlayingCampath?.StopPlayback();
+
+        // Parse campath file to get duration
+        var campathFile = CampathFileParser.Parse(campath.FilePath);
+        if (campathFile != null && campathFile.Points.Count > 0)
+        {
+            var firstTime = campathFile.Points[0].Time;
+            var lastTime = campathFile.Points[campathFile.Points.Count - 1].Time;
+            var duration = lastTime - firstTime;
+
+            if (duration > 0)
+            {
+                campath.StartPlayback(duration);
+                _currentlyPlayingCampath = campath;
+            }
+        }
+
         await _webSocketClient.SendCampathPlayAsync(campath.FilePath);
     }
 
@@ -389,6 +408,24 @@ public class CampathsDockViewModel : Tool
         else
         {
             selected = available[_random.Next(available.Count)];
+        }
+
+        // Stop the currently playing campath if any
+        _currentlyPlayingCampath?.StopPlayback();
+
+        // Parse campath file to get duration
+        var campathFile = CampathFileParser.Parse(selected.FilePath!);
+        if (campathFile != null && campathFile.Points.Count > 0)
+        {
+            var firstTime = campathFile.Points[0].Time;
+            var lastTime = campathFile.Points[campathFile.Points.Count - 1].Time;
+            var duration = lastTime - firstTime;
+
+            if (duration > 0)
+            {
+                selected.StartPlayback(duration);
+                _currentlyPlayingCampath = selected;
+            }
         }
 
         await _webSocketClient.SendCampathPlayAsync(selected.FilePath!);
@@ -529,6 +566,11 @@ public class CampathItemViewModel : ViewModelBase
     private string? _filePath;
     private string? _imagePath;
     private Avalonia.Media.Imaging.Bitmap? _thumbnail;
+    private double _playbackProgress;
+    private bool _isPlaying;
+    private System.Timers.Timer? _progressTimer;
+    private DateTime _playbackStartTime;
+    private double _campathDuration;
 
     public CampathItemViewModel(CampathData data)
     {
@@ -571,6 +613,18 @@ public class CampathItemViewModel : ViewModelBase
         private set => SetProperty(ref _thumbnail, value);
     }
 
+    public double PlaybackProgress
+    {
+        get => _playbackProgress;
+        private set => SetProperty(ref _playbackProgress, value);
+    }
+
+    public bool IsPlaying
+    {
+        get => _isPlaying;
+        private set => SetProperty(ref _isPlaying, value);
+    }
+
     public CampathData ToData() => new()
     {
         Id = Id,
@@ -578,6 +632,48 @@ public class CampathItemViewModel : ViewModelBase
         FilePath = FilePath,
         ImagePath = ImagePath
     };
+
+    public void StartPlayback(double duration)
+    {
+        if (duration <= 0)
+            return;
+
+        _campathDuration = duration;
+        _playbackStartTime = DateTime.UtcNow;
+        PlaybackProgress = 0;
+        IsPlaying = true;
+
+        _progressTimer?.Stop();
+        _progressTimer?.Dispose();
+        _progressTimer = new System.Timers.Timer(33); // Update at ~30fps
+        _progressTimer.Elapsed += (s, e) => UpdateProgress();
+        _progressTimer.Start();
+    }
+
+    public void StopPlayback()
+    {
+        IsPlaying = false;
+        PlaybackProgress = 0;
+        _progressTimer?.Stop();
+        _progressTimer?.Dispose();
+        _progressTimer = null;
+    }
+
+    private void UpdateProgress()
+    {
+        if (!IsPlaying)
+            return;
+
+        var elapsed = (DateTime.UtcNow - _playbackStartTime).TotalSeconds;
+        var progress = Math.Min(elapsed / _campathDuration, 1.0);
+
+        PlaybackProgress = progress;
+
+        if (progress >= 1.0)
+        {
+            StopPlayback();
+        }
+    }
 
     private void UpdateThumbnail()
     {

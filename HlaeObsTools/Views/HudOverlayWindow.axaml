@@ -16,5 +16,6 @@
         Height="600">
 
     <!-- HUD overlay with freecam indicator and speed scale -->
-    <views:HudOverlayContent x:Name="HudContent" />
+    <views:HudOverlayContent x:Name="HudContent"
+                             IsVisible="{Binding ShowNativeHud}" />
 </Window>

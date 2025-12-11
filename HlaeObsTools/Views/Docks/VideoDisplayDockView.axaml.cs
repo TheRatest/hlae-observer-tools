@@ -81,8 +81,8 @@ public partial class VideoDisplayDockView : UserControl
         if (DataContext is not VideoDisplayDockViewModel vm || SharedTextureAspect == null)
             return;
 
-        // Only update if using D3DHost mode and HUD is enabled
-        if (!vm.UseD3DHost || !vm.ShowNativeHud)
+        // Only update if using D3DHost mode
+        if (!vm.UseD3DHost)
             return;
 
         try
@@ -469,10 +469,8 @@ public partial class VideoDisplayDockView : UserControl
             if (vm.UseD3DHost)
             {
                 SharedTextureHost?.StartRenderer();
-                if (vm.ShowNativeHud)
-                {
-                    vm.ShowHudOverlay();
-                }
+                vm.ShowHudOverlay();
+                UpdateHudOverlayPosition();
             }
         }
 
@@ -489,11 +487,8 @@ public partial class VideoDisplayDockView : UserControl
                 {
                     SharedTextureHost?.StartRenderer();
                     if (vm.IsStreaming) vm.StopStream();
-                    if (vm.ShowNativeHud)
-                    {
-                        vm.ShowHudOverlay();
-                        UpdateHudOverlayPosition();
-                    }
+                    vm.ShowHudOverlay();
+                    UpdateHudOverlayPosition();
                 }
                 else
                 {
@@ -504,17 +499,10 @@ public partial class VideoDisplayDockView : UserControl
         }
         else if (e.PropertyName == nameof(VideoDisplayDockViewModel.ShowNativeHud))
         {
-            if (DataContext is VideoDisplayDockViewModel vm)
+            if (DataContext is VideoDisplayDockViewModel vm && vm.UseD3DHost && vm.ShowNativeHud)
             {
-                if (vm.UseD3DHost && vm.ShowNativeHud)
-                {
-                    vm.ShowHudOverlay();
-                    UpdateHudOverlayPosition();
-                }
-                else if (vm.UseD3DHost && !vm.ShowNativeHud)
-                {
-                    vm.HideHudOverlay();
-                }
+                vm.ShowHudOverlay();
+                UpdateHudOverlayPosition();
             }
         }
         else if (e.PropertyName == nameof(VideoDisplayDockViewModel.FreecamSpeed))
