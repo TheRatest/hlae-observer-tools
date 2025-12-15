@@ -122,12 +122,13 @@ public class HlaeWebSocketClient : IDisposable
     /// <summary>
     /// Request campath playback on the HLAE side.
     /// </summary>
-    public async Task SendCampathPlayAsync(string campathPath)
+    public async Task SendCampathPlayAsync(string campathPath, double offsetSeconds = 0)
     {
         var message = new
         {
             type = "campath_play",
-            cmd = campathPath
+            cmd = campathPath,
+            offset = offsetSeconds
         };
 
         await SendJsonAsync(message);

@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Collections.Generic;
 using HlaeObsTools.ViewModels;
+using HlaeObsTools.Services.Settings;
 
 namespace HlaeObsTools.ViewModels;
 
@@ -36,4 +37,45 @@ public sealed class HudSettings : ViewModelBase
     /// Attach action presets for the radial menu (5 slots).
     /// </summary>
     public List<AttachmentPreset> AttachPresets { get; } = Enumerable.Range(0, 5).Select(_ => new AttachmentPreset()).ToList();
+
+    public void ApplyAttachPresets(IEnumerable<AttachmentPresetData> presets)
+    {
+        var items = presets?.ToList() ?? new List<AttachmentPresetData>();
+        AttachPresets.Clear();
+
+        foreach (var preset in items)
+        {
+            AttachPresets.Add(new AttachmentPreset
+            {
+                AttachmentName = preset.AttachmentName,
+                OffsetPosX = preset.OffsetPosX,
+                OffsetPosY = preset.OffsetPosY,
+                OffsetPosZ = preset.OffsetPosZ,
+                OffsetPitch = preset.OffsetPitch,
+                OffsetYaw = preset.OffsetYaw,
+                OffsetRoll = preset.OffsetRoll,
+                Fov = preset.Fov
+            });
+        }
+
+        while (AttachPresets.Count < 5)
+        {
+            AttachPresets.Add(new AttachmentPreset());
+        }
+    }
+
+    public IEnumerable<AttachmentPresetData> ToAttachPresetData()
+    {
+        return AttachPresets.Select(p => new AttachmentPresetData
+        {
+            AttachmentName = p.AttachmentName,
+            OffsetPosX = p.OffsetPosX,
+            OffsetPosY = p.OffsetPosY,
+            OffsetPosZ = p.OffsetPosZ,
+            OffsetPitch = p.OffsetPitch,
+            OffsetYaw = p.OffsetYaw,
+            OffsetRoll = p.OffsetRoll,
+            Fov = p.Fov
+        });
+    }
 }

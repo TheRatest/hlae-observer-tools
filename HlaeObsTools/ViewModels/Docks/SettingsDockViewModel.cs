@@ -11,6 +11,7 @@ using Avalonia.Platform.Storage;
 using Dock.Model.Mvvm.Controls;
 using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.ViewModels;
+using HlaeObsTools.Services.Settings;
 
 
 namespace HlaeObsTools.ViewModels.Docks
@@ -23,13 +24,15 @@ namespace HlaeObsTools.ViewModels.Docks
         private readonly RadarSettings _radarSettings;
         private readonly HudSettings _hudSettings;
         private readonly FreecamSettings _freecamSettings;
+        private readonly SettingsStorage _settingsStorage;
         private readonly HlaeWebSocketClient? _ws;
 
-        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, HlaeWebSocketClient wsClient)
+        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient)
         {
             _radarSettings = radarSettings;
             _hudSettings = hudSettings;
             _freecamSettings = freecamSettings;
+            _settingsStorage = settingsStorage;
             _ws = wsClient;
 
             Title = "Settings";
@@ -132,6 +135,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 AttachPresets[i].PropertyChanged -= OnPresetChanged;
                 AttachPresets[i].PropertyChanged += OnPresetChanged;
             }
+            SaveAttachPresets();
         }
 
         private void OnPresetChanged(object? sender, PropertyChangedEventArgs e)
@@ -141,6 +145,16 @@ namespace HlaeObsTools.ViewModels.Docks
             var index = AttachPresets.IndexOf(vm);
             if (index < 0 || index >= _hudSettings.AttachPresets.Count) return;
             _hudSettings.AttachPresets[index] = vm.ToModel();
+            SaveAttachPresets();
+        }
+
+        private void SaveAttachPresets()
+        {
+            var data = new AppSettingsData
+            {
+                AttachPresets = _hudSettings.ToAttachPresetData().ToList()
+            };
+            _settingsStorage.Save(data);
         }
 
         #endregion

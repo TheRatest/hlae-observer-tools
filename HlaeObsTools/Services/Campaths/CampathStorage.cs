@@ -78,6 +78,7 @@ public class CampathData
     public string Name { get; set; } = "Campath";
     public string? FilePath { get; set; }
     public string? ImagePath { get; set; }
+    public double Offset { get; set; }
 }
 
 public class CampathGroupData

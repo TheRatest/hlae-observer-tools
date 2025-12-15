@@ -43,13 +43,13 @@ public partial class CampathsDockView : UserControl
         }
     }
 
-    private async Task<string?> PromptAsync(string title, string message)
+    private async Task<string?> PromptAsync(string title, string message, int width, int height)
     {
         var dialog = new Window
         {
             Title = title,
-            Width = 360,
-            Height = 180,
+            Width = width,
+            Height = height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner
         };
 

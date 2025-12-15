@@ -10,6 +10,7 @@ using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.ViewModels.Docks;
 using HlaeObsTools.Services.Gsi;
 using HlaeObsTools.ViewModels;
+using HlaeObsTools.Services.Settings;
 
 namespace HlaeObsTools.ViewModels;
 
@@ -63,8 +64,12 @@ public class MainDockFactory : Factory
     public override IRootDock CreateLayout()
     {
         // Shared settings for radar customization
+        var settingsStorage = new SettingsStorage();
+        var storedSettings = settingsStorage.Load();
+
         var radarSettings = new RadarSettings();
         var hudSettings = new HudSettings();
+        hudSettings.ApplyAttachPresets(storedSettings.AttachPresets);
         var freecamSettings = new FreecamSettings();
 
         // Create the 5 docks (top-right hosts the CS2 console)
@@ -72,7 +77,7 @@ public class MainDockFactory : Factory
         var topLeft = new RadarDockViewModel(_gsiServer, _radarConfigProvider, radarSettings, bottomRight, _webSocketClient) { Id = "TopLeft", Title = "Radar" };
         var topCenter = new VideoDisplayDockViewModel { Id = "TopCenter", Title = "Video Stream" };
         var topRight = new NetConsoleDockViewModel { Id = "TopRight", Title = "Console" };
-        var bottomLeft = new SettingsDockViewModel(radarSettings, hudSettings, freecamSettings, _webSocketClient) { Id = "BottomLeft", Title = "Settings" };
+        var bottomLeft = new SettingsDockViewModel(radarSettings, hudSettings, freecamSettings, settingsStorage, _webSocketClient) { Id = "BottomLeft", Title = "Settings" };
 
         // Inject WebSocket and UDP services into video display
         topCenter.SetWebSocketClient(_webSocketClient);

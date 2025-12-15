@@ -811,10 +811,20 @@ public sealed class RadarDockViewModel : Tool, IDisposable
 
     public async void PlayCampath(CampathPathViewModel? path)
     {
-        if (path == null || string.IsNullOrWhiteSpace(path.FilePath) || _webSocketClient == null)
+        if (path == null)
             return;
 
-        await _webSocketClient.SendCampathPlayAsync(path.FilePath);
+        var campath = _campathsVm?.SelectedProfile?.Campaths.FirstOrDefault(c => c.Id == path.Id);
+        if (campath != null)
+        {
+            await _campathsVm!.PlayCampathAsync(campath);
+            return;
+        }
+
+        if (_webSocketClient == null || string.IsNullOrWhiteSpace(path.FilePath))
+            return;
+
+        await _webSocketClient.SendCampathPlayAsync(path.FilePath, 0);
     }
 
     public void SetCampathHighlight(CampathPathViewModel? target, bool isHighlighted)

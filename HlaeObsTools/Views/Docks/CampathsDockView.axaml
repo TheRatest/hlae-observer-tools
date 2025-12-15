@@ -200,6 +200,21 @@
                     </Grid>
                   </Border>
 
+                  <!-- Offset -->
+                  <StackPanel Orientation="Horizontal"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Bottom"
+                              Margin="8"
+                              Spacing="6">
+                    <Button Content="Offset"
+                            Command="{Binding DataContext.SetOffsetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            CommandParameter="{Binding}" />
+                    <TextBlock Text="{Binding Offset, StringFormat={}{0:0.###}}"
+                               VerticalAlignment="Center"
+                               Foreground="#E0E0E0" />
+
+                  </StackPanel>
+
                   <!-- Progress bar -->
                   <Grid VerticalAlignment="Bottom"
                         HorizontalAlignment="Stretch"

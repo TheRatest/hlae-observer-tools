@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -30,6 +31,7 @@ public class CampathsDockViewModel : Tool
     private readonly DelegateCommand _browseCampathCommand;
     private readonly DelegateCommand _browseImageCommand;
     private readonly DelegateCommand _screenShotCommand;
+    private readonly DelegateCommand _setOffsetCommand;
     private readonly DelegateCommand _deleteGroupCommand;
     private readonly DelegateCommand _toggleGroupModeCommand;
     private readonly DelegateCommand _viewGroupCommand;
@@ -59,6 +61,7 @@ public class CampathsDockViewModel : Tool
         _browseCampathCommand = new DelegateCommand(async param => await BrowseCampathAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
         _browseImageCommand = new DelegateCommand(async param => await BrowseImageAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
         _screenShotCommand = new DelegateCommand(param => { ScreenShotCampath(param as CampathItemViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
+        _setOffsetCommand = new DelegateCommand(async param => await SetCampathOffsetAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
         _deleteGroupCommand = new DelegateCommand(param => { DeleteGroup(param as CampathGroupViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
         _toggleGroupModeCommand = new DelegateCommand(param => { ToggleGroupMode(param as CampathGroupViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
         _viewGroupCommand = new DelegateCommand(param => { ViewGroupRequested?.Invoke(this, param as CampathGroupViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
@@ -112,13 +115,14 @@ public class CampathsDockViewModel : Tool
     public ICommand BrowseCampathCommand => _browseCampathCommand;
     public ICommand BrowseImageCommand => _browseImageCommand;
     public ICommand ScreenShotCommand => _screenShotCommand;
+    public ICommand SetOffsetCommand => _setOffsetCommand;
     public ICommand DeleteGroupCommand => _deleteGroupCommand;
     public ICommand ToggleGroupModeCommand => _toggleGroupModeCommand;
     public ICommand ViewGroupCommand => _viewGroupCommand;
 
     public async Task AddProfileAsync()
     {
-        var name = await PromptAsync("Profile Name", "Enter a profile name:");
+        var name = await PromptAsync("Profile Name", "Enter a profile name:", 250, 150);
         if (string.IsNullOrWhiteSpace(name))
             return;
 
@@ -144,7 +148,7 @@ public class CampathsDockViewModel : Tool
         if (SelectedProfile == null)
             return;
 
-        var name = await PromptAsync("Campath Name", "Enter a campath name:");
+        var name = await PromptAsync("Campath Name", "Enter a campath name:", 250, 150);
         if (string.IsNullOrWhiteSpace(name))
             return;
 
@@ -217,7 +221,7 @@ public class CampathsDockViewModel : Tool
         if (SelectedProfile == null)
             return;
 
-        var name = await PromptAsync("Group Name", "Enter a group name:");
+        var name = await PromptAsync("Group Name", "Enter a group name:", 250, 150);
         if (string.IsNullOrWhiteSpace(name))
             return;
 
@@ -248,7 +252,7 @@ public class CampathsDockViewModel : Tool
     }
 
     // The view wires these to actual UI dialogs to avoid viewmodel knowing about UI
-    public Func<string, string, Task<string?>> PromptAsync { get; set; } = (_, _) => Task.FromResult<string?>(null);
+    public Func<string, string, int, int, Task<string?>> PromptAsync { get; set; } = (_, _, _, _) => Task.FromResult<string?>(null);
     public Func<Task<CampathPopulateSource?>> SelectPopulateSourceAsync { get; set; } = () => Task.FromResult<CampathPopulateSource?>(CampathPopulateSource.Folder);
     public Func<string, Task<string?>> BrowseFileAsync { get; set; } = _ => Task.FromResult<string?>(null);
     public Func<string, Task<IEnumerable<string>?>> BrowseFilesAsync { get; set; } = _ => Task.FromResult<IEnumerable<string>?>(null);
@@ -276,7 +280,7 @@ public class CampathsDockViewModel : Tool
         if (item == null)
             return;
 
-        var name = await PromptAsync("Rename Campath", "Enter a new name:");
+        var name = await PromptAsync("Rename Campath", "Enter a new name:", 250, 150);
         if (string.IsNullOrWhiteSpace(name))
             return;
 
@@ -306,6 +310,23 @@ public class CampathsDockViewModel : Tool
         if (!string.IsNullOrWhiteSpace(path))
         {
             item.ImagePath = path;
+            Save();
+        }
+    }
+
+    public async Task SetCampathOffsetAsync(CampathItemViewModel? item)
+    {
+        if (item == null)
+            return;
+
+        var input = await PromptAsync("Campath Offset", "Offset(seconds):", 250, 150);
+        if (string.IsNullOrWhiteSpace(input))
+            return;
+
+        if (double.TryParse(input, NumberStyles.Float, CultureInfo.InvariantCulture, out var offset) ||
+            double.TryParse(input, NumberStyles.Float, CultureInfo.CurrentCulture, out offset))
+        {
+            item.Offset = Math.Max(0, offset);
             Save();
         }
     }
@@ -408,15 +429,16 @@ public class CampathsDockViewModel : Tool
             var firstTime = campathFile.Points[0].Time;
             var lastTime = campathFile.Points[campathFile.Points.Count - 1].Time;
             var duration = lastTime - firstTime;
+            var effectiveDuration = Math.Max(0.0, duration - campath.Offset);
 
-            if (duration > 0)
+            if (effectiveDuration > 0)
             {
-                campath.StartPlayback(duration);
+                campath.StartPlayback(effectiveDuration);
                 _currentlyPlayingCampath = campath;
             }
         }
 
-        await _webSocketClient.SendCampathPlayAsync(campath.FilePath);
+        await _webSocketClient.SendCampathPlayAsync(campath.FilePath, campath.Offset);
     }
 
     public async Task PlayCampathGroupAsync(CampathGroupViewModel? group)
@@ -469,15 +491,16 @@ public class CampathsDockViewModel : Tool
             var firstTime = campathFile.Points[0].Time;
             var lastTime = campathFile.Points[campathFile.Points.Count - 1].Time;
             var duration = lastTime - firstTime;
+            var effectiveDuration = Math.Max(0.0, duration - selected.Offset);
 
-            if (duration > 0)
+            if (effectiveDuration > 0)
             {
-                selected.StartPlayback(duration);
+                selected.StartPlayback(effectiveDuration);
                 _currentlyPlayingCampath = selected;
             }
         }
 
-        await _webSocketClient.SendCampathPlayAsync(selected.FilePath!);
+        await _webSocketClient.SendCampathPlayAsync(selected.FilePath!, selected.Offset);
     }
 
     public void MoveGroup(CampathGroupViewModel source, CampathGroupViewModel? target)
@@ -615,6 +638,7 @@ public class CampathItemViewModel : ViewModelBase
     private string? _filePath;
     private string? _imagePath;
     private Avalonia.Media.Imaging.Bitmap? _thumbnail;
+    private double _offset;
     private double _playbackProgress;
     private bool _isPlaying;
     private System.Timers.Timer? _progressTimer;
@@ -627,6 +651,7 @@ public class CampathItemViewModel : ViewModelBase
         _name = data.Name;
         _filePath = data.FilePath;
         _imagePath = data.ImagePath;
+        _offset = data.Offset;
         UpdateThumbnail();
     }
 
@@ -662,6 +687,12 @@ public class CampathItemViewModel : ViewModelBase
         private set => SetProperty(ref _thumbnail, value);
     }
 
+    public double Offset
+    {
+        get => _offset;
+        set => SetProperty(ref _offset, value);
+    }
+
     public double PlaybackProgress
     {
         get => _playbackProgress;
@@ -679,7 +710,8 @@ public class CampathItemViewModel : ViewModelBase
         Id = Id,
         Name = Name,
         FilePath = FilePath,
-        ImagePath = ImagePath
+        ImagePath = ImagePath,
+        Offset = Offset
     };
 
     public void StartPlayback(double duration)
