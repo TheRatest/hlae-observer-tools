@@ -1,10 +1,19 @@
 using System.ComponentModel;
+using System.Collections.Generic;
 using HlaeObsTools.ViewModels;
 
 namespace HlaeObsTools.ViewModels;
 
 public sealed class AttachPresetViewModel : ViewModelBase
 {
+    private static readonly string[] DefaultAttachmentOptions = new[]
+    {
+        "knife","eholster","pistol","leg_l_iktarget","leg_r_iktarget","defusekit",
+        "grenade0","grenade1","grenade2","grenade3","grenade4","primary","primary_smg",
+        "c4","look_straight_ahead_stand","clip_limit","weapon_hand_l","weapon_hand_r",
+        "gun_accurate","weaponhier_l_iktarget","weaponhier_r_iktarget",
+        "look_straight_ahead_crouch","axis_of_intent"
+    };
     private string _title;
     private string _attachmentName = string.Empty;
     private double _offsetPosX;
@@ -14,6 +23,7 @@ public sealed class AttachPresetViewModel : ViewModelBase
     private double _offsetYaw;
     private double _offsetRoll;
     private double _fov = 90.0;
+    public IReadOnlyList<string> AttachmentOptions { get; } = DefaultAttachmentOptions;
 
     public AttachPresetViewModel(string title)
     {
