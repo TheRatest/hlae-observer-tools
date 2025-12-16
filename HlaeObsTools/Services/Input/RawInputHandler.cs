@@ -35,6 +35,7 @@ public class RawInputHandler : IDisposable
     private bool _prevMouseMiddleButton;
     private bool _prevMouseButton4;
     private bool _prevMouseButton5;
+    private volatile bool _suppressKeyboard;
 
     // Track keyboard state changes between flushes
     private bool _keysDirty;
@@ -48,6 +49,30 @@ public class RawInputHandler : IDisposable
     {
         get => _captureOnlyWhenFocused;
         set => _captureOnlyWhenFocused = value;
+    }
+
+    public bool SuppressKeyboard
+    {
+        get => _suppressKeyboard;
+        set
+        {
+            if (_suppressKeyboard == value)
+                return;
+
+            _suppressKeyboard = value;
+            if (value)
+            {
+                // Clear tracked keys so we don't keep sending stale key-down states
+                lock (_lockObject)
+                {
+                    if (_currentlyPressedKeys.Count > 0)
+                    {
+                        _currentlyPressedKeys.Clear();
+                        _keysDirty = true;
+                    }
+                }
+            }
+        }
     }
 
     public void SetFocusedWindow(IntPtr handle)
@@ -178,6 +203,9 @@ public class RawInputHandler : IDisposable
 
     private void ProcessKeyboardInput(ref RAWKEYBOARD keyboard)
     {
+        if (_suppressKeyboard)
+            return;
+
         ushort vKey = keyboard.VKey;
         if (vKey == 0 || vKey > byte.MaxValue)
             return;
@@ -252,8 +280,16 @@ public class RawInputHandler : IDisposable
             button4 = _mouseButton4;
             button5 = _mouseButton5;
 
-            keys = new Keys[_currentlyPressedKeys.Count];
-            _currentlyPressedKeys.CopyTo(keys);
+            keys = _suppressKeyboard
+                ? Array.Empty<Keys>()
+                : new Keys[_currentlyPressedKeys.Count];
+
+            if (!_suppressKeyboard)
+            {
+                _currentlyPressedKeys.CopyTo(keys);
+            }
+
+            keysChanged = _suppressKeyboard ? _keysDirty || keysChanged : keysChanged;
 
             // Reset accumulators
             _mouseDx = 0;

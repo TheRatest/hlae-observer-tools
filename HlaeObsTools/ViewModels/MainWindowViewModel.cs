@@ -21,6 +21,11 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
         _factory.InitLayout(Layout);
     }
 
+    public void SetKeyboardSuppression(bool suppress)
+    {
+        _factory.SetKeyboardSuppression(suppress);
+    }
+
     public void Dispose()
     {
         _factory.Dispose();

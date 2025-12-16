@@ -1,5 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using HlaeObsTools.ViewModels;
 using System;
 
@@ -11,6 +13,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new MainWindowViewModel();
+
+        AddHandler(InputElement.GotFocusEvent, OnInputElementGotFocus, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, true);
+        Deactivated += OnWindowDeactivated;
     }
 
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -45,6 +50,29 @@ public partial class MainWindow : Window
     private void CloseWindow(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void OnInputElementGotFocus(object? sender, GotFocusEventArgs e)
+    {
+        UpdateKeyboardSuppression(IsTextInputElement(e.Source));
+    }
+
+    private void OnWindowDeactivated(object? sender, EventArgs e)
+    {
+        UpdateKeyboardSuppression(false);
+    }
+
+    private void UpdateKeyboardSuppression(bool suppress)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.SetKeyboardSuppression(suppress);
+        }
+    }
+
+    private static bool IsTextInputElement(object? source)
+    {
+        return source is TextBox || source is TextPresenter;
     }
 
     protected override void OnClosed(EventArgs e)

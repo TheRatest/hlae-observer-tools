@@ -260,10 +260,20 @@ public class MainDockFactory : Factory, IDisposable
 
         HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
         {
-            [nameof(IDockWindow)] = () => new Views.DockHostWindow()
+            [nameof(IDockWindow)] = () =>
+            {
+                var hostWindow = new Views.DockHostWindow();
+                hostWindow.SetKeyboardSuppressionHandler(SetKeyboardSuppression);
+                return hostWindow;
+            }
         };
 
         base.InitLayout(layout);
+    }
+
+    public void SetKeyboardSuppression(bool suppress)
+    {
+        _rawInputHandler.SuppressKeyboard = suppress;
     }
 
     public void Dispose()

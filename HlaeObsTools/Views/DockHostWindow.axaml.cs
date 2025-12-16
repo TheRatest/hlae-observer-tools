@@ -1,16 +1,24 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
+using System;
 
 namespace HlaeObsTools.Views;
 
 public partial class DockHostWindow : Window, IHostWindow
 {
+    private Action<bool>? _keyboardSuppressionHandler;
+
     public DockHostWindow()
     {
         InitializeComponent();
+        AddHandler(InputElement.GotFocusEvent, OnInputElementGotFocus, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, true);
+        Deactivated += OnWindowDeactivated;
     }
 
     public IDockWindow? Window { get; set; }
@@ -105,6 +113,26 @@ public partial class DockHostWindow : Window, IHostWindow
         {
             DockControl.Layout = dock;
         }
+    }
+
+    public void SetKeyboardSuppressionHandler(Action<bool> handler)
+    {
+        _keyboardSuppressionHandler = handler;
+    }
+
+    private void OnInputElementGotFocus(object? sender, GotFocusEventArgs e)
+    {
+        _keyboardSuppressionHandler?.Invoke(IsTextInputElement(e.Source));
+    }
+
+    private void OnWindowDeactivated(object? sender, EventArgs e)
+    {
+        _keyboardSuppressionHandler?.Invoke(false);
+    }
+
+    private static bool IsTextInputElement(object? source)
+    {
+        return source is TextBox || source is TextPresenter;
     }
 
     public void SetActive()
