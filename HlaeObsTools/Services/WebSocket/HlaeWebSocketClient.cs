@@ -13,8 +13,8 @@ namespace HlaeObsTools.Services.WebSocket;
 /// </summary>
 public class HlaeWebSocketClient : IDisposable
 {
-    private readonly string _serverAddress;
-    private readonly int _serverPort;
+    private string _serverAddress;
+    private int _serverPort;
     private ClientWebSocket? _webSocket;
     private CancellationTokenSource? _cancellationTokenSource;
     private Task? _receiveTask;
@@ -59,6 +59,18 @@ public class HlaeWebSocketClient : IDisposable
             await DisconnectAsync();
             return false;
         }
+    }
+
+    public void ConfigureEndpoint(string serverAddress, int serverPort)
+    {
+        _serverAddress = serverAddress;
+        _serverPort = serverPort;
+    }
+
+    public async Task ReconnectAsync()
+    {
+        await DisconnectAsync();
+        await ConnectAsync();
     }
 
     public async Task DisconnectAsync()

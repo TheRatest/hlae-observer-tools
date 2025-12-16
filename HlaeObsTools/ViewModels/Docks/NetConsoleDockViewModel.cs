@@ -25,9 +25,10 @@ public class NetConsoleDockViewModel : Tool, IDisposable
     private readonly List<string> _history = new();
 
     private Cs2NetConsoleClient? _client;
-    private int _currentPort = 2121;
+    private string _currentHost = "127.0.0.1";
+    private int _currentPort = 54545;
 
-    private string _portText = "2121";
+    private string _hostPortText = "127.0.0.1:54545";
     private string _inputText = string.Empty;
     private string _statusText = "Not connected";
     private string _logText = string.Empty;
@@ -55,10 +56,10 @@ public class NetConsoleDockViewModel : Tool, IDisposable
 
     public bool HasSuggestions => _suggestions.Count > 0;
 
-    public string PortText
+    public string HostPortText
     {
-        get => _portText;
-        set => SetProperty(ref _portText, value);
+        get => _hostPortText;
+        set => SetProperty(ref _hostPortText, value);
     }
 
     public string InputText
@@ -159,19 +160,20 @@ public class NetConsoleDockViewModel : Tool, IDisposable
         if (IsConnecting || IsConnected)
             return;
 
-        if (!int.TryParse(PortText, out var port) || port < 1 || port > 65535)
+        if (!TryParseHostPort(HostPortText, out var host, out var port))
         {
-            AppendLog("SYS", $"Invalid port: {PortText}");
+            AppendLog("SYS", $"Invalid address: {HostPortText} (use host:port)");
             return;
         }
 
         _currentPort = port;
+        _currentHost = host;
         IsConnecting = true;
-        StatusText = $"Connecting to 127.0.0.1:{port}...";
+        StatusText = $"Connecting to {host}:{port}...";
 
-        AppendLog("SYS", $"Connecting to 127.0.0.1:{port}...");
+        AppendLog("SYS", $"Connecting to {host}:{port}...");
 
-        var client = new Cs2NetConsoleClient("127.0.0.1", port);
+        var client = new Cs2NetConsoleClient(host, port);
         _client = client;
 
         client.MessageReceived += OnMessageReceived;
@@ -324,7 +326,7 @@ public class NetConsoleDockViewModel : Tool, IDisposable
         {
             IsConnecting = false;
             IsConnected = true;
-            StatusText = $"Connected to 127.0.0.1:{_currentPort}";
+            StatusText = $"Connected to {_currentHost}:{_currentPort}";
             AppendLog("SYS", "Connected");
         });
     }
@@ -482,6 +484,27 @@ public class NetConsoleDockViewModel : Tool, IDisposable
     private void CleanupClient()
     {
         _client = null;
+    }
+
+    private static bool TryParseHostPort(string input, out string host, out int port)
+    {
+        host = "127.0.0.1";
+        port = 0;
+
+        if (string.IsNullOrWhiteSpace(input))
+            return false;
+
+        var trimmed = input.Trim();
+        var colonIdx = trimmed.LastIndexOf(':');
+        if (colonIdx <= 0 || colonIdx == trimmed.Length - 1)
+            return false;
+
+        host = trimmed.Substring(0, colonIdx).Trim();
+        var portStr = trimmed[(colonIdx + 1)..].Trim();
+        if (!int.TryParse(portStr, out port) || port < 1 || port > 65535)
+            return false;
+
+        return !string.IsNullOrWhiteSpace(host);
     }
 
     public void Dispose()

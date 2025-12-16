@@ -49,6 +49,7 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     private FreecamSettings? _freecamSettings;
     private bool _useD3DHost;
     private double _freecamSpeed;
+    private RtpReceiverConfig _rtpConfig = new();
     private HlaeWebSocketClient? _speedWebSocketClient;
     private readonly IReadOnlyList<double> _speedTicks;
     private double _speedMultiplier = 1.0;
@@ -209,6 +210,11 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
 
         _gsiServer = server;
         _gsiServer.GameStateUpdated += OnHudGameStateUpdated;
+    }
+
+    public void SetRtpConfig(RtpReceiverConfig config)
+    {
+        _rtpConfig = config;
     }
 
     public bool IsHudEnabled => _hudSettings?.IsHudEnabled ?? false;
@@ -855,13 +861,14 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
 
     private void StartRtpInternal(RtpReceiverConfig? config = null)
     {
-        var receiver = new RtpVideoReceiver(config);
+        var receiver = new RtpVideoReceiver(config ?? _rtpConfig);
         receiver.FrameReceived += OnFrameReceived;
         receiver.Start();
 
         _videoSource = receiver;
         IsStreaming = true;
-        StatusText = $"Connected - {config?.Address ?? "127.0.0.1"}:{config?.Port ?? 5000}";
+        var activeConfig = config ?? _rtpConfig;
+        StatusText = $"Connected - {activeConfig.Address}:{activeConfig.Port}";
         _lastFrameTime = DateTime.Now;
         _frameCount = 0;
     }

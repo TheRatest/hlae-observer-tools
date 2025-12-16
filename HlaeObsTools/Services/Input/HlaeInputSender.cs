@@ -14,8 +14,8 @@ namespace HlaeObsTools.Services.Input;
 /// </summary>
 public class HlaeInputSender : IDisposable
 {
-    private readonly string _serverAddress;
-    private readonly int _serverPort;
+    private string _serverAddress;
+    private int _serverPort;
     private UdpClient? _udpClient;
     private IPEndPoint? _serverEndpoint;
     private CancellationTokenSource? _cancellationTokenSource;
@@ -222,5 +222,22 @@ public class HlaeInputSender : IDisposable
 
         Stop();
         _disposed = true;
+    }
+
+    public void ConfigureEndpoint(string serverAddress, int serverPort, bool restartIfActive = true)
+    {
+        var wasActive = IsActive;
+        if (IsActive && restartIfActive)
+        {
+            Stop();
+        }
+
+        _serverAddress = serverAddress;
+        _serverPort = serverPort;
+
+        if (wasActive && restartIfActive)
+        {
+            Start();
+        }
     }
 }

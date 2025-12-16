@@ -5,6 +5,7 @@ using Dock.Model.Mvvm.Controls;
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using HlaeObsTools.Services.Input;
 using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.ViewModels.Docks;
@@ -23,18 +24,24 @@ public class MainDockFactory : Factory
     private readonly Timer _inputFlushTimer;
     private readonly GsiServer _gsiServer;
     private readonly RadarConfigProvider _radarConfigProvider;
+    private readonly SettingsStorage _settingsStorage;
+    private readonly AppSettingsData _storedSettings;
+    private VideoDisplayDockViewModel? _videoDisplayVm;
 
     public MainDockFactory(object context)
     {
         _context = context;
 
-        // Initialize WebSocket client (connect to HLAE on localhost)
-        _webSocketClient = new HlaeWebSocketClient("127.0.0.1", 31338);
+        _settingsStorage = new SettingsStorage();
+        _storedSettings = _settingsStorage.Load();
+
+        // Initialize WebSocket client
+        _webSocketClient = new HlaeWebSocketClient(_storedSettings.WebSocketHost, _storedSettings.WebSocketPort);
         _webSocketClient.MessageReceived += OnHlaeMessage;
         _ = _webSocketClient.ConnectAsync(); // Fire and forget
 
         // Initialize UDP input sender (send at 240Hz to HLAE)
-        _inputSender = new HlaeInputSender("127.0.0.1", 31339);
+        _inputSender = new HlaeInputSender(_storedSettings.UdpHost, _storedSettings.UdpPort);
         _inputSender.SendRate = 240; // Hz
         _inputSender.Start();
 
@@ -56,6 +63,43 @@ public class MainDockFactory : Factory
         // TODO: Parse JSON and update UI state
     }
 
+    private async Task ApplyNetworkSettingsAsync(SettingsDockViewModel.NetworkSettingsData data)
+    {
+        _storedSettings.WebSocketHost = data.WebSocketHost;
+        _storedSettings.WebSocketPort = data.WebSocketPort;
+        _storedSettings.UdpHost = data.UdpHost;
+        _storedSettings.UdpPort = data.UdpPort;
+        _storedSettings.RtpHost = data.RtpHost;
+        _storedSettings.RtpPort = data.RtpPort;
+        _storedSettings.GsiHost = data.GsiHost;
+        _storedSettings.GsiPort = data.GsiPort;
+        _settingsStorage.Save(_storedSettings);
+
+        _webSocketClient.ConfigureEndpoint(data.WebSocketHost, data.WebSocketPort);
+        await _webSocketClient.ReconnectAsync();
+
+        _inputSender.ConfigureEndpoint(data.UdpHost, data.UdpPort, restartIfActive: true);
+
+        if (_videoDisplayVm != null)
+        {
+            _videoDisplayVm.SetRtpConfig(new Services.Video.RTP.RtpReceiverConfig
+            {
+                Address = data.RtpHost,
+                Port = data.RtpPort
+            });
+
+            if (_videoDisplayVm.IsStreaming)
+            {
+                _videoDisplayVm.StopStream();
+                _videoDisplayVm.StartStream();
+            }
+        }
+
+        // Restart GSI listener with new endpoint
+        _gsiServer.Stop();
+        _gsiServer.Start(data.GsiPort, "/gsi/", data.GsiHost);
+    }
+
     public override IDocumentDock CreateDocumentDock() => new DocumentDock();
     public override IToolDock CreateToolDock() => new ToolDock();
     public override IProportionalDock CreateProportionalDock() => new ProportionalDock();
@@ -64,27 +108,39 @@ public class MainDockFactory : Factory
     public override IRootDock CreateLayout()
     {
         // Shared settings for radar customization
-        var settingsStorage = new SettingsStorage();
-        var storedSettings = settingsStorage.Load();
-
-        var radarSettings = new RadarSettings { MarkerScale = storedSettings.MarkerScale };
+        var radarSettings = new RadarSettings { MarkerScale = _storedSettings.MarkerScale };
         var hudSettings = new HudSettings();
-        hudSettings.ApplyAttachPresets(storedSettings.AttachPresets);
+        hudSettings.ApplyAttachPresets(_storedSettings.AttachPresets);
         var freecamSettings = new FreecamSettings();
 
         // Create the 5 docks (top-right hosts the CS2 console)
         var bottomRight = new CampathsDockViewModel { Id = "BottomRight", Title = "Campaths" };
         var topLeft = new RadarDockViewModel(_gsiServer, _radarConfigProvider, radarSettings, bottomRight, _webSocketClient) { Id = "TopLeft", Title = "Radar" };
-        var topCenter = new VideoDisplayDockViewModel { Id = "TopCenter", Title = "Video Stream" };
+        _videoDisplayVm = new VideoDisplayDockViewModel { Id = "TopCenter", Title = "Video Stream" };
         var topRight = new NetConsoleDockViewModel { Id = "TopRight", Title = "Console" };
-        var bottomLeft = new SettingsDockViewModel(radarSettings, hudSettings, freecamSettings, settingsStorage, _webSocketClient) { Id = "BottomLeft", Title = "Settings" };
+        var bottomLeft = new SettingsDockViewModel(
+            radarSettings,
+            hudSettings,
+            freecamSettings,
+            _settingsStorage,
+            _webSocketClient,
+            ApplyNetworkSettingsAsync,
+            _storedSettings)
+        { Id = "BottomLeft", Title = "Settings" };
 
         // Inject WebSocket and UDP services into video display
-        topCenter.SetWebSocketClient(_webSocketClient);
-        topCenter.SetInputSender(_inputSender);
-        topCenter.SetFreecamSettings(freecamSettings);
-        topCenter.SetHudSettings(hudSettings);
-        topCenter.SetGsiServer(_gsiServer);
+        _videoDisplayVm.SetWebSocketClient(_webSocketClient);
+        _videoDisplayVm.SetInputSender(_inputSender);
+        _videoDisplayVm.SetFreecamSettings(freecamSettings);
+        _videoDisplayVm.SetHudSettings(hudSettings);
+        _videoDisplayVm.SetGsiServer(_gsiServer);
+        _videoDisplayVm.SetRtpConfig(new Services.Video.RTP.RtpReceiverConfig
+        {
+            Address = _storedSettings.RtpHost,
+            Port = _storedSettings.RtpPort
+        });
+        // Start GSI listener with configured host/port (host currently informational; listener binds to prefixes)
+        _gsiServer.Start(_storedSettings.GsiPort, "/gsi/", _storedSettings.GsiHost);
         bottomRight.SetWebSocketClient(_webSocketClient);
 
         // Wrap tools in ToolDocks for proper docking behavior
@@ -102,8 +158,8 @@ public class MainDockFactory : Factory
         {
             Id = "TopCenterDock",
             Proportion = 0.5,
-            ActiveDockable = topCenter,
-            VisibleDockables = CreateList<IDockable>(topCenter)
+            ActiveDockable = _videoDisplayVm,
+            VisibleDockables = CreateList<IDockable>(_videoDisplayVm)
         };
 
         // Top-right: Settings - remaining space

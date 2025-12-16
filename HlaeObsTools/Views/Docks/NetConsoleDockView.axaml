@@ -5,14 +5,14 @@
              x:DataType="vm:NetConsoleDockViewModel">
   <Border Background="#1E1E1E" Padding="10">
     <Grid RowDefinitions="Auto,*,Auto" RowSpacing="8">
-      <Grid ColumnDefinitions="Auto,100,*,Auto" ColumnSpacing="8">
-        <TextBlock Text="Port"
+      <Grid ColumnDefinitions="Auto,180,*,Auto" ColumnSpacing="8">
+        <TextBlock Text="Address"
                    VerticalAlignment="Center"
                    Foreground="#D0D0D0" />
         <TextBox Grid.Column="1"
-                 Text="{Binding PortText, Mode=TwoWay}"
+                 Text="{Binding HostPortText, Mode=TwoWay}"
                  HorizontalAlignment="Stretch"
-                 MinWidth="80"
+                 MinWidth="140"
                  VerticalContentAlignment="Center"
                  Background="#2A2A2A"
                  Foreground="#E0E0E0"

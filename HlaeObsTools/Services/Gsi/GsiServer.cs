@@ -14,39 +14,67 @@ namespace HlaeObsTools.Services.Gsi;
 /// </summary>
 public sealed class GsiServer : IDisposable
 {
-    private readonly HttpListener _listener = new();
+    private HttpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
     private long _heartbeat;
 
     public event EventHandler<GsiGameState>? GameStateUpdated;
 
-    public bool IsRunning => _listener.IsListening;
+    public bool IsRunning => _listener != null && _listener.IsListening;
 
-    public void Start(int port = 31982, string path = "/gsi/")
+    public void Start(int port = 31337, string path = "/gsi/", string host = "127.0.0.1")
     {
-        if (IsRunning) return;
+        Stop();
 
+        var normalizedPath = path.StartsWith("/") ? path : "/" + path;
+        if (!normalizedPath.EndsWith("/")) normalizedPath += "/";
+
+        bool started = false;
+        string requestedHost = host;
+
+        _listener = new HttpListener();
+
+        // Try requested host first (may require URL ACL for non-loopback).
         try
         {
             _listener.Prefixes.Clear();
-            var normalizedPath = path.StartsWith("/") ? path : "/" + path;
-            if (!normalizedPath.EndsWith("/")) normalizedPath += "/";
-
-            // Add both the specific path and a root fallback to catch mismatched trailing slashes.
-            _listener.Prefixes.Add($"http://127.0.0.1:{port}{normalizedPath}");
-            _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+            _listener.Prefixes.Add($"http://{requestedHost}:{port}{normalizedPath}");
+            _listener.Prefixes.Add($"http://{requestedHost}:{port}/");
             _listener.Start();
+            started = true;
         }
         catch (HttpListenerException ex)
         {
-            Console.WriteLine($"GSI listener failed to start: {ex.Message}");
+            Console.WriteLine($"GSI listener failed on {requestedHost}:{port} ({ex.Message}). If you need non-loopback, run as administrator or add a URL ACL: netsh http add urlacl url=http://{requestedHost}:{port}/ user=Everyone");
+        }
+
+        // Fallback to loopback if requested host failed and isn't already loopback.
+        if (!started && !string.Equals(requestedHost, "127.0.0.1", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                _listener = new HttpListener();
+                _listener.Prefixes.Add($"http://127.0.0.1:{port}{normalizedPath}");
+                _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+                _listener.Start();
+                started = true;
+                host = "127.0.0.1";
+            }
+            catch (HttpListenerException ex)
+            {
+                Console.WriteLine($"GSI listener fallback to loopback failed: {ex.Message}");
+            }
+        }
+
+        if (!started)
+        {
             return;
         }
 
         _cts = new CancellationTokenSource();
         _loopTask = Task.Run(() => ListenLoopAsync(_cts.Token));
-        Console.WriteLine($"GSI listener started on http://127.0.0.1:{port}{path}");
+        Console.WriteLine($"GSI listener started on http://{host}:{port}{path}");
     }
 
     public void Stop()
@@ -75,6 +103,7 @@ public sealed class GsiServer : IDisposable
             HttpListenerContext? ctx = null;
             try
             {
+                if (_listener == null) break;
                 ctx = await _listener.GetContextAsync().ConfigureAwait(false);
             }
             catch when (token.IsCancellationRequested)
@@ -399,6 +428,10 @@ public sealed class GsiServer : IDisposable
     public void Dispose()
     {
         Stop();
-        _listener.Close();
+        if (_listener != null)
+        {
+            _listener.Close();
+            _listener = null;
+        }
     }
 }
