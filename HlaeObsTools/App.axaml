@@ -29,5 +29,8 @@
         <DataTemplate DataType="vm:SettingsDockViewModel">
             <views:SettingsDockView/>
         </DataTemplate>
+        <DataTemplate DataType="vm:Viewport3DDockViewModel">
+            <views:Viewport3DDockView/>
+        </DataTemplate>
     </Application.DataTemplates>
 </Application>

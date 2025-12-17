@@ -24,17 +24,19 @@ namespace HlaeObsTools.ViewModels.Docks
         private readonly RadarSettings _radarSettings;
         private readonly HudSettings _hudSettings;
         private readonly FreecamSettings _freecamSettings;
+        private readonly Viewport3DSettings _viewport3DSettings;
         private readonly SettingsStorage _settingsStorage;
         private readonly HlaeWebSocketClient? _ws;
         private readonly Func<NetworkSettingsData, Task>? _applyNetworkSettingsAsync;
 
         public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, int GsiPort);
 
-        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null)
+        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null)
         {
             _radarSettings = radarSettings;
             _hudSettings = hudSettings;
             _freecamSettings = freecamSettings;
+            _viewport3DSettings = viewport3DSettings;
             _settingsStorage = settingsStorage;
             _ws = wsClient;
             _applyNetworkSettingsAsync = applyNetworkSettingsAsync;
@@ -52,8 +54,10 @@ namespace HlaeObsTools.ViewModels.Docks
             _rtpPort = settings.RtpPort;
             _gsiPort = settings.GsiPort;
             _useAltPlayerBinds = settings.UseAltPlayerBinds;
+            _mapObjPath = settings.MapObjPath ?? string.Empty;
             _radarSettings.UseAltPlayerBinds = _useAltPlayerBinds;
             _hudSettings.UseAltPlayerBinds = _useAltPlayerBinds;
+            _viewport3DSettings.MapObjPath = _mapObjPath;
 
             if (_ws != null)
             {
@@ -146,6 +150,70 @@ namespace HlaeObsTools.ViewModels.Docks
                 await _applyNetworkSettingsAsync(payload);
             }
         }
+        #endregion
+
+        #region ==== 3D Viewport ====
+
+        private string _mapObjPath = string.Empty;
+        public string MapObjPath
+        {
+            get => _mapObjPath;
+            set
+            {
+                if (_mapObjPath != value)
+                {
+                    _mapObjPath = value ?? string.Empty;
+                    _viewport3DSettings.MapObjPath = _mapObjPath;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public ICommand BrowseMapObjCommand => new AsyncRelay(BrowseMapObjAsync);
+        public ICommand ClearMapObjCommand => new Relay(() =>
+        {
+            MapObjPath = string.Empty;
+        });
+
+        private async Task BrowseMapObjAsync()
+        {
+            var path = await PickObjFileToLoadAsync();
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            MapObjPath = path;
+        }
+
+        private async Task<string?> PickObjFileToLoadAsync()
+        {
+            if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime lifetime)
+                return null;
+
+            var window = lifetime.MainWindow;
+            if (window is null)
+                return null;
+
+            var result = await window.StorageProvider.OpenFilePickerAsync(
+                new FilePickerOpenOptions
+                {
+                    Title = "Load Map OBJ",
+                    AllowMultiple = false,
+                    FileTypeFilter =
+                    [
+                        new FilePickerFileType("Wavefront OBJ")
+                        {
+                            Patterns = ["*.obj"]
+                        }
+                    ]
+                });
+
+            if (result is { Count: > 0 })
+                return result[0].Path.LocalPath;
+
+            return null;
+        }
+
         #endregion
 
         #region === General Settings ===
@@ -294,7 +362,8 @@ namespace HlaeObsTools.ViewModels.Docks
                 WebSocketHost = WebSocketHost,
                 WebSocketPort = WebSocketPort,
                 UdpPort = UdpPort,
-                RtpPort = RtpPort
+                RtpPort = RtpPort,
+                MapObjPath = _mapObjPath
             };
             _settingsStorage.Save(data);
         }

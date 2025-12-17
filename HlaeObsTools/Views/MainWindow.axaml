@@ -40,6 +40,11 @@
         <DataTemplate DataType="vmd:NetConsoleDockViewModel">
             <vd:NetConsoleDockView />
         </DataTemplate>
+
+        <!-- Data template for Viewport3DDockViewModel -->
+        <DataTemplate DataType="vmd:Viewport3DDockViewModel">
+            <vd:Viewport3DDockView />
+        </DataTemplate>
     </Window.DataTemplates>
 
     <Grid RowDefinitions="Auto,*">

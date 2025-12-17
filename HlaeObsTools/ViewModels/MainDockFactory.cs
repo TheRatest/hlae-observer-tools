@@ -117,8 +117,12 @@ public class MainDockFactory : Factory, IDisposable
         };
         hudSettings.ApplyAttachPresets(_storedSettings.AttachPresets);
         var freecamSettings = new FreecamSettings();
+        var viewport3DSettings = new Viewport3DSettings
+        {
+            MapObjPath = _storedSettings.MapObjPath ?? string.Empty
+        };
 
-        // Create the 5 docks (top-right hosts the CS2 console)
+        // Create the docks (top-right hosts the CS2 console)
         var bottomRight = new CampathsDockViewModel { Id = "BottomRight", Title = "Campaths" };
         var topLeft = new RadarDockViewModel(_gsiServer, _radarConfigProvider, radarSettings, bottomRight, _webSocketClient) { Id = "TopLeft", Title = "Radar" };
         _videoDisplayVm = new VideoDisplayDockViewModel { Id = "TopCenter", Title = "Video Stream" };
@@ -127,11 +131,13 @@ public class MainDockFactory : Factory, IDisposable
             radarSettings,
             hudSettings,
             freecamSettings,
+            viewport3DSettings,
             _settingsStorage,
             _webSocketClient,
             ApplyNetworkSettingsAsync,
             _storedSettings)
         { Id = "BottomLeft", Title = "Settings" };
+        var bottomCenter = new Viewport3DDockViewModel(viewport3DSettings) { Id = "BottomCenter", Title = "3D Viewport" };
 
         // Inject WebSocket and UDP services into video display
         _videoDisplayVm.SetWebSocketClient(_webSocketClient);
@@ -179,15 +185,23 @@ public class MainDockFactory : Factory, IDisposable
         var bottomLeftDock = new ToolDock
         {
             Id = "BottomLeftDock",
-            Proportion = 0.5,
+            Proportion = 0.3,
             ActiveDockable = bottomLeft,
             VisibleDockables = CreateList<IDockable>(bottomLeft)
+        };
+
+        var bottomCenterDock = new ToolDock
+        {
+            Id = "BottomCenterDock",
+            Proportion = 0.4,
+            ActiveDockable = bottomCenter,
+            VisibleDockables = CreateList<IDockable>(bottomCenter)
         };
 
         var bottomRightDock = new ToolDock
         {
             Id = "BottomRightDock",
-            Proportion = 0.5,
+            Proportion = 0.3,
             ActiveDockable = bottomRight,
             VisibleDockables = CreateList<IDockable>(bottomRight)
         };
@@ -209,7 +223,7 @@ public class MainDockFactory : Factory, IDisposable
             )
         };
 
-        // Create bottom row (2 docks with splitter between them)
+        // Create bottom row (3 docks with splitters between them)
         var bottomRow = new ProportionalDock
         {
             Id = "BottomRow",
@@ -219,6 +233,8 @@ public class MainDockFactory : Factory, IDisposable
             VisibleDockables = CreateList<IDockable>
             (
                 bottomLeftDock,
+                new ProportionalDockSplitter(),
+                bottomCenterDock,
                 new ProportionalDockSplitter(),
                 bottomRightDock
             )

@@ -123,6 +123,26 @@
                 </StackPanel>
             </TabItem>
 
+            <TabItem Header="3D">
+                <StackPanel Margin="10" Spacing="10">
+                    <TextBlock Text="Map OBJ"
+                               Foreground="#CCCCCC"
+                               FontWeight="SemiBold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBox Width="320"
+                                 Text="{Binding MapObjPath, Mode=TwoWay}"
+                                 Watermark="path\\to\\map.obj"/>
+                        <Button Content="Browse"
+                                Command="{Binding BrowseMapObjCommand}"/>
+                        <Button Content="Clear"
+                                Command="{Binding ClearMapObjCommand}"/>
+                    </StackPanel>
+                    <TextBlock Text="Load a low-poly .obj map for the 3D viewport."
+                               Foreground="#888888"
+                               FontSize="12"/>
+                </StackPanel>
+            </TabItem>
+
             <TabItem Header="HUD">
                 <StackPanel Margin="10" Spacing="10">
                     <TextBlock Text="Video HUD Overlay"

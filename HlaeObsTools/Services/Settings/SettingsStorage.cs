@@ -67,6 +67,7 @@ public class AppSettingsData
     public int UdpPort { get; set; } = 31339;
     public int RtpPort { get; set; } = 5000;
     public int GsiPort { get; set; } = 31337;
+    public string MapObjPath { get; set; } = string.Empty;
 }
 
 public class AttachmentPresetData
