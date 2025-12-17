@@ -34,6 +34,8 @@ public sealed class FreecamSettings : ViewModelBase
     private bool _smoothEnabled = true;
     private double _halfVec = 0.5;
     private double _halfRot = 0.5;
+    private double _lockHalfRot = 0.2;
+    private double _lockHalfRotTransition = 1.0;
     private double _halfFov = 0.5;
 
     #region Mouse Settings
@@ -205,6 +207,24 @@ public sealed class FreecamSettings : ViewModelBase
     {
         get => _halfRot;
         set => SetProperty(ref _halfRot, value);
+    }
+
+    /// <summary>
+    /// Rotation smoothing half-time in seconds while player lock is active.
+    /// </summary>
+    public double LockHalfRot
+    {
+        get => _lockHalfRot;
+        set => SetProperty(ref _lockHalfRot, value);
+    }
+
+    /// <summary>
+    /// Seconds to transition between halfRot and lockHalfRot.
+    /// </summary>
+    public double LockHalfRotTransition
+    {
+        get => _lockHalfRotTransition;
+        set => SetProperty(ref _lockHalfRotTransition, value);
     }
 
     /// <summary>

@@ -12,9 +12,6 @@
         <conv:BooleanToOpacityConverter x:Key="AliveOpacityConverter"
                                         TrueOpacity="1"
                                         FalseOpacity="0.35" />
-        <conv:BooleanToOpacityConverter x:Key="FocusedGlowOpacityConverter"
-                                        TrueOpacity="0.9"
-                                        FalseOpacity="0" />
     </UserControl.Resources>
     <Grid>
         <Border x:Name="CardBorder"
@@ -26,14 +23,6 @@
                 BorderThickness="{Binding DisplayBorderThickness}"
                 Width="330"
                 Opacity="{Binding IsAlive, Converter={StaticResource AliveOpacityConverter}}">
-            <Border.Effect>
-                <DropShadowEffect
-                    Color="#FFFFFFFF"
-                    BlurRadius="18"
-                    OffsetX="0"
-                    OffsetY="0"
-                    Opacity="{Binding IsFocused, Converter={StaticResource FocusedGlowOpacityConverter}}"/>
-            </Border.Effect>
 
             <StackPanel Spacing="6">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">

@@ -383,6 +383,35 @@
                                            Width="50"
                                            Foreground="#E6E6E6"/>
                             </StackPanel>
+
+                            <TextBlock Text="Player Lock Half-time (seconds)"
+                                       Foreground="#CCCCCC"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Slider Minimum="0.05"
+                                        Maximum="2.0"
+                                        SmallChange="0.05"
+                                        LargeChange="0.1"
+                                        Width="200"
+                                        Value="{Binding LockHalfRot, Mode=TwoWay}"/>
+                                <TextBlock Text="{Binding LockHalfRot, StringFormat={}{0:F2}}"
+                                           Width="50"
+                                           Foreground="#E6E6E6"/>
+                            </StackPanel>
+
+                            <TextBlock Text="Player Lock Half-time Transition (seconds)"
+                                       Foreground="#CCCCCC"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Slider Minimum="0.05"
+                                        Maximum="2.0"
+                                        SmallChange="0.05"
+                                        LargeChange="0.1"
+                                        Width="200"
+                                        Value="{Binding LockHalfRotTransition, Mode=TwoWay}"/>
+                                <TextBlock Text="{Binding LockHalfRotTransition, StringFormat={}{0:F2}}"
+                                           Width="50"
+                                           Foreground="#E6E6E6"/>
+                            </StackPanel>
+                                                        
                         </StackPanel>
 
                         </StackPanel>

@@ -685,6 +685,34 @@ namespace HlaeObsTools.ViewModels.Docks
             }
         }
 
+        public double LockHalfRot
+        {
+            get => _freecamSettings.LockHalfRot;
+            set
+            {
+                if (_freecamSettings.LockHalfRot != value)
+                {
+                    _freecamSettings.LockHalfRot = value;
+                    OnPropertyChanged();
+                    SendFreecamConfigAsync(new { lockHalfRot = (float)value });
+                }
+            }
+        }
+
+        public double LockHalfRotTransition
+        {
+            get => _freecamSettings.LockHalfRotTransition;
+            set
+            {
+                if (_freecamSettings.LockHalfRotTransition != value)
+                {
+                    _freecamSettings.LockHalfRotTransition = value;
+                    OnPropertyChanged();
+                    SendFreecamConfigAsync(new { lockHalfRotTransition = (float)value });
+                }
+            }
+        }
+
         public double HalfFov
         {
             get => _freecamSettings.HalfFov;

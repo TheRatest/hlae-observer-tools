@@ -43,7 +43,17 @@
         </DataTemplate>
 
         <DataTemplate x:Key="PlayerCardTemplate" x:DataType="hud:HudPlayerCardViewModel">
-            <controls:HudPlayerCardControl />
+            <Border Background="Transparent">
+                <controls:HudPlayerCardControl />
+                <Border.Effect>
+                    <DropShadowEffect
+                        Color="#FFFFFFFF"
+                        BlurRadius="18"
+                        OffsetX="0"
+                        OffsetY="0"
+                        Opacity="{Binding IsFocused, Converter={StaticResource FocusedGlowOpacityConverter}}"/>
+                </Border.Effect>
+            </Border>
         </DataTemplate>
 
         <DataTemplate x:Key="FocusedPlayerCardTemplate" x:DataType="hud:HudPlayerCardViewModel">
