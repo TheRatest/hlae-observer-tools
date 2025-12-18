@@ -24,6 +24,12 @@ public sealed class OpenTkViewport : OpenGlControlBase
         AvaloniaProperty.Register<OpenTkViewport, string?>(nameof(StatusText), string.Empty);
     public static readonly StyledProperty<float> PinScaleProperty =
         AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinScale), 1.0f);
+    public static readonly StyledProperty<float> PinOffsetXProperty =
+        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinOffsetX), 0.0f);
+    public static readonly StyledProperty<float> PinOffsetYProperty =
+        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinOffsetY), 0.0f);
+    public static readonly StyledProperty<float> PinOffsetZProperty =
+        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinOffsetZ), 0.0f);
     public static readonly StyledProperty<float> MapScaleProperty =
         AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapScale), 1.0f);
     public static readonly StyledProperty<float> MapYawProperty =
@@ -143,6 +149,9 @@ public sealed class OpenTkViewport : OpenGlControlBase
     {
         MapPathProperty.Changed.AddClassHandler<OpenTkViewport>((sender, args) => sender.OnMapPathChanged(args));
         PinScaleProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnPinScaleChanged());
+        PinOffsetXProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnPinOffsetChanged());
+        PinOffsetYProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnPinOffsetChanged());
+        PinOffsetZProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnPinOffsetChanged());
         MapScaleProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
         MapYawProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
         MapPitchProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
@@ -176,6 +185,24 @@ public sealed class OpenTkViewport : OpenGlControlBase
     {
         get => GetValue(PinScaleProperty);
         set => SetValue(PinScaleProperty, value);
+    }
+
+    public float PinOffsetX
+    {
+        get => GetValue(PinOffsetXProperty);
+        set => SetValue(PinOffsetXProperty, value);
+    }
+
+    public float PinOffsetY
+    {
+        get => GetValue(PinOffsetYProperty);
+        set => SetValue(PinOffsetYProperty, value);
+    }
+
+    public float PinOffsetZ
+    {
+        get => GetValue(PinOffsetZProperty);
+        set => SetValue(PinOffsetZProperty, value);
     }
 
     public float MapScale
@@ -747,6 +774,12 @@ public sealed class OpenTkViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
+    private void OnPinOffsetChanged()
+    {
+        _pinsDirty = true;
+        RequestNextFrameRendering();
+    }
+
     private void OnWorldTransformChanged()
     {
         _pinsDirty = true;
@@ -806,12 +839,14 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var rotation = GetWorldRotation();
         var offset = new Vector3(WorldOffsetX, WorldOffsetY, WorldOffsetZ);
         var scale = WorldScale;
+        var pinOffset = new Vector3(PinOffsetX, PinOffsetY, PinOffsetZ);
 
         var list = new List<PinRenderData>();
         foreach (var pin in pins)
         {
             var position = new Vector3((float)pin.Position.X, (float)pin.Position.Y, (float)pin.Position.Z);
             var forward = new Vector3((float)pin.Forward.X, (float)pin.Forward.Y, (float)pin.Forward.Z);
+            position += pinOffset;
             position *= scale;
             position = Transform(position, rotation) + offset;
             forward = Transform(forward, rotation);

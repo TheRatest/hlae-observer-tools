@@ -157,6 +157,7 @@ public partial class VideoDisplayDockView : UserControl
         vm.OverlayRightButtonUp += OnOverlayRightButtonUp;
         vm.OverlayShiftKeyChanged += OnOverlayShiftKeyChanged;
         vm.FreecamInputLockRequested += OnFreecamInputLockRequested;
+        vm.FreecamInputReleaseRequested += OnFreecamInputReleaseRequested;
     }
 
     private void UnsubscribeFromOverlayEvents(VideoDisplayDockViewModel vm)
@@ -165,6 +166,7 @@ public partial class VideoDisplayDockView : UserControl
         vm.OverlayRightButtonUp -= OnOverlayRightButtonUp;
         vm.OverlayShiftKeyChanged -= OnOverlayShiftKeyChanged;
         vm.FreecamInputLockRequested -= OnFreecamInputLockRequested;
+        vm.FreecamInputReleaseRequested -= OnFreecamInputReleaseRequested;
     }
 
     private void OnRtpViewerWindowChanged(object? sender, IntPtr hwnd)
@@ -208,6 +210,15 @@ public partial class VideoDisplayDockView : UserControl
 
         _isRightButtonDown = true;
         BeginFreecam();
+    }
+
+    private void OnFreecamInputReleaseRequested(object? sender, EventArgs e)
+    {
+        if (!_lockedCursorCenter.HasValue)
+            return;
+
+        _isRightButtonDown = false;
+        EndFreecam();
     }
 
     private void OnParentWindowPositionChanged(object? sender, PixelPointEventArgs e)

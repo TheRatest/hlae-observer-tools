@@ -146,18 +146,23 @@
                                 Foreground="#CCCCCC"
                                 FontWeight="SemiBold"
                                 Margin="0,10,0,0"/>
-                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                            <Slider Minimum="0.25"
-                                    Maximum="100"
-                                    SmallChange="0.05"
-                                    LargeChange="1"
-                                    Width="200"
-                                    Value="{Binding PinScale, Mode=TwoWay}"/>
-                            <TextBlock Text="{Binding PinScale, StringFormat={}{0:F2}}"
-                                    Width="50"
-                                    Foreground="#E6E6E6"/>
-                        </StackPanel>
+                        <TextBox Width="120"
+                                Text="{Binding PinScale, Mode=TwoWay}"
+                                Watermark="1.0"/>
                         <TextBlock Text="Adjusts player pin size in the 3D viewport."
+                                Foreground="#888888"
+                                FontSize="12"/>
+
+                        <TextBlock Text="Pin offset"
+                                Foreground="#CCCCCC"
+                                FontWeight="SemiBold"
+                                Margin="0,10,0,0"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBox Width="80" Watermark="X" Text="{Binding PinOffsetX, Mode=TwoWay}" />
+                            <TextBox Width="80" Watermark="Y" Text="{Binding PinOffsetY, Mode=TwoWay}" />
+                            <TextBox Width="80" Watermark="Z" Text="{Binding PinOffsetZ, Mode=TwoWay}" />
+                        </StackPanel>
+                        <TextBlock Text="Offsets player pins (use Z to lift above the floor)."
                                 Foreground="#888888"
                                 FontSize="12"/>
 

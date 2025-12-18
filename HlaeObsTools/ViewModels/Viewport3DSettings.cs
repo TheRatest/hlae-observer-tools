@@ -8,6 +8,9 @@ public sealed class Viewport3DSettings : ViewModelBase
     private string _mapObjPath = string.Empty;
     private bool _useAltPlayerBinds;
     private float _pinScale = 1.0f;
+    private float _pinOffsetX;
+    private float _pinOffsetY;
+    private float _pinOffsetZ;
     private float _worldScale = 1.0f;
     private float _worldYaw;
     private float _worldPitch;
@@ -48,6 +51,33 @@ public sealed class Viewport3DSettings : ViewModelBase
     {
         get => _pinScale;
         set => SetProperty(ref _pinScale, value);
+    }
+
+    /// <summary>
+    /// Pin offset in world space (X).
+    /// </summary>
+    public float PinOffsetX
+    {
+        get => _pinOffsetX;
+        set => SetProperty(ref _pinOffsetX, value);
+    }
+
+    /// <summary>
+    /// Pin offset in world space (Y).
+    /// </summary>
+    public float PinOffsetY
+    {
+        get => _pinOffsetY;
+        set => SetProperty(ref _pinOffsetY, value);
+    }
+
+    /// <summary>
+    /// Pin offset in world space (Z).
+    /// </summary>
+    public float PinOffsetZ
+    {
+        get => _pinOffsetZ;
+        set => SetProperty(ref _pinOffsetZ, value);
     }
 
     /// <summary>

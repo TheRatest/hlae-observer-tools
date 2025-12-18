@@ -19,6 +19,7 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
     private readonly VideoDisplayDockViewModel? _videoDisplay;
     private readonly GsiServer? _gsiServer;
     private long _lastHeartbeat;
+    private bool _awaitFreecamRelease;
 
     private static readonly string[] AltBindLabels = { "Q", "E", "R", "T", "Z" };
 
@@ -131,6 +132,16 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
 
         await _webSocketClient.SendCommandAsync("freecam_handoff", args);
         _videoDisplay?.RequestFreecamInputLock();
+        _awaitFreecamRelease = true;
+    }
+
+    public void ReleaseHandoffFreecamInput()
+    {
+        if (!_awaitFreecamRelease)
+            return;
+
+        _awaitFreecamRelease = false;
+        _videoDisplay?.RequestFreecamInputRelease();
     }
 
     public float PinScale
@@ -141,6 +152,45 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             if (Math.Abs(_settings.PinScale - value) > 0.0001f)
             {
                 _settings.PinScale = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public float PinOffsetX
+    {
+        get => _settings.PinOffsetX;
+        set
+        {
+            if (Math.Abs(_settings.PinOffsetX - value) > 0.0001f)
+            {
+                _settings.PinOffsetX = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public float PinOffsetY
+    {
+        get => _settings.PinOffsetY;
+        set
+        {
+            if (Math.Abs(_settings.PinOffsetY - value) > 0.0001f)
+            {
+                _settings.PinOffsetY = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public float PinOffsetZ
+    {
+        get => _settings.PinOffsetZ;
+        set
+        {
+            if (Math.Abs(_settings.PinOffsetZ - value) > 0.0001f)
+            {
+                _settings.PinOffsetZ = value;
                 OnPropertyChanged();
             }
         }
@@ -334,6 +384,12 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             OnPropertyChanged(nameof(MapObjPath));
         else if (e.PropertyName == nameof(Viewport3DSettings.PinScale))
             OnPropertyChanged(nameof(PinScale));
+        else if (e.PropertyName == nameof(Viewport3DSettings.PinOffsetX))
+            OnPropertyChanged(nameof(PinOffsetX));
+        else if (e.PropertyName == nameof(Viewport3DSettings.PinOffsetY))
+            OnPropertyChanged(nameof(PinOffsetY));
+        else if (e.PropertyName == nameof(Viewport3DSettings.PinOffsetZ))
+            OnPropertyChanged(nameof(PinOffsetZ));
         else if (e.PropertyName == nameof(Viewport3DSettings.WorldScale))
             OnPropertyChanged(nameof(WorldScale));
         else if (e.PropertyName == nameof(Viewport3DSettings.WorldYaw))

@@ -56,6 +56,9 @@ namespace HlaeObsTools.ViewModels.Docks
             _useAltPlayerBinds = settings.UseAltPlayerBinds;
             _mapObjPath = settings.MapObjPath ?? string.Empty;
             _pinScale = (float)settings.PinScale;
+            _pinOffsetX = (float)settings.PinOffsetX;
+            _pinOffsetY = (float)settings.PinOffsetY;
+            _pinOffsetZ = (float)settings.PinOffsetZ;
             _worldScale = (float)settings.WorldScale;
             _worldYaw = (float)settings.WorldYaw;
             _worldPitch = (float)settings.WorldPitch;
@@ -75,6 +78,9 @@ namespace HlaeObsTools.ViewModels.Docks
             _viewport3DSettings.UseAltPlayerBinds = _useAltPlayerBinds;
             _viewport3DSettings.MapObjPath = _mapObjPath;
             _viewport3DSettings.PinScale = _pinScale;
+            _viewport3DSettings.PinOffsetX = _pinOffsetX;
+            _viewport3DSettings.PinOffsetY = _pinOffsetY;
+            _viewport3DSettings.PinOffsetZ = _pinOffsetZ;
             _viewport3DSettings.WorldScale = _worldScale;
             _viewport3DSettings.WorldYaw = _worldYaw;
             _viewport3DSettings.WorldPitch = _worldPitch;
@@ -211,6 +217,54 @@ namespace HlaeObsTools.ViewModels.Docks
                 {
                     _pinScale = value;
                     _viewport3DSettings.PinScale = _pinScale;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        private float _pinOffsetX;
+        public float PinOffsetX
+        {
+            get => _pinOffsetX;
+            set
+            {
+                if (Math.Abs(_pinOffsetX - value) > 0.0001f)
+                {
+                    _pinOffsetX = value;
+                    _viewport3DSettings.PinOffsetX = _pinOffsetX;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        private float _pinOffsetY;
+        public float PinOffsetY
+        {
+            get => _pinOffsetY;
+            set
+            {
+                if (Math.Abs(_pinOffsetY - value) > 0.0001f)
+                {
+                    _pinOffsetY = value;
+                    _viewport3DSettings.PinOffsetY = _pinOffsetY;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        private float _pinOffsetZ;
+        public float PinOffsetZ
+        {
+            get => _pinOffsetZ;
+            set
+            {
+                if (Math.Abs(_pinOffsetZ - value) > 0.0001f)
+                {
+                    _pinOffsetZ = value;
+                    _viewport3DSettings.PinOffsetZ = _pinOffsetZ;
                     OnPropertyChanged();
                     SaveSettings();
                 }
@@ -637,6 +691,9 @@ namespace HlaeObsTools.ViewModels.Docks
                 RtpPort = RtpPort,
                 MapObjPath = _mapObjPath,
                 PinScale = _pinScale,
+                PinOffsetX = _pinOffsetX,
+                PinOffsetY = _pinOffsetY,
+                PinOffsetZ = _pinOffsetZ,
                 WorldScale = _worldScale,
                 WorldYaw = _worldYaw,
                 WorldPitch = _worldPitch,

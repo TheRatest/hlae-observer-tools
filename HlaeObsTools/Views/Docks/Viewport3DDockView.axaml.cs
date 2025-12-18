@@ -33,6 +33,15 @@ public partial class Viewport3DDockView : UserControl
     {
         if (Viewport != null)
             Viewport.ForwardPointerReleased(e);
+
+        if (DataContext is not Viewport3DDockViewModel vm)
+            return;
+
+        var point = e.GetCurrentPoint(this);
+        if (point.Properties.PointerUpdateKind == PointerUpdateKind.RightButtonReleased)
+        {
+            vm.ReleaseHandoffFreecamInput();
+        }
     }
 
     private void OnViewportPointerMoved(object? sender, PointerEventArgs e)
