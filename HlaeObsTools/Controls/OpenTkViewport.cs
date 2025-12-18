@@ -112,6 +112,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private bool _panning;
     private Point _lastPointer;
     private Point _freecamCenterLocal;
+    private PixelPoint _freecamCenterScreen;
     private bool _freecamCursorHidden;
     private bool _freecamActive;
     private bool _freecamInputEnabled;
@@ -472,8 +473,13 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
         if (_freecamActive && _freecamInputEnabled)
         {
-            var freecamDelta = point.Position - _freecamCenterLocal;
-            _freecamMouseDelta += new Vector2((float)freecamDelta.X, (float)freecamDelta.Y);
+            if (TryGetScreenPoint(point.Position, out var screenPoint))
+            {
+                var dx = screenPoint.X - _freecamCenterScreen.X;
+                var dy = screenPoint.Y - _freecamCenterScreen.Y;
+                if (dx != 0 || dy != 0)
+                    _freecamMouseDelta += new Vector2(dx, dy);
+            }
             CenterFreecamCursor();
             UpdateInputStatus("Input: freecam");
             RequestNextFrameRendering();
@@ -993,7 +999,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var aspect = width / (float)height;
         if (_freecamActive)
         {
-            var fov = MathHelper.DegreesToRadians(_freecamSmoothed.Fov);
+            var fov = GetSourceVerticalFovRadians(_freecamSmoothed.Fov);
             var projection = Matrix4.CreatePerspectiveFieldOfView(fov, aspect, 0.05f, 100000f);
             var view = CreateFreecamView(_freecamSmoothed);
             return view * projection;
@@ -1004,6 +1010,13 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var projectionOrbit = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60f), aspect, nearPlane, farPlane);
         var viewOrbit = Matrix4.LookAt(GetCameraPosition(), _target, Vector3.UnitY);
         return viewOrbit * projectionOrbit;
+    }
+
+    private static float GetSourceVerticalFovRadians(float sourceFovDeg)
+    {
+        var hRad = MathHelper.DegreesToRadians(Math.Clamp(sourceFovDeg, 1.0f, 179.0f));
+        var vRad = 2f * MathF.Atan(MathF.Tan(hRad * 0.5f) * (3f / 4f));
+        return Math.Clamp(vRad, MathHelper.DegreesToRadians(1.0f), MathHelper.DegreesToRadians(179.0f));
     }
 
     private void ApplyCommonUniforms(ref Matrix4 mvp, Vector3 color)
@@ -1415,6 +1428,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             return;
 
         _freecamCenterLocal = centerLocal;
+        _freecamCenterScreen = centerScreen;
         SetCursorPosition(centerScreen.X, centerScreen.Y);
         Cursor = new Cursor(StandardCursorType.None);
         if (!_freecamCursorHidden)
@@ -1444,6 +1458,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             return;
 
         _freecamCenterLocal = centerLocal;
+        _freecamCenterScreen = centerScreen;
         SetCursorPosition(centerScreen.X, centerScreen.Y);
     }
 
