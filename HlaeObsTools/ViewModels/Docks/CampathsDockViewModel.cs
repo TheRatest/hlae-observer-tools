@@ -4,10 +4,18 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Avalonia;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using Avalonia.Threading;
 using Dock.Model.Mvvm.Controls;
 using HlaeObsTools.Services.Campaths;
+using HlaeObsTools.Services.Video;
+using HlaeObsTools.Services.Video.Shared;
 using HlaeObsTools.Services.WebSocket;
 
 namespace HlaeObsTools.ViewModels.Docks;
@@ -60,7 +68,7 @@ public class CampathsDockViewModel : Tool
         _renameCampathCommand = new DelegateCommand(async param => await RenameCampathAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
         _browseCampathCommand = new DelegateCommand(async param => await BrowseCampathAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
         _browseImageCommand = new DelegateCommand(async param => await BrowseImageAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
-        _screenShotCommand = new DelegateCommand(param => { ScreenShotCampath(param as CampathItemViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
+        _screenShotCommand = new DelegateCommand(async param => await ScreenShotCampathAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
         _setOffsetCommand = new DelegateCommand(async param => await SetCampathOffsetAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
         _deleteGroupCommand = new DelegateCommand(param => { DeleteGroup(param as CampathGroupViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
         _toggleGroupModeCommand = new DelegateCommand(param => { ToggleGroupMode(param as CampathGroupViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
@@ -331,11 +339,172 @@ public class CampathsDockViewModel : Tool
         }
     }
 
-    public void ScreenShotCampath(CampathItemViewModel? item)
+    public async Task ScreenShotCampathAsync(CampathItemViewModel? item)
     {
-        // Placeholder until implemented
-        // For now just mark a note
-        Save();
+        if (item == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(item.FilePath))
+        {
+            Console.WriteLine($"Campath '{item.Name}' has no file path set.");
+            return;
+        }
+
+        var targetPath = Path.ChangeExtension(item.FilePath, ".png");
+        var targetDirectory = Path.GetDirectoryName(targetPath);
+        if (string.IsNullOrWhiteSpace(targetDirectory) || !Directory.Exists(targetDirectory))
+        {
+            Console.WriteLine($"Campath '{item.Name}' has invalid path '{item.FilePath}'.");
+            return;
+        }
+
+        var frame = await CaptureSharedTextureFrameAsync();
+        if (frame == null)
+        {
+            Console.WriteLine("Failed to capture shared texture frame.");
+            return;
+        }
+
+        var saved = await Task.Run(() => SaveFrameToPng(frame, targetPath));
+        if (!saved)
+        {
+            Console.WriteLine($"Failed to save campath screenshot to '{targetPath}'.");
+            return;
+        }
+
+        UpdateCampathImage(item, targetPath);
+    }
+
+    private void UpdateCampathImage(CampathItemViewModel item, string imagePath)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            if (string.Equals(item.ImagePath, imagePath, StringComparison.OrdinalIgnoreCase))
+            {
+                item.RefreshThumbnail();
+            }
+            else
+            {
+                item.ImagePath = imagePath;
+            }
+            Save();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (string.Equals(item.ImagePath, imagePath, StringComparison.OrdinalIgnoreCase))
+            {
+                item.RefreshThumbnail();
+            }
+            else
+            {
+                item.ImagePath = imagePath;
+            }
+            Save();
+        }, DispatcherPriority.Background);
+    }
+
+    private static bool SaveFrameToPng(VideoFrame frame, string path)
+    {
+        try
+        {
+            using var bitmap = CreateBitmapFromFrame(frame);
+            using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
+            bitmap.Save(stream);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SaveFrameToPng error: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static WriteableBitmap CreateBitmapFromFrame(VideoFrame frame)
+    {
+        var bitmap = new WriteableBitmap(
+            new PixelSize(frame.Width, frame.Height),
+            new Vector(96, 96),
+            PixelFormat.Bgra8888);
+
+        using (var buffer = bitmap.Lock())
+        {
+            unsafe
+            {
+                var dest = (byte*)buffer.Address;
+                var destStride = buffer.RowBytes;
+
+                for (int y = 0; y < frame.Height; y++)
+                {
+                    int srcOffset = y * frame.Stride;
+                    int destOffset = y * destStride;
+
+                    Marshal.Copy(
+                        frame.Data,
+                        srcOffset,
+                        (IntPtr)(dest + destOffset),
+                        Math.Min(frame.Stride, destStride));
+                }
+            }
+        }
+
+        return bitmap;
+    }
+
+    private static async Task<VideoFrame?> CaptureSharedTextureFrameAsync()
+    {
+        using var source = new SharedTextureVideoSource();
+        var tcs = new TaskCompletionSource<VideoFrame>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void Handler(object? sender, VideoFrame frame)
+        {
+            var dataCopy = new byte[frame.Stride * frame.Height];
+            Buffer.BlockCopy(frame.Data, 0, dataCopy, 0, dataCopy.Length);
+
+            tcs.TrySetResult(new VideoFrame
+            {
+                Data = dataCopy,
+                Width = frame.Width,
+                Height = frame.Height,
+                Stride = frame.Stride,
+                Timestamp = frame.Timestamp,
+                SourceTimestampUs = frame.SourceTimestampUs,
+                ReceivedTimestampUs = frame.ReceivedTimestampUs
+            });
+        }
+
+        source.FrameReceived += Handler;
+
+        try
+        {
+            source.Start();
+        }
+        catch (Exception ex)
+        {
+            source.FrameReceived -= Handler;
+            Console.WriteLine($"SharedTextureVideoSource start failed: {ex.Message}");
+            return null;
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            using (cts.Token.Register(() => tcs.TrySetCanceled()))
+            {
+                return await tcs.Task;
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            Console.WriteLine("Shared texture capture timed out.");
+            return null;
+        }
+        finally
+        {
+            source.FrameReceived -= Handler;
+            source.Stop();
+        }
     }
 
     public void DeleteGroup(CampathGroupViewModel? group)
@@ -765,13 +934,19 @@ public class CampathItemViewModel : ViewModelBase
 
             if (!string.IsNullOrWhiteSpace(_imagePath) && File.Exists(_imagePath))
             {
-                Thumbnail = new Avalonia.Media.Imaging.Bitmap(_imagePath);
+                using var stream = File.OpenRead(_imagePath);
+                Thumbnail = new Avalonia.Media.Imaging.Bitmap(stream);
             }
         }
         catch
         {
             Thumbnail = null;
         }
+    }
+
+    public void RefreshThumbnail()
+    {
+        UpdateThumbnail();
     }
 }
 
