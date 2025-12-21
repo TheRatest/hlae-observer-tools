@@ -67,6 +67,9 @@ public partial class Viewport3DDockView : UserControl
         if (DataContext is not Viewport3DDockViewModel vm)
             return;
 
+        if (!Viewport.IsFreecamActive || !Viewport.IsFreecamInputEnabled)
+            return;
+
         if (!Viewport.TryGetFreecamState(out var state))
             return;
 

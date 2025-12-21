@@ -307,6 +307,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     public ReadOnlyObservableCollection<PinLabel> Labels { get; }
 
     public bool IsFreecamActive => _freecamActive;
+    public bool IsFreecamInputEnabled => _freecamInputEnabled;
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
