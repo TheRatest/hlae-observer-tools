@@ -45,6 +45,8 @@ public class RawInputHandler : IDisposable
 
     private HlaeInputSender? _inputSender;
 
+    public event EventHandler<Keys>? KeyPressed;
+
     public bool CaptureOnlyWhenFocused
     {
         get => _captureOnlyWhenFocused;
@@ -217,6 +219,8 @@ public class RawInputHandler : IDisposable
         var key = (Keys)vKey;
         bool isKeyDown = (keyboard.Flags & 0x01) == 0; // RI_KEY_MAKE = 0, RI_KEY_BREAK = 1
 
+        bool raisePressed = false;
+
         lock (_lockObject)
         {
             if (isKeyDown)
@@ -224,6 +228,7 @@ public class RawInputHandler : IDisposable
                 if (_currentlyPressedKeys.Add(key))
                 {
                     _keysDirty = true;
+                    raisePressed = true;
                 }
             }
             else
@@ -233,6 +238,11 @@ public class RawInputHandler : IDisposable
                     _keysDirty = true;
                 }
             }
+        }
+
+        if (raisePressed)
+        {
+            KeyPressed?.Invoke(this, key);
         }
     }
 

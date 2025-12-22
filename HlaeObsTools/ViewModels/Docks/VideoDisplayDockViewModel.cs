@@ -245,6 +245,14 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     public void RequestFreecamInputLock()
     {
         FreecamInputLockRequested?.Invoke(this, EventArgs.Empty);
+        if (_hudOverlayWindow != null && _hudOverlayWindow.IsVisible)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                _hudOverlayWindow.Activate();
+                _hudOverlayWindow.Focus();
+            }, DispatcherPriority.Background);
+        }
     }
 
     public void RequestFreecamInputRelease()
@@ -373,6 +381,16 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         FreecamStateChanged?.Invoke(this, false);
 
         Console.WriteLine("Freecam deactivated");
+    }
+
+    public async void EnableFreecamHold()
+    {
+        if (_webSocketClient == null)
+            return;
+
+        await _webSocketClient.SendCommandAsync("freecam_hold");
+
+        Console.WriteLine("Freecam input hold requested");
     }
 
     /// <summary>

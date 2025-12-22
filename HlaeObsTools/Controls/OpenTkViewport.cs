@@ -1238,6 +1238,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private void EndFreecamInput()
     {
         _freecamInputEnabled = false;
+        ClearFreecamInputState();
         UnlockFreecamCursor();
         UpdateInputStatus("Input: idle");
     }
@@ -1246,6 +1247,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     {
         _freecamInputEnabled = false;
         _freecamActive = false;
+        ClearFreecamInputState();
         UnlockFreecamCursor();
         RestoreOrbitState();
     }
@@ -1286,6 +1288,15 @@ public sealed class OpenTkViewport : OpenGlControlBase
         _freecamMouseVelocityY = 0.0f;
         _freecamTargetRoll = 0.0f;
         _freecamCurrentRoll = 0.0f;
+    }
+
+    private void ClearFreecamInputState()
+    {
+        _keysDown.Clear();
+        _mouseButton4Down = false;
+        _mouseButton5Down = false;
+        _freecamMouseDelta = Vector2.Zero;
+        _freecamWheelDelta = 0f;
     }
 
     private void RestoreOrbitState()

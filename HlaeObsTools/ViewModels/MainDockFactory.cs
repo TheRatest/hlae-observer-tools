@@ -6,6 +6,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
+using Timer = System.Threading.Timer;
+using FormsKeys = System.Windows.Forms.Keys;
 using HlaeObsTools.Services.Input;
 using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.ViewModels.Docks;
@@ -52,6 +55,7 @@ public class MainDockFactory : Factory, IDisposable
         // Initialize global raw input handler and periodically flush into UDP sender
         _rawInputHandler = new RawInputHandler();
         _rawInputHandler.SetInputSender(_inputSender);
+        _rawInputHandler.KeyPressed += OnRawInputKeyPressed;
         _inputFlushTimer = new Timer(_ => _rawInputHandler.FlushToSender(), null, 0, 4);
 
         Console.WriteLine("Observer tools initialized: WebSocket (127.0.0.1:31338), UDP (127.0.0.1:31339)");
@@ -315,6 +319,23 @@ public class MainDockFactory : Factory, IDisposable
         _rawInputHandler.SuppressKeyboard = suppress;
     }
 
+    private void OnRawInputKeyPressed(object? sender, FormsKeys key)
+    {
+        if (key != FormsKeys.C)
+            return;
+        if (_videoDisplayVm == null || !_videoDisplayVm.IsFreecamActive)
+            return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_videoDisplayVm == null || !_videoDisplayVm.IsFreecamActive)
+                return;
+
+            _videoDisplayVm.EnableFreecamHold();
+            _videoDisplayVm.RequestFreecamInputRelease();
+        }, DispatcherPriority.Background);
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -331,6 +352,7 @@ public class MainDockFactory : Factory, IDisposable
         }
         _inputFlushTimer.Dispose();
 
+        _rawInputHandler.KeyPressed -= OnRawInputKeyPressed;
         _rawInputHandler.Dispose();
         _inputSender.Dispose();
 
