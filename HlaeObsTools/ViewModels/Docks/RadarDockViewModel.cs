@@ -33,6 +33,7 @@ public sealed class RadarPlayerViewModel : ViewModelBase
     private bool _isShooting;
     private DateTime _shootingExpiryTime;
     private bool _useAltBindings;
+    private string? _activeGrenadeIconPath;
     private static readonly string[] AltBindLabels = { "Q", "E", "R", "T", "Z" };
 
     public RadarPlayerViewModel(string id, string name, string team, int slot, IBrush fill, IBrush border)
@@ -191,6 +192,21 @@ public sealed class RadarPlayerViewModel : ViewModelBase
         set => SetProperty(ref _shootingExpiryTime, value);
     }
 
+    public string? ActiveGrenadeIconPath
+    {
+        get => _activeGrenadeIconPath;
+        set
+        {
+            if (SetProperty(ref _activeGrenadeIconPath, value))
+            {
+                OnPropertyChanged(nameof(HasActiveGrenadeIcon));
+            }
+        }
+    }
+
+    public bool HasActiveGrenadeIcon => !string.IsNullOrWhiteSpace(ActiveGrenadeIconPath);
+
+
     public void SetMarkerScale(double scale)
     {
         MarkerScale = scale;
@@ -208,6 +224,69 @@ public sealed class RadarPlayerViewModel : ViewModelBase
         {
             IsShooting = false;
         }
+    }
+}
+
+public sealed class RadarDeadPlayerViewModel : ViewModelBase
+{
+    private double _canvasX;
+    private double _canvasY;
+    private double _markerScale = 1.0;
+
+    public RadarDeadPlayerViewModel(string id, string team, IBrush stroke)
+    {
+        Id = id;
+        Team = team;
+        Stroke = stroke;
+    }
+
+    public string Id { get; }
+    public string Team { get; }
+    public IBrush Stroke { get; }
+
+    public double CanvasX
+    {
+        get => _canvasX;
+        set
+        {
+            if (SetProperty(ref _canvasX, value))
+            {
+                OnPropertyChanged(nameof(ScaledCanvasX));
+            }
+        }
+    }
+
+    public double CanvasY
+    {
+        get => _canvasY;
+        set
+        {
+            if (SetProperty(ref _canvasY, value))
+            {
+                OnPropertyChanged(nameof(ScaledCanvasY));
+            }
+        }
+    }
+
+    public double MarkerScale
+    {
+        get => _markerScale;
+        private set
+        {
+            if (SetProperty(ref _markerScale, value))
+            {
+                OnPropertyChanged(nameof(ScaledCanvasX));
+                OnPropertyChanged(nameof(ScaledCanvasY));
+            }
+        }
+    }
+
+    public double ScaledCanvasX => CanvasX - 6.0 * (MarkerScale - 1.0);
+    public double ScaledCanvasY => CanvasY - 6.0 * (MarkerScale - 1.0);
+
+    public void SetMarkerScale(double scale)
+    {
+        MarkerScale = scale;
     }
 }
 
@@ -320,6 +399,8 @@ public sealed class RadarDockViewModel : Tool, IDisposable
     private readonly RadarProjector _projector;
     private readonly Dictionary<int, SmokeTracker> _smokeTrackers = new();
     private readonly Dictionary<string, PlayerWeaponState> _playerWeaponStates = new();
+    private readonly Dictionary<string, RadarDeadPlayerViewModel> _deadPlayerMarkers = new();
+    private readonly Dictionary<string, Vec3> _lastAlivePositions = new();
     private readonly CampathsDockViewModel? _campathsVm;
     private readonly HlaeWebSocketClient? _webSocketClient;
     private readonly RadarSettings _settings;
@@ -335,6 +416,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
     private const int StationaryUpdatesRequired = 2; // Number of updates smoke must be stationary to be detonated
 
     public ObservableCollection<RadarPlayerViewModel> Players { get; } = new();
+    public ObservableCollection<RadarDeadPlayerViewModel> DeadPlayers { get; } = new();
     public ObservableCollection<RadarGrenadeViewModel> Grenades { get; } = new();
     public ObservableCollection<FlameViewModel> Flames { get; } = new();
     public ObservableCollection<RadarBombViewModel> Bombs { get; } = new();
@@ -411,16 +493,25 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         {
             HasRadar = false;
             Players.Clear();
+            DeadPlayers.Clear();
             CampathPaths.Clear();
+            _deadPlayerMarkers.Clear();
+            _lastAlivePositions.Clear();
             return;
         }
 
         var aliveColorT = new SolidColorBrush(Color.Parse("#FF9340"));
         var aliveColorCt = new SolidColorBrush(Color.Parse("#4DB3FF"));
-        var deadColor = new SolidColorBrush(Color.Parse("#777777"));
         var border = new SolidColorBrush(Color.Parse("#0D1015"));
         var bombColor = new SolidColorBrush(Color.Parse("#FF5353"));
         Players.Clear();
+
+        if (mapChanged)
+        {
+            DeadPlayers.Clear();
+            _deadPlayerMarkers.Clear();
+            _lastAlivePositions.Clear();
+        }
 
         // Clean up weapon states for disconnected players
         var currentPlayerIds = new HashSet<string>(state.Players.Select(p => p.SteamId));
@@ -432,69 +523,111 @@ public sealed class RadarDockViewModel : Tool, IDisposable
             _playerWeaponStates.Remove(key);
         }
 
+        var deadKeysToRemove = _deadPlayerMarkers.Keys
+            .Where(id => !currentPlayerIds.Contains(id))
+            .ToList();
+        foreach (var key in deadKeysToRemove)
+        {
+            DeadPlayers.Remove(_deadPlayerMarkers[key]);
+            _deadPlayerMarkers.Remove(key);
+            _lastAlivePositions.Remove(key);
+        }
+
         foreach (var p in state.Players)
         {
-            if (!p.IsAlive)
-                continue;
-
-            if (!_projector.TryProject(state.MapName, p.Position, out var x, out var y, out var level))
-                continue;
-
-            var brush = p.Team.Equals("T", StringComparison.OrdinalIgnoreCase) ? aliveColorT : aliveColorCt;
-            if (p.HasBomb) brush = bombColor;
-
-            var vm = new RadarPlayerViewModel(p.SteamId, p.Name, p.Team, p.Slot, brush, border)
+            if (p.IsAlive)
             {
-                RelativeX = x,
-                RelativeY = y,
-                CanvasX = x * 1024.0 - 18.0, // center the 36px marker on the projected point
-                CanvasY = y * 1024.0 - 22.0,
-                Rotation = NormalizeDegrees(Math.Atan2(p.Forward.X, p.Forward.Y) * 180.0 / Math.PI),
-                IsAlive = p.IsAlive,
-                HasBomb = p.HasBomb,
-                IsFocused = p.SteamId == state.FocusedPlayerSteamId,
-                Level = level,
-                UseAltBindings = _settings.UseAltPlayerBinds
-            };
-            vm.SetMarkerScale(_settings.MarkerScale);
-
-            Players.Add(vm);
-
-            // Track weapon state and detect shots
-            if (!_playerWeaponStates.TryGetValue(p.SteamId, out var weaponState))
-            {
-                weaponState = new PlayerWeaponState();
-                _playerWeaponStates[p.SteamId] = weaponState;
-            }
-
-            // Find active weapon
-            var activeWeapon = p.Weapons.FirstOrDefault(w =>
-                w.State.Equals("active", StringComparison.OrdinalIgnoreCase));
-
-            if (activeWeapon != null)
-            {
-                // Check if this is the same weapon as before
-                bool isSameWeapon = weaponState.ActiveWeaponName == activeWeapon.Name;
-
-                if (isSameWeapon)
+                _lastAlivePositions[p.SteamId] = p.Position;
+                if (_deadPlayerMarkers.TryGetValue(p.SteamId, out var deadVm))
                 {
-                    // Detect shot: ammo decreased
-                    if (activeWeapon.AmmoClip < weaponState.LastAmmoClip)
-                    {
-                        // Trigger shooting flash on player marker
-                        vm.TriggerShootingFlash(100);
-                    }
+                    DeadPlayers.Remove(deadVm);
+                    _deadPlayerMarkers.Remove(p.SteamId);
                 }
 
-                // Update state
-                weaponState.ActiveWeaponName = activeWeapon.Name;
-                weaponState.LastAmmoClip = activeWeapon.AmmoClip;
+                if (!_projector.TryProject(state.MapName, p.Position, out var x, out var y, out var level))
+                    continue;
+
+                var brush = p.Team.Equals("T", StringComparison.OrdinalIgnoreCase) ? aliveColorT : aliveColorCt;
+                if (p.HasBomb) brush = bombColor;
+
+                var activeWeapon = p.Weapons.FirstOrDefault(w =>
+                    w.State.Equals("active", StringComparison.OrdinalIgnoreCase));
+                var activeGrenadeIcon = GetActiveGrenadeIconPath(p.Weapons);
+
+                var vm = new RadarPlayerViewModel(p.SteamId, p.Name, p.Team, p.Slot, brush, border)
+                {
+                    RelativeX = x,
+                    RelativeY = y,
+                    CanvasX = x * 1024.0 - 18.0, // center the 36px marker on the projected point
+                    CanvasY = y * 1024.0 - 22.0,
+                    Rotation = NormalizeDegrees(Math.Atan2(p.Forward.X, p.Forward.Y) * 180.0 / Math.PI),
+                    IsAlive = p.IsAlive,
+                    HasBomb = p.HasBomb,
+                    IsFocused = p.SteamId == state.FocusedPlayerSteamId,
+                    Level = level,
+                    UseAltBindings = _settings.UseAltPlayerBinds,
+                    ActiveGrenadeIconPath = activeGrenadeIcon
+                };
+                vm.SetMarkerScale(_settings.MarkerScale);
+
+                Players.Add(vm);
+
+                // Track weapon state and detect shots
+                if (!_playerWeaponStates.TryGetValue(p.SteamId, out var weaponState))
+                {
+                    weaponState = new PlayerWeaponState();
+                    _playerWeaponStates[p.SteamId] = weaponState;
+                }
+
+                if (activeWeapon != null)
+                {
+                    // Check if this is the same weapon as before
+                    bool isSameWeapon = weaponState.ActiveWeaponName == activeWeapon.Name;
+
+                    if (isSameWeapon)
+                    {
+                        // Detect shot: ammo decreased
+                        if (activeWeapon.AmmoClip < weaponState.LastAmmoClip)
+                        {
+                            // Trigger shooting flash on player marker
+                            vm.TriggerShootingFlash(100);
+                        }
+                    }
+
+                    // Update state
+                    weaponState.ActiveWeaponName = activeWeapon.Name;
+                    weaponState.LastAmmoClip = activeWeapon.AmmoClip;
+                }
+                else
+                {
+                    // No active weapon, reset state
+                    weaponState.ActiveWeaponName = string.Empty;
+                    weaponState.LastAmmoClip = 0;
+                }
             }
             else
             {
-                // No active weapon, reset state
-                weaponState.ActiveWeaponName = string.Empty;
-                weaponState.LastAmmoClip = 0;
+                if (_deadPlayerMarkers.ContainsKey(p.SteamId))
+                {
+                    continue;
+                }
+
+                var deathPos = _lastAlivePositions.TryGetValue(p.SteamId, out var lastPos) ? lastPos : p.Position;
+                if (!_projector.TryProject(state.MapName, deathPos, out var x, out var y, out _))
+                {
+                    continue;
+                }
+
+                var stroke = p.Team.Equals("T", StringComparison.OrdinalIgnoreCase) ? aliveColorT : aliveColorCt;
+                var deadVm = new RadarDeadPlayerViewModel(p.SteamId, p.Team, stroke)
+                {
+                    CanvasX = x * 1024.0 - 6.0, // center the 12px cross on the projected point
+                    CanvasY = y * 1024.0 - 6.0
+                };
+                deadVm.SetMarkerScale(_settings.MarkerScale);
+
+                _deadPlayerMarkers[p.SteamId] = deadVm;
+                DeadPlayers.Add(deadVm);
             }
         }
 
@@ -680,6 +813,69 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         return Math.Sqrt(dx * dx + dy * dy + dz * dz);
     }
 
+    private static string? GetActiveGrenadeIconPath(IReadOnlyList<GsiWeapon> weapons)
+    {
+        if (weapons == null || weapons.Count == 0)
+            return null;
+
+        var activeWeapon = weapons.FirstOrDefault(w =>
+            w.State.Equals("active", StringComparison.OrdinalIgnoreCase));
+        if (activeWeapon != null)
+        {
+            var activePath = GetGrenadeIconPath(activeWeapon);
+            if (activePath != null)
+                return activePath;
+        }
+
+        foreach (var weapon in weapons)
+        {
+            if (weapon.State.Equals("holstered", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var path = GetGrenadeIconPath(weapon);
+            if (path != null)
+                return path;
+        }
+
+        return null;
+    }
+
+    private static string? GetGrenadeIconPath(GsiWeapon weapon)
+    {
+        var fromName = GetGrenadeIconPath(weapon.Name);
+        if (fromName != null)
+            return fromName;
+
+        return GetGrenadeIconPath(weapon.Type);
+    }
+
+    private static string? GetGrenadeIconPath(string? weaponName)
+    {
+        if (string.IsNullOrWhiteSpace(weaponName))
+            return null;
+
+        var normalized = weaponName.Trim().ToLowerInvariant();
+        if (normalized.StartsWith("weapon_", StringComparison.Ordinal))
+        {
+            normalized = normalized.Substring("weapon_".Length);
+        }
+
+        var iconName = normalized switch
+        {
+            "hegrenade" => "hegrenade",
+            "flashbang" => "flashbang",
+            "smokegrenade" => "smokegrenade",
+            "molotov" => "molotov",
+            "incgrenade" => "incgrenade",
+            "firebomb" => "firebomb",
+            "decoy" => "decoy",
+            "tagrenade" => "tagrenade",
+            _ => null
+        };
+
+        return iconName == null ? null : $"avares://HlaeObsTools/Assets/hud/weapons/{iconName}.svg";
+    }
+
     private void LoadRadarResources(string mapName)
     {
         if (!_configProvider.TryGet(mapName, out var cfg))
@@ -736,6 +932,10 @@ public sealed class RadarDockViewModel : Tool, IDisposable
             foreach (var player in Players)
             {
                 player.SetMarkerScale(_settings.MarkerScale);
+            }
+            foreach (var dead in DeadPlayers)
+            {
+                dead.SetMarkerScale(_settings.MarkerScale);
             }
         }
         else if (e.PropertyName == nameof(RadarSettings.UseAltPlayerBinds))

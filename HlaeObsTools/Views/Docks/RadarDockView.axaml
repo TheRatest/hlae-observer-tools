@@ -78,6 +78,41 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
+          <!-- Dead player markers -->
+          <ItemsControl ItemsSource="{Binding DeadPlayers}"
+                        Width="1024"
+                        Height="1024"
+                        IsHitTestVisible="False"
+                        x:CompileBindings="False">
+            <ItemsControl.Styles>
+              <Style Selector="ContentPresenter">
+                <Setter Property="Canvas.Left" Value="{Binding ScaledCanvasX}" />
+                <Setter Property="Canvas.Top" Value="{Binding ScaledCanvasY}" />
+              </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <Canvas />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:RadarDeadPlayerViewModel">
+                <Canvas Width="12"
+                        Height="12"
+                        RenderTransformOrigin="0.5,0.5">
+                  <Canvas.RenderTransform>
+                    <ScaleTransform ScaleX="{Binding DataContext.MarkerScale, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    ScaleY="{Binding DataContext.MarkerScale, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                  </Canvas.RenderTransform>
+                  <Path Data="M 0,0 L 12,12 M 12,0 L 0,12"
+                        Stroke="{Binding Stroke}"
+                        StrokeThickness="2"
+                        StrokeLineCap="Round" />
+                </Canvas>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
           <ItemsControl ItemsSource="{Binding Players}"
                         Width="1024"
                         Height="1024"
@@ -136,13 +171,30 @@
                              Foreground="#000000"
                              TextAlignment="Center"
                              VerticalAlignment="Center" />
-                 <TextBlock Text="{Binding Name}"
+                  <TextBlock Text="{Binding Name}"
                              Canvas.Left="-12"
                              Canvas.Top="36"
                              Width="60"
                              FontSize="10"
                              Foreground="#E6E6E6"
                              TextAlignment="Center" />
+                  <Border x:Name="GrenadeIconMask"
+                          Width="14"
+                          Height="14"
+                          Canvas.Left="16"
+                          Canvas.Top="14"
+                          Background="#FFD04A"
+                          IsVisible="{Binding HasActiveGrenadeIcon}">
+                    <Border.OpacityMask>
+                      <VisualBrush Stretch="Uniform">
+                        <VisualBrush.Visual>
+                          <svg:Svg Path="{Binding DataContext.ActiveGrenadeIconPath, ElementName=GrenadeIconMask}"
+                                   Width="14"
+                                   Height="14" />
+                        </VisualBrush.Visual>
+                      </VisualBrush>
+                    </Border.OpacityMask>
+                  </Border>
                 </Canvas>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
