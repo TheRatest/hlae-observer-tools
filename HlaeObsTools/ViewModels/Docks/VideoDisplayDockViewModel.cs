@@ -194,6 +194,21 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         _inputSender = sender;
     }
 
+    public bool AnalogKeyboardEnabled => _freecamSettings?.AnalogKeyboardEnabled ?? false;
+
+    public bool TryGetAnalogSprint(out double sprintInput)
+    {
+        sprintInput = 0.0;
+        if (_freecamSettings?.AnalogKeyboardEnabled != true || _inputSender == null)
+            return false;
+
+        if (!_inputSender.TryGetAnalogState(out var enabled, out _, out _, out _, out var rx) || !enabled)
+            return false;
+
+        sprintInput = Math.Clamp(rx, 0.0f, 1.0f);
+        return true;
+    }
+
     /// <summary>
     /// Configure HUD settings.
     /// </summary>

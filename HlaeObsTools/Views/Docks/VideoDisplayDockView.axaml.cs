@@ -33,10 +33,11 @@ public partial class VideoDisplayDockView : UserControl
     private TextBlock? _speedLabel;
     private bool _isFirstSpeedUpdate = true;
     private CancellationTokenSource? _animationCts;
-    private double _lastFreecamSpeed;
+    private double _lastEffectiveSpeed;
     private double _lastCanvasHeight;
-    private bool _lastShiftPressed;
+    private bool _lastSprintActive;
     private Window? _parentWindow;
+    private DispatcherTimer? _analogSprintTimer;
 
     public VideoDisplayDockView()
     {
@@ -90,6 +91,19 @@ public partial class VideoDisplayDockView : UserControl
         KeyUp += OnKeyUp;
 
         DataContextChanged += OnDataContextChanged;
+
+        _analogSprintTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(50)
+        };
+        _analogSprintTimer.Tick += (_, _) =>
+        {
+            if (DataContext is VideoDisplayDockViewModel vm && vm.AnalogKeyboardEnabled)
+            {
+                UpdateSpeedScale();
+            }
+        };
+        _analogSprintTimer.Start();
     }
 
     private void UpdateHudOverlayPosition()
@@ -773,31 +787,48 @@ public partial class VideoDisplayDockView : UserControl
         canvas.Width = canvasWidth;
 
         // Calculate target position
-        double speedMultiplier = _isShiftPressed ? vm.SprintMultiplier : 1.0;
+        double sprintInput = 0.0;
+        bool analogSprintActive = false;
+        double analogSprint = 0.0;
+        bool analogAvailable = vm.AnalogKeyboardEnabled && vm.TryGetAnalogSprint(out analogSprint);
+        if (analogAvailable)
+        {
+            sprintInput = analogSprint;
+            if (sprintInput <= 0.0 && _isShiftPressed)
+            {
+                sprintInput = 1.0;
+            }
+            analogSprintActive = sprintInput > 0.0;
+        }
+
+        double speedMultiplier = analogAvailable
+            ? 1.0 + sprintInput * (vm.SprintMultiplier - 1.0)
+            : (_isShiftPressed ? vm.SprintMultiplier : 1.0);
+        bool sprintActive = analogAvailable ? analogSprintActive : _isShiftPressed;
         var effectiveSpeed = vm.FreecamSpeed * speedMultiplier;
         var clampedSpeed = Math.Clamp(effectiveSpeed, vm.SpeedMin, vm.SpeedMax);
         double currentNorm = (clampedSpeed - vm.SpeedMin) / (vm.SpeedMax - vm.SpeedMin);
         double targetArrowY = marginTop + usableHeight * (1 - currentNorm);
 
         // Detect if speed changed vs. just a resize
-        bool speedChanged = Math.Abs(vm.FreecamSpeed - _lastFreecamSpeed) > 0.001;
-        bool shiftStateChanged = _isShiftPressed != _lastShiftPressed;
+        bool speedChanged = Math.Abs(effectiveSpeed - _lastEffectiveSpeed) > 0.001;
+        bool shiftStateChanged = sprintActive != _lastSprintActive;
         bool heightChanged = Math.Abs(height - _lastCanvasHeight) > 0.5;
 
         // Initialize on first update
         if (_isFirstSpeedUpdate)
         {
             _currentArrowY = targetArrowY;
-            _lastFreecamSpeed = vm.FreecamSpeed;
+            _lastEffectiveSpeed = effectiveSpeed;
             _lastCanvasHeight = height;
-            _lastShiftPressed = _isShiftPressed;
+            _lastSprintActive = sprintActive;
             _isFirstSpeedUpdate = false;
         }
 
         // Update tracked values
-        _lastFreecamSpeed = vm.FreecamSpeed;
+        _lastEffectiveSpeed = effectiveSpeed;
         _lastCanvasHeight = height;
-        _lastShiftPressed = _isShiftPressed;
+        _lastSprintActive = sprintActive;
 
         // Clear and rebuild static elements
         canvas.Children.Clear();
@@ -847,7 +878,7 @@ public partial class VideoDisplayDockView : UserControl
         }
 
         // Update arrow appearance
-        _speedArrow.Fill = _isShiftPressed ? Brushes.Yellow : Brushes.White;
+        _speedArrow.Fill = sprintActive ? Brushes.Yellow : Brushes.White;
         _speedArrow.Points = new Points(new[]
         {
             new Point(lineX + tickLong + 8, 0),
@@ -856,9 +887,9 @@ public partial class VideoDisplayDockView : UserControl
         });
 
         // Update label text and appearance
-        var speedText = _isShiftPressed ? $"{effectiveSpeed:F1}" : vm.FreecamSpeedText;
+        var speedText = sprintActive ? $"{effectiveSpeed:F1}" : vm.FreecamSpeedText;
         _speedLabel!.Text = speedText;
-        _speedLabel.Foreground = _isShiftPressed ? Brushes.Yellow : Brushes.White;
+        _speedLabel.Foreground = sprintActive ? Brushes.Yellow : Brushes.White;
 
         // Remove from old parent if necessary before adding to new canvas
         if (_speedArrow.Parent is Panel oldArrowParent)
