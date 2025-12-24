@@ -1010,6 +1010,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             LeanVelocityScale = (float)_freecamSettings.LeanVelocityScale,
             LeanMaxAngle = (float)_freecamSettings.LeanMaxAngle,
             LeanHalfTime = (float)_freecamSettings.LeanHalfTime,
+            ClampPitch = _freecamSettings.ClampPitch,
             FovMin = (float)_freecamSettings.FovMin,
             FovMax = (float)_freecamSettings.FovMax,
             FovStep = (float)_freecamSettings.FovStep,
@@ -1385,7 +1386,10 @@ public sealed class OpenTkViewport : OpenGlControlBase
         _freecamMouseVelocityX = deltaYaw / deltaTime;
         _freecamMouseVelocityY = deltaPitch / deltaTime;
 
-        _freecamTransform.Pitch = Clamp(_freecamTransform.Pitch, -89.0f, 89.0f);
+        if (_freecamConfig.ClampPitch)
+        {
+            _freecamTransform.Pitch = Clamp(_freecamTransform.Pitch, -89.0f, 89.0f);
+        }
 
         while (_freecamTransform.Yaw > 180.0f) _freecamTransform.Yaw -= 360.0f;
         while (_freecamTransform.Yaw < -180.0f) _freecamTransform.Yaw += 360.0f;
@@ -2316,6 +2320,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             LeanVelocityScale = 0.01f,
             LeanMaxAngle = 20.0f,
             LeanHalfTime = 0.18f,
+            ClampPitch = false,
             FovMin = 10.0f,
             FovMax = 150.0f,
             FovStep = 2.0f,
@@ -2340,6 +2345,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         public float LeanVelocityScale { get; init; }
         public float LeanMaxAngle { get; init; }
         public float LeanHalfTime { get; init; }
+        public bool ClampPitch { get; init; }
         public float FovMin { get; init; }
         public float FovMax { get; init; }
         public float FovStep { get; init; }

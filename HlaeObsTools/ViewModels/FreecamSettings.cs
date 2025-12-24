@@ -50,6 +50,7 @@ public sealed class FreecamSettings : ViewModelBase
     private double _analogLeftDeadzone;
     private double _analogRightDeadzone;
     private double _analogCurve;
+    private bool _clampPitch;
 
     #region Mouse Settings
 
@@ -113,6 +114,19 @@ public sealed class FreecamSettings : ViewModelBase
     {
         get => _analogCurve;
         set => SetProperty(ref _analogCurve, value);
+    }
+
+    #endregion
+
+    #region Camera Constraints
+
+    /// <summary>
+    /// Clamp pitch to prevent flipping (off by default).
+    /// </summary>
+    public bool ClampPitch
+    {
+        get => _clampPitch;
+        set => SetProperty(ref _clampPitch, value);
     }
 
     #endregion

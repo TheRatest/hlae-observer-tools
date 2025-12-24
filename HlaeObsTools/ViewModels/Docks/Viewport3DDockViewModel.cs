@@ -131,6 +131,7 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             leanVelocityScale = (float)_freecamSettings.LeanVelocityScale,
             leanMaxAngle = (float)_freecamSettings.LeanMaxAngle,
             leanHalfTime = (float)_freecamSettings.LeanHalfTime,
+            clampPitch = _freecamSettings.ClampPitch,
             fovMin = (float)_freecamSettings.FovMin,
             fovMax = (float)_freecamSettings.FovMax,
             fovStep = (float)_freecamSettings.FovStep,

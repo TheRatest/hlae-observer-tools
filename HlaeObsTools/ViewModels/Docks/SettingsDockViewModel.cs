@@ -1263,6 +1263,20 @@ namespace HlaeObsTools.ViewModels.Docks
 
         #endregion
 
+        public bool ClampPitch
+        {
+            get => _freecamSettings.ClampPitch;
+            set
+            {
+                if (_freecamSettings.ClampPitch != value)
+                {
+                    _freecamSettings.ClampPitch = value;
+                    OnPropertyChanged();
+                    SendFreecamConfigAsync(new { clampPitch = value });
+                }
+            }
+        }
+
         // Simple ICommand helper (no MVVM library required)
         private class Relay : ICommand
         {
