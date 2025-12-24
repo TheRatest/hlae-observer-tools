@@ -56,6 +56,7 @@ public class MainDockFactory : Factory, IDisposable
         _rawInputHandler = new RawInputHandler();
         _rawInputHandler.SetInputSender(_inputSender);
         _rawInputHandler.KeyPressed += OnRawInputKeyPressed;
+        _rawInputHandler.KeyStateChanged += OnRawInputKeyStateChanged;
         _inputFlushTimer = new Timer(_ => _rawInputHandler.FlushToSender(), null, 0, 4);
 
         Console.WriteLine("Observer tools initialized: WebSocket (127.0.0.1:31338), UDP (127.0.0.1:31339)");
@@ -336,6 +337,16 @@ public class MainDockFactory : Factory, IDisposable
         }, DispatcherPriority.Background);
     }
 
+    private void OnRawInputKeyStateChanged(object? sender, (FormsKeys Key, bool IsDown) e)
+    {
+        if (e.Key != FormsKeys.LShiftKey && e.Key != FormsKeys.RShiftKey && e.Key != FormsKeys.ShiftKey)
+            return;
+        if (_videoDisplayVm == null)
+            return;
+
+        Dispatcher.UIThread.Post(() => _videoDisplayVm?.SetSprintModifierState(e.IsDown), DispatcherPriority.Background);
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -353,6 +364,7 @@ public class MainDockFactory : Factory, IDisposable
         _inputFlushTimer.Dispose();
 
         _rawInputHandler.KeyPressed -= OnRawInputKeyPressed;
+        _rawInputHandler.KeyStateChanged -= OnRawInputKeyStateChanged;
         _rawInputHandler.Dispose();
         _inputSender.Dispose();
 

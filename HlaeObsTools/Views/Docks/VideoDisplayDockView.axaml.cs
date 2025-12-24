@@ -156,6 +156,7 @@ public partial class VideoDisplayDockView : UserControl
         vm.OverlayRightButtonDown += OnOverlayRightButtonDown;
         vm.OverlayRightButtonUp += OnOverlayRightButtonUp;
         vm.OverlayShiftKeyChanged += OnOverlayShiftKeyChanged;
+        vm.FreecamSprintStateChanged += OnFreecamSprintStateChanged;
         vm.FreecamInputLockRequested += OnFreecamInputLockRequested;
         vm.FreecamInputReleaseRequested += OnFreecamInputReleaseRequested;
     }
@@ -165,6 +166,7 @@ public partial class VideoDisplayDockView : UserControl
         vm.OverlayRightButtonDown -= OnOverlayRightButtonDown;
         vm.OverlayRightButtonUp -= OnOverlayRightButtonUp;
         vm.OverlayShiftKeyChanged -= OnOverlayShiftKeyChanged;
+        vm.FreecamSprintStateChanged -= OnFreecamSprintStateChanged;
         vm.FreecamInputLockRequested -= OnFreecamInputLockRequested;
         vm.FreecamInputReleaseRequested -= OnFreecamInputReleaseRequested;
     }
@@ -198,6 +200,19 @@ public partial class VideoDisplayDockView : UserControl
     }
 
     private void OnOverlayShiftKeyChanged(object? sender, bool isPressed)
+    {
+        if (DataContext is VideoDisplayDockViewModel vm)
+        {
+            vm.SetSprintModifierState(isPressed);
+        }
+        else
+        {
+            _isShiftPressed = isPressed;
+            UpdateSpeedScale();
+        }
+    }
+
+    private void OnFreecamSprintStateChanged(object? sender, bool isPressed)
     {
         _isShiftPressed = isPressed;
         UpdateSpeedScale();
@@ -404,7 +419,11 @@ public partial class VideoDisplayDockView : UserControl
     {
         if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
         {
-            if (!_isShiftPressed)
+            if (DataContext is VideoDisplayDockViewModel vm)
+            {
+                vm.SetSprintModifierState(true);
+            }
+            else if (!_isShiftPressed)
             {
                 _isShiftPressed = true;
                 UpdateSpeedScale();
@@ -416,7 +435,11 @@ public partial class VideoDisplayDockView : UserControl
     {
         if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
         {
-            if (_isShiftPressed)
+            if (DataContext is VideoDisplayDockViewModel vm)
+            {
+                vm.SetSprintModifierState(false);
+            }
+            else if (_isShiftPressed)
             {
                 _isShiftPressed = false;
                 UpdateSpeedScale();
@@ -854,24 +877,28 @@ public partial class VideoDisplayDockView : UserControl
         if (heightChanged && !speedChanged && !shiftStateChanged)
         {
             // Window resize: recalculate position proportionally without animation
+            CancelSpeedAnimation();
             _currentArrowY = targetArrowY;
             UpdateArrowPosition(lineX, tickLong);
         }
         else if (shiftStateChanged && _isShiftPressed)
         {
             // Shift pressed: snap immediately to doubled position
+            CancelSpeedAnimation();
             _currentArrowY = targetArrowY;
             UpdateArrowPosition(lineX, tickLong);
         }
         else if (shiftStateChanged && !_isShiftPressed)
         {
             // Shift released: snap back to original position
+            CancelSpeedAnimation();
             _currentArrowY = targetArrowY;
             UpdateArrowPosition(lineX, tickLong);
         }
         else if (Math.Abs(targetArrowY - _currentArrowY) < 0.5)
         {
             // Very small changes: instant update
+            CancelSpeedAnimation();
             _currentArrowY = targetArrowY;
             UpdateArrowPosition(lineX, tickLong);
         }
@@ -885,6 +912,11 @@ public partial class VideoDisplayDockView : UserControl
             // No change: just update position
             UpdateArrowPosition(lineX, tickLong);
         }
+    }
+
+    private void CancelSpeedAnimation()
+    {
+        _animationCts?.Cancel();
     }
 
     private void UpdateArrowPosition(double lineX, double tickLong)

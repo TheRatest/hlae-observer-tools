@@ -148,6 +148,7 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     }
 
     public event EventHandler<bool>? FreecamStateChanged;
+    public event EventHandler<bool>? FreecamSprintStateChanged;
     public event EventHandler<IntPtr>? RtpViewerWindowChanged;
     public event EventHandler? FreecamInputLockRequested;
     public event EventHandler? FreecamInputReleaseRequested;
@@ -253,6 +254,11 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
                 _hudOverlayWindow.Focus();
             }, DispatcherPriority.Background);
         }
+    }
+
+    public void SetSprintModifierState(bool isPressed)
+    {
+        FreecamSprintStateChanged?.Invoke(this, isPressed);
     }
 
     public void RequestFreecamInputRelease()
