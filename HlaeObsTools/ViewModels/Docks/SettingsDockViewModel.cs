@@ -66,6 +66,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _worldOffsetX = (float)settings.WorldOffsetX;
             _worldOffsetY = (float)settings.WorldOffsetY;
             _worldOffsetZ = (float)settings.WorldOffsetZ;
+            _viewportMouseScale = (float)settings.ViewportMouseScale;
             _mapScale = (float)settings.MapScale;
             _mapYaw = (float)settings.MapYaw;
             _mapPitch = (float)settings.MapPitch;
@@ -88,6 +89,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _viewport3DSettings.WorldOffsetX = _worldOffsetX;
             _viewport3DSettings.WorldOffsetY = _worldOffsetY;
             _viewport3DSettings.WorldOffsetZ = _worldOffsetZ;
+            _viewport3DSettings.ViewportMouseScale = _viewportMouseScale;
             _viewport3DSettings.MapScale = _mapScale;
             _viewport3DSettings.MapYaw = _mapYaw;
             _viewport3DSettings.MapPitch = _mapPitch;
@@ -377,6 +379,22 @@ namespace HlaeObsTools.ViewModels.Docks
                 {
                     _worldOffsetZ = value;
                     _viewport3DSettings.WorldOffsetZ = _worldOffsetZ;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        private float _viewportMouseScale = 1.0f;
+        public float ViewportMouseScale
+        {
+            get => _viewportMouseScale;
+            set
+            {
+                if (Math.Abs(_viewportMouseScale - value) > 0.0001f)
+                {
+                    _viewportMouseScale = value;
+                    _viewport3DSettings.ViewportMouseScale = _viewportMouseScale;
                     OnPropertyChanged();
                     SaveSettings();
                 }
@@ -701,6 +719,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 WorldOffsetX = _worldOffsetX,
                 WorldOffsetY = _worldOffsetY,
                 WorldOffsetZ = _worldOffsetZ,
+                ViewportMouseScale = _viewportMouseScale,
                 MapScale = _mapScale,
                 MapYaw = _mapYaw,
                 MapPitch = _mapPitch,

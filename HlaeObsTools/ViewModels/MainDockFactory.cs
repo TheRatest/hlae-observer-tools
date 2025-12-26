@@ -137,6 +137,7 @@ public class MainDockFactory : Factory, IDisposable
             WorldOffsetX = (float)_storedSettings.WorldOffsetX,
             WorldOffsetY = (float)_storedSettings.WorldOffsetY,
             WorldOffsetZ = (float)_storedSettings.WorldOffsetZ,
+            ViewportMouseScale = (float)_storedSettings.ViewportMouseScale,
             MapScale = (float)_storedSettings.MapScale,
             MapYaw = (float)_storedSettings.MapYaw,
             MapPitch = (float)_storedSettings.MapPitch,

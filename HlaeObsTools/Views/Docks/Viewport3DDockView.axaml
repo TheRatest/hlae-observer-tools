@@ -25,6 +25,7 @@
                                      WorldOffsetX="{Binding WorldOffsetX}"
                                      WorldOffsetY="{Binding WorldOffsetY}"
                                      WorldOffsetZ="{Binding WorldOffsetZ}"
+                                     ViewportMouseScale="{Binding ViewportMouseScale}"
                                      MapScale="{Binding MapScale}"
                                      MapYaw="{Binding MapYaw}"
                                      MapPitch="{Binding MapPitch}"

@@ -18,6 +18,7 @@ public sealed class Viewport3DSettings : ViewModelBase
     private float _worldOffsetX;
     private float _worldOffsetY;
     private float _worldOffsetZ;
+    private float _viewportMouseScale = 1.0f;
     private float _mapScale = 1.0f;
     private float _mapYaw;
     private float _mapPitch;
@@ -141,6 +142,15 @@ public sealed class Viewport3DSettings : ViewModelBase
     {
         get => _worldOffsetZ;
         set => SetProperty(ref _worldOffsetZ, value);
+    }
+
+    /// <summary>
+    /// Mouse sensitivity scale for the 3D viewport freecam.
+    /// </summary>
+    public float ViewportMouseScale
+    {
+        get => _viewportMouseScale;
+        set => SetProperty(ref _viewportMouseScale, value);
     }
 
     /// <summary>

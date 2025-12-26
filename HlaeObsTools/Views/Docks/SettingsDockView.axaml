@@ -197,6 +197,17 @@
                             <TextBox Width="80" Watermark="Z" Text="{Binding WorldOffsetZ, Mode=TwoWay}" />
                         </StackPanel>
 
+                        <TextBlock Text="Viewport mouse scale"
+                                Foreground="#CCCCCC"
+                                FontWeight="SemiBold"
+                                Margin="0,10,0,0"/>
+                        <TextBox Width="120"
+                                Text="{Binding ViewportMouseScale, Mode=TwoWay}"
+                                Watermark="1.0"/>
+                        <TextBlock Text="Scales mouse sensitivity in the 3D viewport freecam."
+                                Foreground="#888888"
+                                FontSize="12"/>
+
                         <TextBlock Text="Map scale"
                                 Foreground="#CCCCCC"
                                 FontWeight="SemiBold"

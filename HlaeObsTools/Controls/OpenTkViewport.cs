@@ -60,6 +60,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
         AvaloniaProperty.Register<OpenTkViewport, float>(nameof(WorldOffsetY), 0.0f);
     public static readonly StyledProperty<float> WorldOffsetZProperty =
         AvaloniaProperty.Register<OpenTkViewport, float>(nameof(WorldOffsetZ), 0.0f);
+    public static readonly StyledProperty<float> ViewportMouseScaleProperty =
+        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(ViewportMouseScale), 1.0f);
     public static readonly StyledProperty<FreecamSettings?> FreecamSettingsProperty =
         AvaloniaProperty.Register<OpenTkViewport, FreecamSettings?>(nameof(FreecamSettings));
     public static readonly StyledProperty<HlaeInputSender?> InputSenderProperty =
@@ -138,6 +140,9 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private float _freecamCurrentRoll;
     private float _freecamRollVelocity;
     private float _freecamLastLateralVelocity;
+    private Quaternion _freecamRawQuat = Quaternion.Identity;
+    private Quaternion _freecamSmoothedQuat = Quaternion.Identity;
+    private Vector3 _freecamRotVelocity = Vector3.Zero;
     private Vector3 _freecamLastSmoothedPosition;
     private Vector2 _freecamMouseDelta;
     private float _freecamWheelDelta;
@@ -303,6 +308,12 @@ public sealed class OpenTkViewport : OpenGlControlBase
     {
         get => GetValue(WorldOffsetZProperty);
         set => SetValue(WorldOffsetZProperty, value);
+    }
+
+    public float ViewportMouseScale
+    {
+        get => GetValue(ViewportMouseScaleProperty);
+        set => SetValue(ViewportMouseScaleProperty, value);
     }
 
     public FreecamSettings? FreecamSettings
@@ -572,17 +583,25 @@ public sealed class OpenTkViewport : OpenGlControlBase
             forward = Vector3.UnitZ;
         forward = Vector3.Normalize(forward);
 
-        var yaw = MathHelper.RadiansToDegrees(MathF.Atan2(forward.Z, forward.X));
-        var pitch = MathHelper.RadiansToDegrees(MathF.Asin(Math.Clamp(forward.Y, -1f, 1f)));
+        GetYawPitchFromForward(forward, out var yaw, out var pitch);
         var fov = _freecamActive ? _freecamTransform.Fov : _freecamConfig.DefaultFov;
+
+        var forwardFromAngles = GetForwardVector(pitch, yaw);
+        var right = Vector3.Cross(forwardFromAngles, Vector3.UnitY);
+        if (right.LengthSquared < 1e-6f)
+            right = Vector3.Cross(forwardFromAngles, Vector3.UnitZ);
+        right = Vector3.Normalize(right);
+        var up = Vector3.Normalize(Vector3.Cross(right, forwardFromAngles));
+        var roll = ComputeRollForUp(pitch, yaw, up);
 
         _freecamTransform = new FreecamTransform
         {
             Position = pin.Position,
             Yaw = yaw,
             Pitch = pitch,
-            Roll = 0f,
-            Fov = fov
+            Roll = roll,
+            Fov = fov,
+            Orientation = BuildQuat(pitch, yaw, roll)
         };
         _freecamSmoothed = _freecamTransform;
         _freecamActive = true;
@@ -643,13 +662,11 @@ public sealed class OpenTkViewport : OpenGlControlBase
                 return;
             }
 
-            if (TryGetScreenPoint(point.Position, out var screenPoint))
-            {
-                var dx = screenPoint.X - _freecamCenterScreen.X;
-                var dy = screenPoint.Y - _freecamCenterScreen.Y;
-                if (dx != 0 || dy != 0)
-                    _freecamMouseDelta += new Vector2(dx, dy);
-            }
+            var scale = MathF.Max(0.01f, ViewportMouseScale);
+            var dx = (float)(point.Position.X - _freecamCenterLocal.X) * scale;
+            var dy = (float)(point.Position.Y - _freecamCenterLocal.Y) * scale;
+            if (dx != 0 || dy != 0)
+                _freecamMouseDelta += new Vector2(dx, dy);
             CenterFreecamCursor();
             UpdateInputStatus("Input: freecam");
             RequestNextFrameRendering();
@@ -1280,16 +1297,25 @@ public sealed class OpenTkViewport : OpenGlControlBase
     {
         var cameraPos = GetCameraPosition();
         var forward = Vector3.Normalize(_target - cameraPos);
-        var yaw = MathHelper.RadiansToDegrees(MathF.Atan2(forward.Z, forward.X));
-        var pitch = MathHelper.RadiansToDegrees(MathF.Asin(forward.Y));
+        GetYawPitchFromForward(forward, out var yaw, out var pitch);
+
+        var forwardFromAngles = GetForwardVector(pitch, yaw);
+        var worldUp = Vector3.UnitY;
+        var right = Vector3.Cross(forwardFromAngles, worldUp);
+        if (right.LengthSquared < 1e-6f)
+            right = Vector3.Cross(forwardFromAngles, Vector3.UnitZ);
+        right = Vector3.Normalize(right);
+        var up = Vector3.Normalize(Vector3.Cross(right, forwardFromAngles));
+        var roll = ComputeRollForUp(pitch, yaw, up);
 
         _freecamTransform = new FreecamTransform
         {
             Position = cameraPos,
             Yaw = yaw,
             Pitch = pitch,
-            Roll = 0f,
-            Fov = _freecamConfig.DefaultFov
+            Roll = roll,
+            Fov = _freecamConfig.DefaultFov,
+            Orientation = BuildQuat(pitch, yaw, roll)
         };
         _freecamSmoothed = _freecamTransform;
         ResetFreecamState();
@@ -1315,6 +1341,11 @@ public sealed class OpenTkViewport : OpenGlControlBase
         _freecamRollVelocity = 0.0f;
         _freecamLastLateralVelocity = 0.0f;
         _freecamLastSmoothedPosition = _freecamSmoothed.Position;
+        _freecamTransform.Orientation = BuildQuat(_freecamTransform);
+        _freecamSmoothed.Orientation = BuildQuat(_freecamSmoothed);
+        _freecamRawQuat = _freecamTransform.Orientation;
+        _freecamSmoothedQuat = _freecamSmoothed.Orientation;
+        _freecamRotVelocity = Vector3.Zero;
     }
 
     private void ClearFreecamInputState()
@@ -1360,6 +1391,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
         }
 
         UpdateFreecamRoll(deltaTime);
+        _freecamTransform.Orientation = BuildQuat(_freecamTransform);
+        _freecamRawQuat = _freecamTransform.Orientation;
 
         if (_freecamConfig.SmoothEnabled)
         {
@@ -1368,6 +1401,9 @@ public sealed class OpenTkViewport : OpenGlControlBase
         else
         {
             _freecamSmoothed = _freecamTransform;
+            _freecamSmoothed.Orientation = _freecamTransform.Orientation;
+            _freecamSmoothedQuat = _freecamSmoothed.Orientation;
+            _freecamRotVelocity = Vector3.Zero;
         }
     }
 
@@ -1376,7 +1412,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         if (deltaTime <= 0f)
             return;
 
-        var deltaYaw = _freecamMouseDelta.X * _freecamConfig.MouseSensitivity;
+        var deltaYaw = -_freecamMouseDelta.X * _freecamConfig.MouseSensitivity;
         var deltaPitch = -_freecamMouseDelta.Y * _freecamConfig.MouseSensitivity;
         _freecamMouseDelta = Vector2.Zero;
 
@@ -1390,9 +1426,6 @@ public sealed class OpenTkViewport : OpenGlControlBase
         {
             _freecamTransform.Pitch = Clamp(_freecamTransform.Pitch, -89.0f, 89.0f);
         }
-
-        while (_freecamTransform.Yaw > 180.0f) _freecamTransform.Yaw -= 360.0f;
-        while (_freecamTransform.Yaw < -180.0f) _freecamTransform.Yaw += 360.0f;
     }
 
     private void UpdateFreecamMovement(float deltaTime)
@@ -1428,9 +1461,9 @@ public sealed class OpenTkViewport : OpenGlControlBase
             verticalSpeed *= _freecamConfig.SprintMultiplier;
         }
 
-        var forward = GetForwardVector(_freecamTransform.Pitch, _freecamTransform.Yaw);
-        var right = GetRightVector(_freecamTransform.Yaw);
-        var up = GetUpVector(_freecamTransform.Pitch, _freecamTransform.Yaw);
+        var forward = GetForwardFromQuat(_freecamTransform.Orientation);
+        var right = GetRightFromQuat(_freecamTransform.Orientation);
+        var up = GetUpFromQuat(_freecamTransform.Orientation);
 
         var desiredVel = Vector3.Zero;
 
@@ -1493,7 +1526,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         if (_freecamConfig.SmoothEnabled)
         {
             var view = _freecamConfig.SmoothEnabled ? _freecamSmoothed : _freecamTransform;
-            var right = GetRightVector(view.Yaw);
+            var right = GetRightFromQuat(view.Orientation);
 
             var posBlend = _freecamConfig.HalfVec > 0f
                 ? 1.0f - MathF.Exp((-MathF.Log(2.0f) * deltaTime) / _freecamConfig.HalfVec)
@@ -1620,57 +1653,119 @@ public sealed class OpenTkViewport : OpenGlControlBase
             ? 1.0f - MathF.Exp((-MathF.Log(2.0f) * deltaTime) / _freecamConfig.HalfVec)
             : 1.0f;
 
-        var rotBlend = _freecamConfig.HalfRot > 0f
-            ? 1.0f - MathF.Exp((-MathF.Log(2.0f) * deltaTime) / _freecamConfig.HalfRot)
-            : 1.0f;
-
         var fovBlend = _freecamConfig.HalfFov > 0f
             ? 1.0f - MathF.Exp((-MathF.Log(2.0f) * deltaTime) / _freecamConfig.HalfFov)
             : 1.0f;
 
         _freecamSmoothed.Position = Vector3.Lerp(_freecamSmoothed.Position, _freecamTransform.Position, posBlend);
-
-        var targetYaw = _freecamTransform.Yaw;
-        var currentYaw = _freecamSmoothed.Yaw;
-        while (targetYaw - currentYaw > 180.0f) targetYaw -= 360.0f;
-        while (targetYaw - currentYaw < -180.0f) targetYaw += 360.0f;
-
-        _freecamSmoothed.Pitch = Lerp(_freecamSmoothed.Pitch, _freecamTransform.Pitch, rotBlend);
-        _freecamSmoothed.Yaw = Lerp(currentYaw, targetYaw, rotBlend);
-        _freecamSmoothed.Roll = Lerp(_freecamSmoothed.Roll, _freecamTransform.Roll, rotBlend);
         _freecamSmoothed.Fov = Lerp(_freecamSmoothed.Fov, _freecamTransform.Fov, fovBlend);
+
+        if (_freecamConfig.HalfRot > 0f)
+        {
+            var omega = MathF.Log(2.0f) / _freecamConfig.HalfRot;
+            var target = _freecamRawQuat;
+            var qErr = target * Quaternion.Invert(_freecamSmoothedQuat);
+            if (qErr.W < 0f)
+            {
+                qErr = new Quaternion(-qErr.X, -qErr.Y, -qErr.Z, -qErr.W);
+            }
+
+            var clampedW = Math.Clamp(qErr.W, -1f, 1f);
+            var angle = 2f * MathF.Acos(clampedW);
+            var sinHalf = MathF.Sqrt(MathF.Max(0f, 1f - clampedW * clampedW));
+            var axis = sinHalf < 1e-6f
+                ? Vector3.UnitX
+                : new Vector3(qErr.X / sinHalf, qErr.Y / sinHalf, qErr.Z / sinHalf);
+
+            var error = axis * angle;
+            var wdot = (omega * omega) * error - (2f * omega) * _freecamRotVelocity;
+            _freecamRotVelocity += wdot * deltaTime;
+            _freecamSmoothedQuat = IntegrateQuat(_freecamSmoothedQuat, _freecamRotVelocity, deltaTime);
+        }
+        else
+        {
+            _freecamSmoothedQuat = _freecamRawQuat;
+            _freecamRotVelocity = Vector3.Zero;
+        }
+
+        _freecamSmoothed.Orientation = _freecamSmoothedQuat;
+    }
+
+    private static Quaternion BuildQuat(float pitchDeg, float yawDeg, float rollDeg)
+    {
+        var pitchRad = MathHelper.DegreesToRadians(pitchDeg);
+        var yawRad = MathHelper.DegreesToRadians(yawDeg);
+        var rollRad = MathHelper.DegreesToRadians(rollDeg);
+        var qPitch = Quaternion.FromAxisAngle(Vector3.UnitZ, pitchRad);
+        var qYaw = Quaternion.FromAxisAngle(Vector3.UnitY, yawRad);
+        var qRoll = Quaternion.FromAxisAngle(Vector3.UnitX, rollRad);
+        return Quaternion.Normalize(qYaw * qPitch * qRoll);
+    }
+
+    private static Quaternion BuildQuat(FreecamTransform transform) =>
+        BuildQuat(transform.Pitch, transform.Yaw, transform.Roll);
+
+    private static Vector3 GetForwardFromQuat(Quaternion q)
+    {
+        return Vector3.Normalize(Vector3.Transform(Vector3.UnitX, q));
+    }
+
+    private static Vector3 GetUpFromQuat(Quaternion q)
+    {
+        return Vector3.Normalize(Vector3.Transform(Vector3.UnitY, q));
+    }
+
+    private static Vector3 GetRightFromQuat(Quaternion q)
+    {
+        return Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, q));
+    }
+
+    private static Quaternion IntegrateQuat(Quaternion q, Vector3 angularVelocity, float deltaTime)
+    {
+        var speed = angularVelocity.Length;
+        if (speed <= 1e-8f || deltaTime <= 0f)
+            return q;
+
+        var angle = speed * deltaTime;
+        var axis = angularVelocity / speed;
+        var dq = Quaternion.FromAxisAngle(axis, angle);
+        return Quaternion.Normalize(dq * q);
+    }
+
+    private static float ComputeRollForUp(float pitchDeg, float yawDeg, Vector3 desiredUp)
+    {
+        var forward = GetForwardVector(pitchDeg, yawDeg);
+        var right = GetRightVector(yawDeg);
+        var baseUp = Vector3.Normalize(Vector3.Cross(right, forward));
+        var fwd = Vector3.Normalize(forward);
+        var cross = Vector3.Cross(baseUp, desiredUp);
+        var sin = Vector3.Dot(cross, fwd);
+        var cos = Vector3.Dot(baseUp, desiredUp);
+        var rollRad = MathF.Atan2(sin, cos);
+        return (float)MathHelper.RadiansToDegrees(rollRad);
+    }
+
+    private static void GetYawPitchFromForward(Vector3 forward, out float yawDeg, out float pitchDeg)
+    {
+        forward = Vector3.Normalize(forward);
+        var yaw = MathF.Atan2(-forward.Z, forward.X);
+        var horiz = MathF.Sqrt(forward.X * forward.X + forward.Z * forward.Z);
+        var pitch = MathF.Atan2(forward.Y, horiz);
+        yawDeg = (float)MathHelper.RadiansToDegrees(yaw);
+        pitchDeg = (float)MathHelper.RadiansToDegrees(pitch);
     }
 
     private Matrix4 CreateFreecamView(FreecamTransform transform)
     {
-        var forward = GetForwardVector(transform.Pitch, transform.Yaw);
-        var right = GetRightVector(transform.Yaw);
-        var up = GetUpVector(transform.Pitch, transform.Yaw);
-
-        if (Math.Abs(transform.Roll) > 0.001f)
-        {
-            var rollRad = MathHelper.DegreesToRadians(transform.Roll);
-            var rollMat = Matrix3.CreateFromAxisAngle(Vector3.Normalize(forward), rollRad);
-            right = Transform(right, rollMat);
-            up = Transform(up, rollMat);
-        }
-
+        var forward = GetForwardFromQuat(transform.Orientation);
+        var up = GetUpFromQuat(transform.Orientation);
         return Matrix4.LookAt(transform.Position, transform.Position + forward, up);
     }
 
     private void GetFreecamBasis(FreecamTransform transform, out Vector3 forward, out Vector3 up)
     {
-        forward = GetForwardVector(transform.Pitch, transform.Yaw);
-        var right = GetRightVector(transform.Yaw);
-        up = GetUpVector(transform.Pitch, transform.Yaw);
-
-        if (Math.Abs(transform.Roll) > 0.001f)
-        {
-            var rollRad = MathHelper.DegreesToRadians(transform.Roll);
-            var rollMat = Matrix3.CreateFromAxisAngle(Vector3.Normalize(forward), rollRad);
-            right = Transform(right, rollMat);
-            up = Transform(up, rollMat);
-        }
+        forward = GetForwardFromQuat(transform.Orientation);
+        up = GetUpFromQuat(transform.Orientation);
     }
 
     private bool IsKeyDown(Key key) => _keysDown.Contains(key);
@@ -2300,6 +2395,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         public float Yaw;
         public float Roll;
         public float Fov;
+        public Quaternion Orientation;
     }
 
     private readonly struct FreecamConfig

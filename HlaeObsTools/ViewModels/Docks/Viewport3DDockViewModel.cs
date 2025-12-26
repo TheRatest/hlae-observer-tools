@@ -301,6 +301,19 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         }
     }
 
+    public float ViewportMouseScale
+    {
+        get => _settings.ViewportMouseScale;
+        set
+        {
+            if (Math.Abs(_settings.ViewportMouseScale - value) > 0.0001f)
+            {
+                _settings.ViewportMouseScale = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public float MapScale
     {
         get => _settings.MapScale;
@@ -418,6 +431,8 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             OnPropertyChanged(nameof(WorldOffsetY));
         else if (e.PropertyName == nameof(Viewport3DSettings.WorldOffsetZ))
             OnPropertyChanged(nameof(WorldOffsetZ));
+        else if (e.PropertyName == nameof(Viewport3DSettings.ViewportMouseScale))
+            OnPropertyChanged(nameof(ViewportMouseScale));
         else if (e.PropertyName == nameof(Viewport3DSettings.MapScale))
             OnPropertyChanged(nameof(MapScale));
         else if (e.PropertyName == nameof(Viewport3DSettings.MapYaw))

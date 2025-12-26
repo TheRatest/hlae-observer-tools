@@ -79,6 +79,7 @@ public class AppSettingsData
     public double WorldOffsetX { get; set; }
     public double WorldOffsetY { get; set; }
     public double WorldOffsetZ { get; set; }
+    public double ViewportMouseScale { get; set; } = 1.0;
     public double MapScale { get; set; } = 1.0;
     public double MapYaw { get; set; }
     public double MapPitch { get; set; }
