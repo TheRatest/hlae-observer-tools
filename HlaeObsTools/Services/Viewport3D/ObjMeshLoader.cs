@@ -97,7 +97,7 @@ public static class ObjMeshLoader
                         if (normal.LengthSquared > 0.000001f)
                             normal = Vector3.Normalize(normal);
                         else
-                            normal = Vector3.UnitY;
+                            normal = Vector3.UnitZ;
 
                         AppendVertex(a, normal, vertices, ref min, ref max);
                         AppendVertex(b, normal, vertices, ref min, ref max);

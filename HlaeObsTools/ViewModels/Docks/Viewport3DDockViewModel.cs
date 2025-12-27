@@ -72,6 +72,7 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
 
         var rotation = GetWorldRotation();
         var invRotation = Matrix3.Transpose(rotation);
+        var invRotationQuat = Quaternion.FromMatrix(invRotation);
         var scale = Math.Abs(_settings.WorldScale) < 0.0001f ? 1.0f : _settings.WorldScale;
         var offset = new Vector3(_settings.WorldOffsetX, _settings.WorldOffsetY, _settings.WorldOffsetZ);
 
@@ -97,8 +98,10 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             smoothUp = Vector3.Normalize(smoothUp);
         }
 
-        var (pitch, yaw, roll) = GetAngles(rawForward, rawUp);
-        var (smoothPitch, smoothYaw, smoothRoll) = GetAngles(smoothForward, smoothUp);
+        var pitch = state.RawPitch;
+        var yaw = state.RawYaw;
+        var roll = state.RawRoll;
+        var smoothQuat = Quaternion.Normalize(invRotationQuat * state.SmoothedOrientation);
 
         var args = new
         {
@@ -112,9 +115,10 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             smoothPosX = smooth.Position.X,
             smoothPosY = smooth.Position.Y,
             smoothPosZ = smooth.Position.Z,
-            smoothPitch,
-            smoothYaw,
-            smoothRoll,
+            smoothQuatW = smoothQuat.W,
+            smoothQuatX = smoothQuat.X,
+            smoothQuatY = smoothQuat.Y,
+            smoothQuatZ = smoothQuat.Z,
             smoothFov = state.SmoothedFov,
             speedScalar = state.SpeedScalar,
             mouseSensitivity = (float)_freecamSettings.MouseSensitivity,
@@ -502,9 +506,9 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         var pitch = MathHelper.DegreesToRadians(_settings.WorldPitch);
         var roll = MathHelper.DegreesToRadians(_settings.WorldRoll);
 
-        var yawMat = Matrix3.CreateRotationY(yaw);
-        var pitchMat = Matrix3.CreateRotationX(pitch);
-        var rollMat = Matrix3.CreateRotationZ(roll);
+        var yawMat = Matrix3.CreateRotationZ(yaw);
+        var pitchMat = Matrix3.CreateRotationY(pitch);
+        var rollMat = Matrix3.CreateRotationX(roll);
         return yawMat * pitchMat * rollMat;
     }
 
@@ -529,12 +533,13 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         return (pos, Transform(forward, invRotation), Transform(up, invRotation));
     }
 
-    private static (float Pitch, float Yaw, float Roll) GetAngles(Vector3 forward, Vector3 up)
+    private static (float Pitch, float Yaw, float Roll) GetAngles(Vector3 forward, Vector3 up, bool clampPitch)
     {
         var yaw = MathHelper.RadiansToDegrees(MathF.Atan2(forward.Y, forward.X));
         var pitch = MathHelper.RadiansToDegrees(-MathF.Asin(Math.Clamp(forward.Z, -1f, 1f)));
         yaw = WrapAngle(yaw);
-        pitch = Math.Clamp(pitch, -89.0f, 89.0f);
+        if (clampPitch)
+            pitch = Math.Clamp(pitch, -89.0f, 89.0f);
 
         var baseUp = GetUpVector(pitch, yaw);
         var roll = GetRollFromUp(baseUp, up, forward);

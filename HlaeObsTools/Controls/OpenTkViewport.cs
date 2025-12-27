@@ -420,10 +420,15 @@ public sealed class OpenTkViewport : OpenGlControlBase
             RawPosition = _freecamTransform.Position,
             RawForward = Vector3.Normalize(rawForward),
             RawUp = Vector3.Normalize(rawUp),
+            RawOrientation = _freecamTransform.Orientation,
+            RawPitch = _freecamTransform.Pitch,
+            RawYaw = _freecamTransform.Yaw,
+            RawRoll = _freecamTransform.Roll,
             RawFov = _freecamTransform.Fov,
             SmoothedPosition = _freecamSmoothed.Position,
             SmoothedForward = Vector3.Normalize(smoothForward),
             SmoothedUp = Vector3.Normalize(smoothUp),
+            SmoothedOrientation = _freecamSmoothed.Orientation,
             SmoothedFov = _freecamSmoothed.Fov,
             SpeedScalar = _freecamSpeedScalar
         };
@@ -580,16 +585,16 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
         var forward = pin.Forward;
         if (forward.LengthSquared < 0.0001f)
-            forward = Vector3.UnitZ;
+            forward = Vector3.UnitX;
         forward = Vector3.Normalize(forward);
 
         GetYawPitchFromForward(forward, out var yaw, out var pitch);
         var fov = _freecamActive ? _freecamTransform.Fov : _freecamConfig.DefaultFov;
 
         var forwardFromAngles = GetForwardVector(pitch, yaw);
-        var right = Vector3.Cross(forwardFromAngles, Vector3.UnitY);
+        var right = Vector3.Cross(forwardFromAngles, Vector3.UnitZ);
         if (right.LengthSquared < 1e-6f)
-            right = Vector3.Cross(forwardFromAngles, Vector3.UnitZ);
+            right = Vector3.Cross(forwardFromAngles, Vector3.UnitX);
         right = Vector3.Normalize(right);
         var up = Vector3.Normalize(Vector3.Cross(right, forwardFromAngles));
         var roll = ComputeRollForUp(pitch, yaw, up);
@@ -1151,11 +1156,11 @@ public sealed class OpenTkViewport : OpenGlControlBase
         {
             var offset = -half + i * step;
 
-            AddVertex(vertices, ref index, -half, 0f, offset, 0f, 1f, 0f);
-            AddVertex(vertices, ref index, half, 0f, offset, 0f, 1f, 0f);
+            AddVertex(vertices, ref index, -half, offset, 0f, 0f, 0f, 1f);
+            AddVertex(vertices, ref index, half, offset, 0f, 0f, 0f, 1f);
 
-            AddVertex(vertices, ref index, offset, 0f, -half, 0f, 1f, 0f);
-            AddVertex(vertices, ref index, offset, 0f, half, 0f, 1f, 0f);
+            AddVertex(vertices, ref index, offset, -half, 0f, 0f, 0f, 1f);
+            AddVertex(vertices, ref index, offset, half, 0f, 0f, 0f, 1f);
         }
 
         if (_gridVao != 0)
@@ -1191,7 +1196,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var cosYaw = MathF.Cos(_yaw);
         var sinYaw = MathF.Sin(_yaw);
 
-        var direction = new Vector3(cosPitch * cosYaw, sinPitch, cosPitch * sinYaw);
+        var direction = new Vector3(cosPitch * cosYaw, cosPitch * sinYaw, sinPitch);
         return _target + direction * _distance;
     }
 
@@ -1209,7 +1214,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var nearPlane = Math.Max(0.05f, _distance * 0.01f);
         var farPlane = Math.Max(100f, _distance * 10f);
         var projectionOrbit = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60f), aspect, nearPlane, farPlane);
-        var viewOrbit = Matrix4.LookAt(GetCameraPosition(), _target, Vector3.UnitY);
+        var viewOrbit = Matrix4.LookAt(GetCameraPosition(), _target, Vector3.UnitZ);
         return viewOrbit * projectionOrbit;
     }
 
@@ -1236,7 +1241,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private void Orbit(float deltaX, float deltaY)
     {
         const float rotateSpeed = 0.01f;
-        _yaw += deltaX * rotateSpeed;
+        _yaw -= deltaX * rotateSpeed;
         _pitch += deltaY * rotateSpeed;
         _pitch = Math.Clamp(_pitch, -1.55f, 1.55f);
     }
@@ -1245,7 +1250,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     {
         var cameraPos = GetCameraPosition();
         var forward = Vector3.Normalize(_target - cameraPos);
-        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
+        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
         var up = Vector3.Normalize(Vector3.Cross(right, forward));
 
         var panScale = _distance * 0.001f;
@@ -1302,10 +1307,10 @@ public sealed class OpenTkViewport : OpenGlControlBase
         GetYawPitchFromForward(forward, out var yaw, out var pitch);
 
         var forwardFromAngles = GetForwardVector(pitch, yaw);
-        var worldUp = Vector3.UnitY;
+        var worldUp = Vector3.UnitZ;
         var right = Vector3.Cross(forwardFromAngles, worldUp);
         if (right.LengthSquared < 1e-6f)
-            right = Vector3.Cross(forwardFromAngles, Vector3.UnitZ);
+            right = Vector3.Cross(forwardFromAngles, Vector3.UnitX);
         right = Vector3.Normalize(right);
         var up = Vector3.Normalize(Vector3.Cross(right, forwardFromAngles));
         var roll = ComputeRollForUp(pitch, yaw, up);
@@ -1415,7 +1420,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             return;
 
         var deltaYaw = -_freecamMouseDelta.X * _freecamConfig.MouseSensitivity;
-        var deltaPitch = -_freecamMouseDelta.Y * _freecamConfig.MouseSensitivity;
+        var deltaPitch = _freecamMouseDelta.Y * _freecamConfig.MouseSensitivity;
         _freecamMouseDelta = Vector2.Zero;
 
         _freecamTransform.Yaw += deltaYaw;
@@ -1731,8 +1736,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var pitchRad = MathHelper.DegreesToRadians(pitchDeg);
         var yawRad = MathHelper.DegreesToRadians(yawDeg);
         var rollRad = MathHelper.DegreesToRadians(rollDeg);
-        var qPitch = Quaternion.FromAxisAngle(Vector3.UnitZ, pitchRad);
-        var qYaw = Quaternion.FromAxisAngle(Vector3.UnitY, yawRad);
+        var qPitch = Quaternion.FromAxisAngle(Vector3.UnitY, pitchRad);
+        var qYaw = Quaternion.FromAxisAngle(Vector3.UnitZ, yawRad);
         var qRoll = Quaternion.FromAxisAngle(Vector3.UnitX, rollRad);
         return Quaternion.Normalize(qYaw * qPitch * qRoll);
     }
@@ -1747,12 +1752,12 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private static Vector3 GetUpFromQuat(Quaternion q)
     {
-        return Vector3.Normalize(Vector3.Transform(Vector3.UnitY, q));
+        return Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, q));
     }
 
     private static Vector3 GetRightFromQuat(Quaternion q)
     {
-        return Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, q));
+        return Vector3.Normalize(Vector3.Transform(-Vector3.UnitY, q));
     }
 
     private static Quaternion IntegrateQuat(Quaternion q, Vector3 angularVelocity, float deltaTime)
@@ -1807,9 +1812,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private static void GetYawPitchFromForward(Vector3 forward, out float yawDeg, out float pitchDeg)
     {
         forward = Vector3.Normalize(forward);
-        var yaw = MathF.Atan2(-forward.Z, forward.X);
-        var horiz = MathF.Sqrt(forward.X * forward.X + forward.Z * forward.Z);
-        var pitch = MathF.Atan2(forward.Y, horiz);
+        var yaw = MathF.Atan2(forward.Y, forward.X);
+        var pitch = -MathF.Asin(Math.Clamp(forward.Z, -1f, 1f));
         yawDeg = (float)MathHelper.RadiansToDegrees(yaw);
         pitchDeg = (float)MathHelper.RadiansToDegrees(pitch);
     }
@@ -1929,21 +1933,24 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var cosPitch = MathF.Cos(pitch);
         return new Vector3(
             cosPitch * MathF.Cos(yaw),
-            MathF.Sin(pitch),
-            cosPitch * MathF.Sin(yaw));
+            cosPitch * MathF.Sin(yaw),
+            -MathF.Sin(pitch));
     }
 
     private static Vector3 GetRightVector(float yawDeg)
     {
         var yaw = MathHelper.DegreesToRadians(yawDeg);
-        return new Vector3(-MathF.Sin(yaw), 0f, MathF.Cos(yaw));
+        return new Vector3(MathF.Sin(yaw), -MathF.Cos(yaw), 0f);
     }
 
     private static Vector3 GetUpVector(float pitchDeg, float yawDeg)
     {
-        var forward = GetForwardVector(pitchDeg, yawDeg);
-        var right = GetRightVector(yawDeg);
-        return Vector3.Normalize(Vector3.Cross(right, forward));
+        var pitch = MathHelper.DegreesToRadians(pitchDeg);
+        var yaw = MathHelper.DegreesToRadians(yawDeg);
+        return new Vector3(
+            MathF.Sin(pitch) * MathF.Cos(yaw),
+            MathF.Sin(pitch) * MathF.Sin(yaw),
+            MathF.Cos(pitch));
     }
 
     private static float Clamp(float value, float min, float max)
@@ -2142,13 +2149,13 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var half = size * 0.5f;
         var vertices = new[]
         {
-            -half, 0f, -half, 0f, 1f, 0f,
-            half, 0f, -half, 0f, 1f, 0f,
-            half, 0f, half, 0f, 1f, 0f,
+            -half, -half, 0f, 0f, 0f, 1f,
+            half, -half, 0f, 0f, 0f, 1f,
+            half, half, 0f, 0f, 0f, 1f,
 
-            -half, 0f, -half, 0f, 1f, 0f,
-            half, 0f, half, 0f, 1f, 0f,
-            -half, 0f, half, 0f, 1f, 0f
+            -half, -half, 0f, 0f, 0f, 1f,
+            half, half, 0f, 0f, 0f, 1f,
+            -half, half, 0f, 0f, 0f, 1f
         };
 
         if (_groundVao != 0)
@@ -2274,7 +2281,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             forward = new Vector3(0, 0, 1);
         forward = Vector3.Normalize(forward);
 
-        var upHint = Vector3.UnitY;
+        var upHint = Vector3.UnitZ;
         if (MathF.Abs(Vector3.Dot(forward, upHint)) > 0.95f)
             upHint = Vector3.UnitX;
         var right = Vector3.Normalize(Vector3.Cross(upHint, forward));
@@ -2374,7 +2381,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             var p1 = new Vector3(MathF.Cos(a1), MathF.Sin(a1), 0);
             var normal = Vector3.Cross(p0 - apex, p1 - apex);
             if (normal.LengthSquared < 0.0001f)
-                normal = Vector3.UnitY;
+                normal = Vector3.UnitZ;
             else
                 normal = Vector3.Normalize(normal);
             norms.Add(normal);
@@ -2548,9 +2555,9 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var pitch = MathHelper.DegreesToRadians(WorldPitch);
         var roll = MathHelper.DegreesToRadians(WorldRoll);
 
-        var yawMat = Matrix3.CreateRotationY(yaw);
-        var pitchMat = Matrix3.CreateRotationX(pitch);
-        var rollMat = Matrix3.CreateRotationZ(roll);
+        var yawMat = Matrix3.CreateRotationZ(yaw);
+        var pitchMat = Matrix3.CreateRotationY(pitch);
+        var rollMat = Matrix3.CreateRotationX(roll);
         return yawMat * pitchMat * rollMat;
     }
 
@@ -2560,9 +2567,9 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var pitch = MathHelper.DegreesToRadians(MapPitch);
         var roll = MathHelper.DegreesToRadians(MapRoll);
 
-        var yawMat = Matrix3.CreateRotationY(yaw);
-        var pitchMat = Matrix3.CreateRotationX(pitch);
-        var rollMat = Matrix3.CreateRotationZ(roll);
+        var yawMat = Matrix3.CreateRotationZ(yaw);
+        var pitchMat = Matrix3.CreateRotationY(pitch);
+        var rollMat = Matrix3.CreateRotationX(roll);
         return yawMat * pitchMat * rollMat;
     }
 
