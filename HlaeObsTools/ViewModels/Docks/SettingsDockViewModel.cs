@@ -1215,6 +1215,20 @@ namespace HlaeObsTools.ViewModels.Docks
             }
         }
 
+        public bool RotCriticalDamping
+        {
+            get => _freecamSettings.RotCriticalDamping;
+            set
+            {
+                if (_freecamSettings.RotCriticalDamping != value)
+                {
+                    _freecamSettings.RotCriticalDamping = value;
+                    OnPropertyChanged();
+                    SendFreecamConfigAsync(new { rotCriticalDamping = value });
+                }
+            }
+        }
+
         public bool HoldMovementFollowsCamera
         {
             get => _freecamSettings.HoldMovementFollowsCamera;

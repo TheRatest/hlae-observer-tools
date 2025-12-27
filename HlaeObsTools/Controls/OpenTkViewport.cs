@@ -1035,7 +1035,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
             SmoothEnabled = _freecamSettings.SmoothEnabled,
             HalfVec = (float)_freecamSettings.HalfVec,
             HalfRot = (float)_freecamSettings.HalfRot,
-            HalfFov = (float)_freecamSettings.HalfFov
+            HalfFov = (float)_freecamSettings.HalfFov,
+            RotCriticalDamping = _freecamSettings.RotCriticalDamping
         };
     }
 
@@ -1461,9 +1462,10 @@ public sealed class OpenTkViewport : OpenGlControlBase
             verticalSpeed *= _freecamConfig.SprintMultiplier;
         }
 
-        var forward = GetForwardFromQuat(_freecamTransform.Orientation);
-        var right = GetRightFromQuat(_freecamTransform.Orientation);
-        var up = GetUpFromQuat(_freecamTransform.Orientation);
+        var moveQuat = BuildQuat(_freecamTransform.Pitch, _freecamTransform.Yaw, 0f);
+        var forward = GetForwardFromQuat(moveQuat);
+        var right = GetRightFromQuat(moveQuat);
+        var up = GetUpFromQuat(moveQuat);
 
         var desiredVel = Vector3.Zero;
 
@@ -1662,25 +1664,55 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
         if (_freecamConfig.HalfRot > 0f)
         {
-            var omega = MathF.Log(2.0f) / _freecamConfig.HalfRot;
-            var target = _freecamRawQuat;
-            var qErr = target * Quaternion.Invert(_freecamSmoothedQuat);
-            if (qErr.W < 0f)
+            if (_freecamConfig.RotCriticalDamping)
             {
-                qErr = new Quaternion(-qErr.X, -qErr.Y, -qErr.Z, -qErr.W);
+                var omega = MathF.Log(2.0f) / _freecamConfig.HalfRot;
+                var target = _freecamRawQuat;
+                var qErr = target * Quaternion.Invert(_freecamSmoothedQuat);
+
+                var clampedW = Math.Clamp(qErr.W, -1f, 1f);
+                var angle = 2f * MathF.Acos(clampedW);
+                var sinHalf = MathF.Sqrt(MathF.Max(0f, 1f - clampedW * clampedW));
+                var axis = sinHalf < 1e-6f
+                    ? Vector3.UnitX
+                    : new Vector3(qErr.X / sinHalf, qErr.Y / sinHalf, qErr.Z / sinHalf);
+
+                var error = axis * angle;
+                var wdot = (omega * omega) * error - (2f * omega) * _freecamRotVelocity;
+                _freecamRotVelocity += wdot * deltaTime;
+                _freecamSmoothedQuat = IntegrateQuat(_freecamSmoothedQuat, _freecamRotVelocity, deltaTime);
             }
+            else
+            {
+                var t = deltaTime / _freecamConfig.HalfRot;
+                var target = _freecamRawQuat;
+                var qErr = Quaternion.Normalize(Quaternion.Invert(_freecamSmoothedQuat) * target);
+                var w = Math.Clamp(qErr.W, -1f, 1f);
+                var targetAngle = 2f * MathF.Acos(w);
+                var sinHalf = MathF.Sqrt(MathF.Max(0f, 1f - w * w));
 
-            var clampedW = Math.Clamp(qErr.W, -1f, 1f);
-            var angle = 2f * MathF.Acos(clampedW);
-            var sinHalf = MathF.Sqrt(MathF.Max(0f, 1f - clampedW * clampedW));
-            var axis = sinHalf < 1e-6f
-                ? Vector3.UnitX
-                : new Vector3(qErr.X / sinHalf, qErr.Y / sinHalf, qErr.Z / sinHalf);
-
-            var error = axis * angle;
-            var wdot = (omega * omega) * error - (2f * omega) * _freecamRotVelocity;
-            _freecamRotVelocity += wdot * deltaTime;
-            _freecamSmoothedQuat = IntegrateQuat(_freecamSmoothedQuat, _freecamRotVelocity, deltaTime);
+                if (targetAngle > 1.0e-6f && sinHalf > 1.0e-6f)
+                {
+                    var axis = new Vector3(qErr.X / sinHalf, qErr.Y / sinHalf, qErr.Z / sinHalf);
+                    var stepAngle = CalcDeltaExpSmooth(t, targetAngle);
+                    if (Math.Abs(stepAngle) > 1.0e-6f)
+                    {
+                        var half = 0.5f * stepAngle;
+                        var sinStep = MathF.Sin(half);
+                        var dq = new Quaternion(axis.X * sinStep, axis.Y * sinStep, axis.Z * sinStep, MathF.Cos(half));
+                        _freecamSmoothedQuat = Quaternion.Normalize(_freecamSmoothedQuat * dq);
+                        _freecamRotVelocity = axis * (stepAngle / deltaTime);
+                    }
+                    else
+                    {
+                        _freecamRotVelocity = Vector3.Zero;
+                    }
+                }
+                else
+                {
+                    _freecamRotVelocity = Vector3.Zero;
+                }
+            }
         }
         else
         {
@@ -1689,6 +1721,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         }
 
         _freecamSmoothed.Orientation = _freecamSmoothedQuat;
+        UpdateAnglesFromQuat(_freecamSmoothedQuat, ref _freecamSmoothed);
     }
 
     private static Quaternion BuildQuat(float pitchDeg, float yawDeg, float rollDeg)
@@ -1730,6 +1763,30 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var axis = angularVelocity / speed;
         var dq = Quaternion.FromAxisAngle(axis, angle);
         return Quaternion.Normalize(dq * q);
+    }
+
+    private static float CalcDeltaExpSmooth(float deltaT, float deltaVal)
+    {
+        const float limitTime = 19.931568f;
+        if (deltaT < 0f)
+            return 0f;
+        if (deltaT > limitTime)
+            return deltaVal;
+
+        const float halfTime = 0.69314718f;
+        var x = 1.0f / MathF.Exp(deltaT * halfTime);
+        return (1.0f - x) * deltaVal;
+    }
+
+    private static void UpdateAnglesFromQuat(Quaternion q, ref FreecamTransform transform)
+    {
+        var forward = GetForwardFromQuat(q);
+        var up = GetUpFromQuat(q);
+        GetYawPitchFromForward(forward, out var yaw, out var pitch);
+        var roll = ComputeRollForUp(pitch, yaw, up);
+        transform.Yaw = yaw;
+        transform.Pitch = pitch;
+        transform.Roll = roll;
     }
 
     private static float ComputeRollForUp(float pitchDeg, float yawDeg, Vector3 desiredUp)
@@ -2424,7 +2481,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
             SmoothEnabled = true,
             HalfVec = 0.5f,
             HalfRot = 0.5f,
-            HalfFov = 0.5f
+            HalfFov = 0.5f,
+            RotCriticalDamping = false
         };
 
         public float MouseSensitivity { get; init; }
@@ -2450,6 +2508,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         public float HalfVec { get; init; }
         public float HalfRot { get; init; }
         public float HalfFov { get; init; }
+        public bool RotCriticalDamping { get; init; }
     }
 
     private sealed class PinRenderData

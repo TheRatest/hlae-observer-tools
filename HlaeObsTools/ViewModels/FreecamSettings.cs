@@ -41,6 +41,7 @@ public sealed class FreecamSettings : ViewModelBase
     private double _lockHalfRot = 0.2;
     private double _lockHalfRotTransition = 1.0;
     private double _halfFov = 0.5;
+    private bool _rotCriticalDamping = false;
 
     // Hold settings
     private bool _holdMovementFollowsCamera = true;
@@ -350,6 +351,15 @@ public sealed class FreecamSettings : ViewModelBase
     {
         get => _halfFov;
         set => SetProperty(ref _halfFov, value);
+    }
+
+    /// <summary>
+    /// Use critically damped rotation smoothing (off uses long-path slerp).
+    /// </summary>
+    public bool RotCriticalDamping
+    {
+        get => _rotCriticalDamping;
+        set => SetProperty(ref _rotCriticalDamping, value);
     }
 
     #endregion

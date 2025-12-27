@@ -141,7 +141,8 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             halfRot = (float)_freecamSettings.HalfRot,
             lockHalfRot = (float)_freecamSettings.LockHalfRot,
             lockHalfRotTransition = (float)_freecamSettings.LockHalfRotTransition,
-            halfFov = (float)_freecamSettings.HalfFov
+            halfFov = (float)_freecamSettings.HalfFov,
+            rotCriticalDamping = _freecamSettings.RotCriticalDamping
         };
 
         await _webSocketClient.SendCommandAsync("freecam_handoff", args);

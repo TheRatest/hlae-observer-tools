@@ -466,6 +466,9 @@
                                     <ToggleSwitch IsChecked="{Binding SmoothEnabled, Mode=TwoWay}"
                                                   Content="Enable Smoothing"
                                                   Foreground="#E6E6E6"/>
+                                    <ToggleSwitch IsChecked="{Binding RotCriticalDamping, Mode=TwoWay}"
+                                                  Content="Use Critical Damping (Rotation)"
+                                                  Foreground="#E6E6E6"/>
 
                                     <TextBlock Text="Position Smoothing Half-time (seconds)"
                                                Foreground="#CCCCCC"/>
