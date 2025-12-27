@@ -1229,6 +1229,20 @@ namespace HlaeObsTools.ViewModels.Docks
             }
         }
 
+        public double RotDampingRatio
+        {
+            get => _freecamSettings.RotDampingRatio;
+            set
+            {
+                if (_freecamSettings.RotDampingRatio != value)
+                {
+                    _freecamSettings.RotDampingRatio = value;
+                    OnPropertyChanged();
+                    SendFreecamConfigAsync(new { rotDampingRatio = (float)_freecamSettings.RotDampingRatio });
+                }
+            }
+        }
+
         public bool HoldMovementFollowsCamera
         {
             get => _freecamSettings.HoldMovementFollowsCamera;

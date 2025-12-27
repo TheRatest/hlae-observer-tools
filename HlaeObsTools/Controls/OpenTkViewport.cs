@@ -1036,7 +1036,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
             HalfVec = (float)_freecamSettings.HalfVec,
             HalfRot = (float)_freecamSettings.HalfRot,
             HalfFov = (float)_freecamSettings.HalfFov,
-            RotCriticalDamping = _freecamSettings.RotCriticalDamping
+            RotCriticalDamping = _freecamSettings.RotCriticalDamping,
+            RotDampingRatio = (float)_freecamSettings.RotDampingRatio
         };
     }
 
@@ -1667,6 +1668,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             if (_freecamConfig.RotCriticalDamping)
             {
                 var omega = MathF.Log(2.0f) / _freecamConfig.HalfRot;
+                var damping = MathF.Max(1.0f, _freecamConfig.RotDampingRatio);
                 var target = _freecamRawQuat;
                 var qErr = target * Quaternion.Invert(_freecamSmoothedQuat);
 
@@ -1678,7 +1680,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
                     : new Vector3(qErr.X / sinHalf, qErr.Y / sinHalf, qErr.Z / sinHalf);
 
                 var error = axis * angle;
-                var wdot = (omega * omega) * error - (2f * omega) * _freecamRotVelocity;
+                var wdot = (omega * omega) * error - (2f * damping * omega) * _freecamRotVelocity;
                 _freecamRotVelocity += wdot * deltaTime;
                 _freecamSmoothedQuat = IntegrateQuat(_freecamSmoothedQuat, _freecamRotVelocity, deltaTime);
             }
@@ -2482,7 +2484,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
             HalfVec = 0.5f,
             HalfRot = 0.5f,
             HalfFov = 0.5f,
-            RotCriticalDamping = false
+            RotCriticalDamping = false,
+            RotDampingRatio = 1.0f
         };
 
         public float MouseSensitivity { get; init; }
@@ -2509,6 +2512,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         public float HalfRot { get; init; }
         public float HalfFov { get; init; }
         public bool RotCriticalDamping { get; init; }
+        public float RotDampingRatio { get; init; }
     }
 
     private sealed class PinRenderData

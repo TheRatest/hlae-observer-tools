@@ -467,8 +467,21 @@
                                                   Content="Enable Smoothing"
                                                   Foreground="#E6E6E6"/>
                                     <ToggleSwitch IsChecked="{Binding RotCriticalDamping, Mode=TwoWay}"
-                                                  Content="Use Critical Damping (Rotation)"
+                                                  Content="Use Damping (Rotation)"
                                                   Foreground="#E6E6E6"/>
+                                    <TextBlock Text="Rotation Damping Ratio (>= 1.0)"
+                                               Foreground="#CCCCCC"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Slider Minimum="1.0"
+                                                Maximum="5.0"
+                                                SmallChange="0.1"
+                                                LargeChange="0.5"
+                                                Width="200"
+                                                Value="{Binding RotDampingRatio, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding RotDampingRatio, StringFormat={}{0:F2}}"
+                                                   Width="50"
+                                                   Foreground="#E6E6E6"/>
+                                    </StackPanel>
 
                                     <TextBlock Text="Position Smoothing Half-time (seconds)"
                                                Foreground="#CCCCCC"/>
