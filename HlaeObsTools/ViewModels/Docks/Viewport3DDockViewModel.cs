@@ -70,51 +70,26 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         if (_webSocketClient == null)
             return;
 
-        var rotation = GetWorldRotation();
-        var invRotation = Matrix3.Transpose(rotation);
-        var invRotationQuat = Quaternion.FromMatrix(invRotation);
-        var scale = Math.Abs(_settings.WorldScale) < 0.0001f ? 1.0f : _settings.WorldScale;
-        var offset = new Vector3(_settings.WorldOffsetX, _settings.WorldOffsetY, _settings.WorldOffsetZ);
-
-        var raw = ToGameSpace(state.RawPosition, state.RawForward, state.RawUp, invRotation, offset, scale);
-        if (raw.Forward.LengthSquared < 0.0001f)
+        if (state.RawForward.LengthSquared < 0.0001f)
             return;
-
-        var rawForward = Vector3.Normalize(raw.Forward);
-        var rawUp = Vector3.Normalize(raw.Up);
-
-        var smooth = ToGameSpace(state.SmoothedPosition, state.SmoothedForward, state.SmoothedUp, invRotation, offset, scale);
-        var smoothForward = smooth.Forward;
-        var smoothUp = smooth.Up;
-        if (smoothForward.LengthSquared < 0.0001f)
-        {
-            smooth = raw;
-            smoothForward = rawForward;
-            smoothUp = rawUp;
-        }
-        else
-        {
-            smoothForward = Vector3.Normalize(smoothForward);
-            smoothUp = Vector3.Normalize(smoothUp);
-        }
 
         var pitch = state.RawPitch;
         var yaw = state.RawYaw;
         var roll = state.RawRoll;
-        var smoothQuat = Quaternion.Normalize(invRotationQuat * state.SmoothedOrientation);
+        var smoothQuat = Quaternion.Normalize(state.SmoothedOrientation);
 
         var args = new
         {
-            posX = raw.Position.X,
-            posY = raw.Position.Y,
-            posZ = raw.Position.Z,
+            posX = state.RawPosition.X,
+            posY = state.RawPosition.Y,
+            posZ = state.RawPosition.Z,
             pitch,
             yaw,
             roll,
             fov = state.RawFov,
-            smoothPosX = smooth.Position.X,
-            smoothPosY = smooth.Position.Y,
-            smoothPosZ = smooth.Position.Z,
+            smoothPosX = state.SmoothedPosition.X,
+            smoothPosY = state.SmoothedPosition.Y,
+            smoothPosZ = state.SmoothedPosition.Z,
             smoothQuatW = smoothQuat.W,
             smoothQuatX = smoothQuat.X,
             smoothQuatY = smoothQuat.Y,
@@ -177,32 +152,6 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         }
     }
 
-    public float PinOffsetX
-    {
-        get => _settings.PinOffsetX;
-        set
-        {
-            if (Math.Abs(_settings.PinOffsetX - value) > 0.0001f)
-            {
-                _settings.PinOffsetX = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float PinOffsetY
-    {
-        get => _settings.PinOffsetY;
-        set
-        {
-            if (Math.Abs(_settings.PinOffsetY - value) > 0.0001f)
-            {
-                _settings.PinOffsetY = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
     public float PinOffsetZ
     {
         get => _settings.PinOffsetZ;
@@ -211,97 +160,6 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             if (Math.Abs(_settings.PinOffsetZ - value) > 0.0001f)
             {
                 _settings.PinOffsetZ = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float WorldScale
-    {
-        get => _settings.WorldScale;
-        set
-        {
-            if (Math.Abs(_settings.WorldScale - value) > 0.0001f)
-            {
-                _settings.WorldScale = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float WorldYaw
-    {
-        get => _settings.WorldYaw;
-        set
-        {
-            if (Math.Abs(_settings.WorldYaw - value) > 0.0001f)
-            {
-                _settings.WorldYaw = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float WorldPitch
-    {
-        get => _settings.WorldPitch;
-        set
-        {
-            if (Math.Abs(_settings.WorldPitch - value) > 0.0001f)
-            {
-                _settings.WorldPitch = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float WorldRoll
-    {
-        get => _settings.WorldRoll;
-        set
-        {
-            if (Math.Abs(_settings.WorldRoll - value) > 0.0001f)
-            {
-                _settings.WorldRoll = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float WorldOffsetX
-    {
-        get => _settings.WorldOffsetX;
-        set
-        {
-            if (Math.Abs(_settings.WorldOffsetX - value) > 0.0001f)
-            {
-                _settings.WorldOffsetX = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float WorldOffsetY
-    {
-        get => _settings.WorldOffsetY;
-        set
-        {
-            if (Math.Abs(_settings.WorldOffsetY - value) > 0.0001f)
-            {
-                _settings.WorldOffsetY = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float WorldOffsetZ
-    {
-        get => _settings.WorldOffsetZ;
-        set
-        {
-            if (Math.Abs(_settings.WorldOffsetZ - value) > 0.0001f)
-            {
-                _settings.WorldOffsetZ = value;
                 OnPropertyChanged();
             }
         }
@@ -417,26 +275,8 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             OnPropertyChanged(nameof(MapObjPath));
         else if (e.PropertyName == nameof(Viewport3DSettings.PinScale))
             OnPropertyChanged(nameof(PinScale));
-        else if (e.PropertyName == nameof(Viewport3DSettings.PinOffsetX))
-            OnPropertyChanged(nameof(PinOffsetX));
-        else if (e.PropertyName == nameof(Viewport3DSettings.PinOffsetY))
-            OnPropertyChanged(nameof(PinOffsetY));
         else if (e.PropertyName == nameof(Viewport3DSettings.PinOffsetZ))
             OnPropertyChanged(nameof(PinOffsetZ));
-        else if (e.PropertyName == nameof(Viewport3DSettings.WorldScale))
-            OnPropertyChanged(nameof(WorldScale));
-        else if (e.PropertyName == nameof(Viewport3DSettings.WorldYaw))
-            OnPropertyChanged(nameof(WorldYaw));
-        else if (e.PropertyName == nameof(Viewport3DSettings.WorldPitch))
-            OnPropertyChanged(nameof(WorldPitch));
-        else if (e.PropertyName == nameof(Viewport3DSettings.WorldRoll))
-            OnPropertyChanged(nameof(WorldRoll));
-        else if (e.PropertyName == nameof(Viewport3DSettings.WorldOffsetX))
-            OnPropertyChanged(nameof(WorldOffsetX));
-        else if (e.PropertyName == nameof(Viewport3DSettings.WorldOffsetY))
-            OnPropertyChanged(nameof(WorldOffsetY));
-        else if (e.PropertyName == nameof(Viewport3DSettings.WorldOffsetZ))
-            OnPropertyChanged(nameof(WorldOffsetZ));
         else if (e.PropertyName == nameof(Viewport3DSettings.ViewportMouseScale))
             OnPropertyChanged(nameof(ViewportMouseScale));
         else if (e.PropertyName == nameof(Viewport3DSettings.MapScale))
@@ -500,81 +340,4 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         return ((slot + 1) % 10).ToString();
     }
 
-    private Matrix3 GetWorldRotation()
-    {
-        var yaw = MathHelper.DegreesToRadians(_settings.WorldYaw);
-        var pitch = MathHelper.DegreesToRadians(_settings.WorldPitch);
-        var roll = MathHelper.DegreesToRadians(_settings.WorldRoll);
-
-        var yawMat = Matrix3.CreateRotationZ(yaw);
-        var pitchMat = Matrix3.CreateRotationY(pitch);
-        var rollMat = Matrix3.CreateRotationX(roll);
-        return yawMat * pitchMat * rollMat;
-    }
-
-    private static Vector3 Transform(Vector3 value, Matrix3 matrix)
-    {
-        return new Vector3(
-            value.X * matrix.M11 + value.Y * matrix.M21 + value.Z * matrix.M31,
-            value.X * matrix.M12 + value.Y * matrix.M22 + value.Z * matrix.M32,
-            value.X * matrix.M13 + value.Y * matrix.M23 + value.Z * matrix.M33);
-    }
-
-    private static (Vector3 Position, Vector3 Forward, Vector3 Up) ToGameSpace(
-        Vector3 position,
-        Vector3 forward,
-        Vector3 up,
-        Matrix3 invRotation,
-        Vector3 offset,
-        float scale)
-    {
-        var pos = (position - offset) / scale;
-        pos = Transform(pos, invRotation);
-        return (pos, Transform(forward, invRotation), Transform(up, invRotation));
-    }
-
-    private static (float Pitch, float Yaw, float Roll) GetAngles(Vector3 forward, Vector3 up, bool clampPitch)
-    {
-        var yaw = MathHelper.RadiansToDegrees(MathF.Atan2(forward.Y, forward.X));
-        var pitch = MathHelper.RadiansToDegrees(-MathF.Asin(Math.Clamp(forward.Z, -1f, 1f)));
-        yaw = WrapAngle(yaw);
-        if (clampPitch)
-            pitch = Math.Clamp(pitch, -89.0f, 89.0f);
-
-        var baseUp = GetUpVector(pitch, yaw);
-        var roll = GetRollFromUp(baseUp, up, forward);
-        return (pitch, yaw, roll);
-    }
-
-    private static Vector3 GetUpVector(float pitchDeg, float yawDeg)
-    {
-        var pitch = MathHelper.DegreesToRadians(pitchDeg);
-        var yaw = MathHelper.DegreesToRadians(yawDeg);
-        return new Vector3(
-            MathF.Sin(pitch) * MathF.Cos(yaw),
-            MathF.Sin(pitch) * MathF.Sin(yaw),
-            MathF.Cos(pitch));
-    }
-
-    private static float GetRollFromUp(Vector3 baseUp, Vector3 up, Vector3 forward)
-    {
-        if (baseUp.LengthSquared < 0.0001f || up.LengthSquared < 0.0001f)
-            return 0f;
-
-        baseUp = Vector3.Normalize(baseUp);
-        up = Vector3.Normalize(up);
-        forward = Vector3.Normalize(forward);
-
-        var cross = Vector3.Cross(baseUp, up);
-        var dot = Vector3.Dot(baseUp, up);
-        var rollRad = MathF.Atan2(Vector3.Dot(cross, forward), dot);
-        return MathHelper.RadiansToDegrees(rollRad);
-    }
-
-    private static float WrapAngle(float degrees)
-    {
-        while (degrees > 180f) degrees -= 360f;
-        while (degrees < -180f) degrees += 360f;
-        return degrees;
-    }
 }

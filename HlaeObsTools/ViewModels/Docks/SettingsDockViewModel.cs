@@ -56,16 +56,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _useAltPlayerBinds = settings.UseAltPlayerBinds;
             _mapObjPath = settings.MapObjPath ?? string.Empty;
             _pinScale = (float)settings.PinScale;
-            _pinOffsetX = (float)settings.PinOffsetX;
-            _pinOffsetY = (float)settings.PinOffsetY;
             _pinOffsetZ = (float)settings.PinOffsetZ;
-            _worldScale = (float)settings.WorldScale;
-            _worldYaw = (float)settings.WorldYaw;
-            _worldPitch = (float)settings.WorldPitch;
-            _worldRoll = (float)settings.WorldRoll;
-            _worldOffsetX = (float)settings.WorldOffsetX;
-            _worldOffsetY = (float)settings.WorldOffsetY;
-            _worldOffsetZ = (float)settings.WorldOffsetZ;
             _viewportMouseScale = (float)settings.ViewportMouseScale;
             _mapScale = (float)settings.MapScale;
             _mapYaw = (float)settings.MapYaw;
@@ -79,16 +70,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _viewport3DSettings.UseAltPlayerBinds = _useAltPlayerBinds;
             _viewport3DSettings.MapObjPath = _mapObjPath;
             _viewport3DSettings.PinScale = _pinScale;
-            _viewport3DSettings.PinOffsetX = _pinOffsetX;
-            _viewport3DSettings.PinOffsetY = _pinOffsetY;
             _viewport3DSettings.PinOffsetZ = _pinOffsetZ;
-            _viewport3DSettings.WorldScale = _worldScale;
-            _viewport3DSettings.WorldYaw = _worldYaw;
-            _viewport3DSettings.WorldPitch = _worldPitch;
-            _viewport3DSettings.WorldRoll = _worldRoll;
-            _viewport3DSettings.WorldOffsetX = _worldOffsetX;
-            _viewport3DSettings.WorldOffsetY = _worldOffsetY;
-            _viewport3DSettings.WorldOffsetZ = _worldOffsetZ;
             _viewport3DSettings.ViewportMouseScale = _viewportMouseScale;
             _viewport3DSettings.MapScale = _mapScale;
             _viewport3DSettings.MapYaw = _mapYaw;
@@ -225,38 +207,6 @@ namespace HlaeObsTools.ViewModels.Docks
             }
         }
 
-        private float _pinOffsetX;
-        public float PinOffsetX
-        {
-            get => _pinOffsetX;
-            set
-            {
-                if (Math.Abs(_pinOffsetX - value) > 0.0001f)
-                {
-                    _pinOffsetX = value;
-                    _viewport3DSettings.PinOffsetX = _pinOffsetX;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _pinOffsetY;
-        public float PinOffsetY
-        {
-            get => _pinOffsetY;
-            set
-            {
-                if (Math.Abs(_pinOffsetY - value) > 0.0001f)
-                {
-                    _pinOffsetY = value;
-                    _viewport3DSettings.PinOffsetY = _pinOffsetY;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
         private float _pinOffsetZ;
         public float PinOffsetZ
         {
@@ -267,118 +217,6 @@ namespace HlaeObsTools.ViewModels.Docks
                 {
                     _pinOffsetZ = value;
                     _viewport3DSettings.PinOffsetZ = _pinOffsetZ;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _worldScale = 1.0f;
-        public float WorldScale
-        {
-            get => _worldScale;
-            set
-            {
-                if (Math.Abs(_worldScale - value) > 0.0001f)
-                {
-                    _worldScale = value;
-                    _viewport3DSettings.WorldScale = _worldScale;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _worldYaw;
-        public float WorldYaw
-        {
-            get => _worldYaw;
-            set
-            {
-                if (Math.Abs(_worldYaw - value) > 0.0001f)
-                {
-                    _worldYaw = value;
-                    _viewport3DSettings.WorldYaw = _worldYaw;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _worldPitch;
-        public float WorldPitch
-        {
-            get => _worldPitch;
-            set
-            {
-                if (Math.Abs(_worldPitch - value) > 0.0001f)
-                {
-                    _worldPitch = value;
-                    _viewport3DSettings.WorldPitch = _worldPitch;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _worldRoll;
-        public float WorldRoll
-        {
-            get => _worldRoll;
-            set
-            {
-                if (Math.Abs(_worldRoll - value) > 0.0001f)
-                {
-                    _worldRoll = value;
-                    _viewport3DSettings.WorldRoll = _worldRoll;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _worldOffsetX;
-        public float WorldOffsetX
-        {
-            get => _worldOffsetX;
-            set
-            {
-                if (Math.Abs(_worldOffsetX - value) > 0.0001f)
-                {
-                    _worldOffsetX = value;
-                    _viewport3DSettings.WorldOffsetX = _worldOffsetX;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _worldOffsetY;
-        public float WorldOffsetY
-        {
-            get => _worldOffsetY;
-            set
-            {
-                if (Math.Abs(_worldOffsetY - value) > 0.0001f)
-                {
-                    _worldOffsetY = value;
-                    _viewport3DSettings.WorldOffsetY = _worldOffsetY;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _worldOffsetZ;
-        public float WorldOffsetZ
-        {
-            get => _worldOffsetZ;
-            set
-            {
-                if (Math.Abs(_worldOffsetZ - value) > 0.0001f)
-                {
-                    _worldOffsetZ = value;
-                    _viewport3DSettings.WorldOffsetZ = _worldOffsetZ;
                     OnPropertyChanged();
                     SaveSettings();
                 }
@@ -709,16 +547,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 RtpPort = RtpPort,
                 MapObjPath = _mapObjPath,
                 PinScale = _pinScale,
-                PinOffsetX = _pinOffsetX,
-                PinOffsetY = _pinOffsetY,
                 PinOffsetZ = _pinOffsetZ,
-                WorldScale = _worldScale,
-                WorldYaw = _worldYaw,
-                WorldPitch = _worldPitch,
-                WorldRoll = _worldRoll,
-                WorldOffsetX = _worldOffsetX,
-                WorldOffsetY = _worldOffsetY,
-                WorldOffsetZ = _worldOffsetZ,
                 ViewportMouseScale = _viewportMouseScale,
                 MapScale = _mapScale,
                 MapYaw = _mapYaw,

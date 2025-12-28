@@ -141,72 +141,14 @@
                         <TextBlock Text="Load a low-poly .obj map for the 3D viewport."
                                 Foreground="#888888"
                                 FontSize="12"/>
-
-                        <TextBlock Text="Pin scale"
-                                Foreground="#CCCCCC"
-                                FontWeight="SemiBold"
-                                Margin="0,10,0,0"/>
-                        <TextBox Width="120"
-                                Text="{Binding PinScale, Mode=TwoWay}"
-                                Watermark="1.0"/>
-                        <TextBlock Text="Adjusts player pin size in the 3D viewport."
-                                Foreground="#888888"
-                                FontSize="12"/>
-
-                        <TextBlock Text="Pin offset"
-                                Foreground="#CCCCCC"
-                                FontWeight="SemiBold"
-                                Margin="0,10,0,0"/>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBox Width="80" Watermark="X" Text="{Binding PinOffsetX, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Y" Text="{Binding PinOffsetY, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Z" Text="{Binding PinOffsetZ, Mode=TwoWay}" />
-                        </StackPanel>
-                        <TextBlock Text="Offsets player pins (use Z to lift above the floor)."
-                                Foreground="#888888"
-                                FontSize="12"/>
-
-                        <TextBlock Text="World scale"
-                                Foreground="#CCCCCC"
-                                FontWeight="SemiBold"
-                                Margin="0,10,0,0"/>
-                        <TextBox Width="120"
-                                Text="{Binding WorldScale, Mode=TwoWay}"
-                                Watermark="1.0"/>
-                        <TextBlock Text="Scales GSI positions into the viewport coordinate space."
-                                Foreground="#888888"
-                                FontSize="12"/>
-
-                        <TextBlock Text="World rotation (deg)"
-                                Foreground="#CCCCCC"
-                                FontWeight="SemiBold"
-                                Margin="0,10,0,0"/>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBox Width="80" Watermark="Yaw" Text="{Binding WorldYaw, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Pitch" Text="{Binding WorldPitch, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Roll" Text="{Binding WorldRoll, Mode=TwoWay}" />
-                        </StackPanel>
-
-                        <TextBlock Text="World offset"
-                                Foreground="#CCCCCC"
-                                FontWeight="SemiBold"
-                                Margin="0,10,0,0"/>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBox Width="80" Watermark="X" Text="{Binding WorldOffsetX, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Y" Text="{Binding WorldOffsetY, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Z" Text="{Binding WorldOffsetZ, Mode=TwoWay}" />
-                        </StackPanel>
-
                         <TextBlock Text="Viewport mouse scale"
                                 Foreground="#CCCCCC"
                                 FontWeight="SemiBold"
                                 Margin="0,10,0,0"/>
                         <TextBox Width="120"
                                 Text="{Binding ViewportMouseScale, Mode=TwoWay}"
-                                Watermark="1.0"/>
-                        <TextBlock Text="Scales mouse sensitivity in the 3D viewport freecam."
-                                Foreground="#888888"
-                                FontSize="12"/>
+                                Watermark="1.0"
+                                HorizontalAlignment="Left" />
 
                         <TextBlock Text="Map scale"
                                 Foreground="#CCCCCC"
@@ -214,10 +156,8 @@
                                 Margin="0,10,0,0"/>
                         <TextBox Width="120"
                                 Text="{Binding MapScale, Mode=TwoWay}"
-                                Watermark="1.0"/>
-                        <TextBlock Text="Scales the loaded map mesh."
-                                Foreground="#888888"
-                                FontSize="12"/>
+                                Watermark="1.0"
+                                HorizontalAlignment="Left" />
 
                         <TextBlock Text="Map rotation (deg)"
                                 Foreground="#CCCCCC"
@@ -238,6 +178,29 @@
                             <TextBox Width="80" Watermark="Y" Text="{Binding MapOffsetY, Mode=TwoWay}" />
                             <TextBox Width="80" Watermark="Z" Text="{Binding MapOffsetZ, Mode=TwoWay}" />
                         </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,10,0,0">
+
+                            <StackPanel Orientation="Vertical" Spacing="4">
+                                <TextBlock Text="Pin scale"
+                                        Foreground="#CCCCCC"
+                                        FontWeight="SemiBold"/>
+                                <TextBox Width="120"
+                                        Text="{Binding PinScale, Mode=TwoWay}"
+                                        Watermark="1.0"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Vertical" Spacing="4">
+                                <TextBlock Text="Pin Z offset"
+                                        Foreground="#CCCCCC"
+                                        FontWeight="SemiBold"/>
+                                <TextBox Width="120"
+                                        Text="{Binding PinOffsetZ, Mode=TwoWay}"
+                                        Watermark="Z"/>
+                            </StackPanel>
+
+                        </StackPanel>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

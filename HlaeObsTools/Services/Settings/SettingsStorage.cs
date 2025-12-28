@@ -69,16 +69,7 @@ public class AppSettingsData
     public int GsiPort { get; set; } = 31337;
     public string MapObjPath { get; set; } = string.Empty;
     public double PinScale { get; set; } = 1.0;
-    public double PinOffsetX { get; set; }
-    public double PinOffsetY { get; set; }
     public double PinOffsetZ { get; set; }
-    public double WorldScale { get; set; } = 1.0;
-    public double WorldYaw { get; set; }
-    public double WorldPitch { get; set; }
-    public double WorldRoll { get; set; }
-    public double WorldOffsetX { get; set; }
-    public double WorldOffsetY { get; set; }
-    public double WorldOffsetZ { get; set; }
     public double ViewportMouseScale { get; set; } = 1.0;
     public double MapScale { get; set; } = 1.0;
     public double MapYaw { get; set; }

@@ -8,16 +8,7 @@ public sealed class Viewport3DSettings : ViewModelBase
     private string _mapObjPath = string.Empty;
     private bool _useAltPlayerBinds;
     private float _pinScale = 1.0f;
-    private float _pinOffsetX;
-    private float _pinOffsetY;
     private float _pinOffsetZ;
-    private float _worldScale = 1.0f;
-    private float _worldYaw;
-    private float _worldPitch;
-    private float _worldRoll;
-    private float _worldOffsetX;
-    private float _worldOffsetY;
-    private float _worldOffsetZ;
     private float _viewportMouseScale = 1.0f;
     private float _mapScale = 1.0f;
     private float _mapYaw;
@@ -55,93 +46,12 @@ public sealed class Viewport3DSettings : ViewModelBase
     }
 
     /// <summary>
-    /// Pin offset in world space (X).
-    /// </summary>
-    public float PinOffsetX
-    {
-        get => _pinOffsetX;
-        set => SetProperty(ref _pinOffsetX, value);
-    }
-
-    /// <summary>
-    /// Pin offset in world space (Y).
-    /// </summary>
-    public float PinOffsetY
-    {
-        get => _pinOffsetY;
-        set => SetProperty(ref _pinOffsetY, value);
-    }
-
-    /// <summary>
     /// Pin offset in world space (Z).
     /// </summary>
     public float PinOffsetZ
     {
         get => _pinOffsetZ;
         set => SetProperty(ref _pinOffsetZ, value);
-    }
-
-    /// <summary>
-    /// Uniform scale for GSI world coordinates.
-    /// </summary>
-    public float WorldScale
-    {
-        get => _worldScale;
-        set => SetProperty(ref _worldScale, value);
-    }
-
-    /// <summary>
-    /// World yaw rotation (degrees).
-    /// </summary>
-    public float WorldYaw
-    {
-        get => _worldYaw;
-        set => SetProperty(ref _worldYaw, value);
-    }
-
-    /// <summary>
-    /// World pitch rotation (degrees).
-    /// </summary>
-    public float WorldPitch
-    {
-        get => _worldPitch;
-        set => SetProperty(ref _worldPitch, value);
-    }
-
-    /// <summary>
-    /// World roll rotation (degrees).
-    /// </summary>
-    public float WorldRoll
-    {
-        get => _worldRoll;
-        set => SetProperty(ref _worldRoll, value);
-    }
-
-    /// <summary>
-    /// World offset (X).
-    /// </summary>
-    public float WorldOffsetX
-    {
-        get => _worldOffsetX;
-        set => SetProperty(ref _worldOffsetX, value);
-    }
-
-    /// <summary>
-    /// World offset (Y).
-    /// </summary>
-    public float WorldOffsetY
-    {
-        get => _worldOffsetY;
-        set => SetProperty(ref _worldOffsetY, value);
-    }
-
-    /// <summary>
-    /// World offset (Z).
-    /// </summary>
-    public float WorldOffsetZ
-    {
-        get => _worldOffsetZ;
-        set => SetProperty(ref _worldOffsetZ, value);
     }
 
     /// <summary>
