@@ -10,10 +10,50 @@
     <c:ScaleToHeightConverter x:Key="ScaleToHeightConverter" BaseWidth="260" AspectRatio="1.7777777778"/>
   </UserControl.Resources>
 
-  <!-- Root layout: only columns, no rows -->
-  <Grid ColumnDefinitions="220,*">
+  <!-- Root layout -->
+  <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,*">
+    <!-- Top controls -->
+    <Border Grid.Row="0"
+            Grid.ColumnSpan="2"
+            Background="rgba(16, 16, 17, 1)"
+            Padding="10,8">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="8">
+        <Button Content="Add Profile" Command="{Binding AddProfileCommand}" />
+        <Button Content="Add Campath" Command="{Binding AddCampathCommand}" />
+        <Button Content="Populate Profile" Command="{Binding PopulateFromFolderCommand}" />
+
+        <ComboBox Width="100"
+                  Padding="10,6"
+                  VerticalAlignment="Center"
+                  ItemsSource="{Binding Profiles}"
+                  SelectedItem="{Binding SelectedProfile}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Name}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <Button Content="Remove Profile" Command="{Binding RemoveProfileCommand}" />
+
+        <StackPanel Orientation="Horizontal"
+                    Spacing="4"
+                    VerticalAlignment="Center">
+          <TextBlock Text="Scale"
+                     Foreground="#E0E0E0"
+                     VerticalAlignment="Center"/>
+          <Slider Width="120"
+                  Minimum="0.5"
+                  Maximum="2.0"
+                  Value="{Binding Scale}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
     <!-- Groups panel (left) -->
-    <Border Grid.Column="0"
+    <Border Grid.Row="1"
+            Grid.Column="0"
             Background="#1A1A1A"
             BorderBrush="#2E2E2E"
             BorderThickness="0,0,1,0"
@@ -82,46 +122,11 @@
     </Border>
 
     <!-- Main body (right) -->
-    <DockPanel Grid.Column="1"
+    <DockPanel Grid.Row="1"
+               Grid.Column="1"
                Margin="10,0,0,0"
                Focusable="True"
                Background="rgba(16, 16, 17, 1)">
-
-      <!-- Top controls -->
-      <StackPanel DockPanel.Dock="Top"
-                  Orientation="Horizontal"
-                  Spacing="8"
-                  Margin="0,0,0,8">
-        <Button Content="Add Profile" Command="{Binding AddProfileCommand}" />
-        <Button Content="Add Campath" Command="{Binding AddCampathCommand}" />
-        <Button Content="Populate from Folder" Command="{Binding PopulateFromFolderCommand}" />
-
-        <ComboBox Width="180"
-                  Padding="10,6"
-                  VerticalAlignment="Center"
-                  ItemsSource="{Binding Profiles}"
-                  SelectedItem="{Binding SelectedProfile}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate>
-              <TextBlock Text="{Binding Name}"/>
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
-
-        <Button Content="Remove Profile" Command="{Binding RemoveProfileCommand}" />
-
-        <StackPanel Orientation="Horizontal"
-                    Spacing="4"
-                    VerticalAlignment="Center">
-          <TextBlock Text="Scale"
-                     Foreground="#E0E0E0"
-                     VerticalAlignment="Center"/>
-          <Slider Width="120"
-                  Minimum="0.5"
-                  Maximum="2.0"
-                  Value="{Binding Scale}" />
-        </StackPanel>
-      </StackPanel>
 
       <!-- Scrollable campaths area -->
       <ScrollViewer x:Name="CampathScrollViewer"
