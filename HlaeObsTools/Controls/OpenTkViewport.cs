@@ -1856,8 +1856,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         if (Bounds.Width <= 0 || Bounds.Height <= 0)
             return;
 
-        var centerLocal = new Point(Bounds.Width / 2.0, Bounds.Height / 2.0);
-        if (!TryGetScreenPoint(centerLocal, out var centerScreen))
+        if (!TryGetFreecamCenter(out var centerLocal, out var centerScreen))
             return;
 
         _freecamCenterLocal = centerLocal;
@@ -1886,8 +1885,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         if (Bounds.Width <= 0 || Bounds.Height <= 0)
             return;
 
-        var centerLocal = new Point(Bounds.Width / 2.0, Bounds.Height / 2.0);
-        if (!TryGetScreenPoint(centerLocal, out var centerScreen))
+        if (!TryGetFreecamCenter(out var centerLocal, out var centerScreen))
             return;
 
         _freecamCenterLocal = centerLocal;
@@ -1912,6 +1910,42 @@ public sealed class OpenTkViewport : OpenGlControlBase
         }
 
         screenPoint = topLevel.PointToScreen(translated.Value);
+        return true;
+    }
+
+    private bool TryGetLocalPointFromScreen(PixelPoint screenPoint, out Point localPoint)
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel == null)
+        {
+            localPoint = default;
+            return false;
+        }
+
+        var clientPoint = topLevel.PointToClient(screenPoint);
+        var translated = topLevel.TranslatePoint(clientPoint, this);
+        if (!translated.HasValue)
+        {
+            localPoint = default;
+            return false;
+        }
+
+        localPoint = translated.Value;
+        return true;
+    }
+
+    private bool TryGetFreecamCenter(out Point centerLocal, out PixelPoint centerScreen)
+    {
+        var localCenter = new Point(Bounds.Width / 2.0, Bounds.Height / 2.0);
+        if (!TryGetScreenPoint(localCenter, out centerScreen))
+        {
+            centerLocal = default;
+            return false;
+        }
+
+        if (!TryGetLocalPointFromScreen(centerScreen, out centerLocal))
+            centerLocal = localCenter;
+
         return true;
     }
 
