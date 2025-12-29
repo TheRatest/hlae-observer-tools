@@ -8,6 +8,7 @@
   <UserControl.Resources>
     <c:ScaleToWidthConverter x:Key="ScaleToWidthConverter" BaseWidth="260"/>
     <c:ScaleToHeightConverter x:Key="ScaleToHeightConverter" BaseWidth="260" AspectRatio="1.7777777778"/>
+    <c:RoundWithOffsetConverter x:Key="TopControlsWidthConverter" Offset="-20"/>
   </UserControl.Resources>
 
   <!-- Root layout -->
@@ -15,19 +16,23 @@
     <!-- Top controls -->
     <Border Grid.Row="0"
             Grid.ColumnSpan="2"
+            x:Name="TopControlsHost"
             Background="rgba(16, 16, 17, 1)"
-            Padding="10,8">
-      <StackPanel Orientation="Horizontal"
-                  Spacing="8">
-        <Button Content="Add Profile" Command="{Binding AddProfileCommand}" />
-        <Button Content="Add Campath" Command="{Binding AddCampathCommand}" />
-        <Button Content="Populate Profile" Command="{Binding PopulateFromFolderCommand}" />
+            Padding="10,0">
+      <WrapPanel Orientation="Horizontal"
+                 VerticalAlignment="Center"
+                 UseLayoutRounding="True"
+                 Width="{Binding ElementName=TopControlsHost, Path=Bounds.Width, Converter={StaticResource TopControlsWidthConverter}}">
+        <Button Content="Add Profile" Command="{Binding AddProfileCommand}" Margin="0,4,8,4" />
+        <Button Content="Add Campath" Command="{Binding AddCampathCommand}" Margin="0,4,8,4" />
+        <Button Content="Populate Profile" Command="{Binding PopulateFromFolderCommand}" Margin="0,4,8,4" />
 
         <ComboBox Width="100"
                   Padding="10,6"
                   VerticalAlignment="Center"
                   ItemsSource="{Binding Profiles}"
-                  SelectedItem="{Binding SelectedProfile}">
+                  SelectedItem="{Binding SelectedProfile}"
+                  Margin="0,4,8,4">
           <ComboBox.ItemTemplate>
             <DataTemplate>
               <TextBlock Text="{Binding Name}"/>
@@ -35,11 +40,12 @@
           </ComboBox.ItemTemplate>
         </ComboBox>
 
-        <Button Content="Remove Profile" Command="{Binding RemoveProfileCommand}" />
+        <Button Content="Remove Profile" Command="{Binding RemoveProfileCommand}" Margin="0,4,8,4" />
 
         <StackPanel Orientation="Horizontal"
                     Spacing="4"
-                    VerticalAlignment="Center">
+                    VerticalAlignment="Center"
+                    Margin="0,4,8,4">
           <TextBlock Text="Scale"
                      Foreground="#E0E0E0"
                      VerticalAlignment="Center"/>
@@ -48,7 +54,7 @@
                   Maximum="2.0"
                   Value="{Binding Scale}" />
         </StackPanel>
-      </StackPanel>
+      </WrapPanel>
     </Border>
 
     <!-- Groups panel (left) -->
