@@ -700,6 +700,9 @@
                                 <ToggleSwitch IsChecked="{Binding HoldMovementFollowsCamera, Mode=TwoWay}"
                                                 Content="Hold follows camera rotation"
                                                 Foreground="#E6E6E6"/>
+                                <Button Content="Reset to Default"
+                                        Command="{Binding ResetFreecamSettingsCommand}"
+                                        HorizontalAlignment="Left"/>
                                 </StackPanel>
                             </Grid>
                         </ScrollViewer>

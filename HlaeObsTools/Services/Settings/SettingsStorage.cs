@@ -78,6 +78,7 @@ public class AppSettingsData
     public double MapOffsetX { get; set; }
     public double MapOffsetY { get; set; }
     public double MapOffsetZ { get; set; }
+    public FreecamSettingsData FreecamSettings { get; set; } = new();
 }
 
 public class AttachmentPresetData
@@ -90,4 +91,40 @@ public class AttachmentPresetData
     public double OffsetYaw { get; set; }
     public double OffsetRoll { get; set; }
     public double Fov { get; set; } = 90.0;
+}
+
+public class FreecamSettingsData
+{
+    public double MouseSensitivity { get; set; } = 0.12;
+    public double MoveSpeed { get; set; } = 200.0;
+    public double SprintMultiplier { get; set; } = 2.5;
+    public double VerticalSpeed { get; set; } = 200.0;
+    public double SpeedAdjustRate { get; set; } = 1.1;
+    public double SpeedMinMultiplier { get; set; } = 0.05;
+    public double SpeedMaxMultiplier { get; set; } = 5.0;
+    public double RollSpeed { get; set; } = 45.0;
+    public double RollSmoothing { get; set; } = 0.8;
+    public double LeanStrength { get; set; } = 1.0;
+    public double LeanAccelScale { get; set; } = 0.250;
+    public double LeanVelocityScale { get; set; } = 0.01;
+    public double LeanMaxAngle { get; set; } = 20.0;
+    public double LeanHalfTime { get; set; } = 0.30;
+    public double FovMin { get; set; } = 10.0;
+    public double FovMax { get; set; } = 150.0;
+    public double FovStep { get; set; } = 2.0;
+    public double DefaultFov { get; set; } = 90.0;
+    public bool SmoothEnabled { get; set; } = true;
+    public double HalfVec { get; set; } = 0.5;
+    public double HalfRot { get; set; } = 0.5;
+    public double LockHalfRot { get; set; } = 0.1;
+    public double LockHalfRotTransition { get; set; } = 1.0;
+    public double HalfFov { get; set; } = 0.8;
+    public bool RotCriticalDamping { get; set; } = false;
+    public double RotDampingRatio { get; set; } = 1.0;
+    public bool HoldMovementFollowsCamera { get; set; } = true;
+    public bool AnalogKeyboardEnabled { get; set; }
+    public double AnalogLeftDeadzone { get; set; }
+    public double AnalogRightDeadzone { get; set; }
+    public double AnalogCurve { get; set; }
+    public bool ClampPitch { get; set; }
 }

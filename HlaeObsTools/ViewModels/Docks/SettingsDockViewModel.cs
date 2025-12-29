@@ -28,6 +28,7 @@ namespace HlaeObsTools.ViewModels.Docks
         private readonly SettingsStorage _settingsStorage;
         private readonly HlaeWebSocketClient? _ws;
         private readonly Func<NetworkSettingsData, Task>? _applyNetworkSettingsAsync;
+        private bool _suppressFreecamSave;
 
         public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, int GsiPort);
 
@@ -87,6 +88,9 @@ namespace HlaeObsTools.ViewModels.Docks
 
             LoadAttachPresets();
             SendAltPlayerBindsMode();
+            if (_ws?.IsConnected == true)
+                _ = SendAllFreecamConfigAsync();
+            _freecamSettings.PropertyChanged += OnFreecamSettingsChanged;
         }
 
         #region === Network Settings ===
@@ -459,6 +463,7 @@ namespace HlaeObsTools.ViewModels.Docks
         private void OnWebSocketConnected(object? sender, EventArgs e)
         {
             SendAltPlayerBindsMode();
+            _ = SendAllFreecamConfigAsync();
         }
 
         private void SendAltPlayerBindsMode()
@@ -555,7 +560,8 @@ namespace HlaeObsTools.ViewModels.Docks
                 MapRoll = _mapRoll,
                 MapOffsetX = _mapOffsetX,
                 MapOffsetY = _mapOffsetY,
-                MapOffsetZ = _mapOffsetZ
+                MapOffsetZ = _mapOffsetZ,
+                FreecamSettings = _freecamSettings.ToData()
             };
             _settingsStorage.Save(data);
         }
@@ -697,9 +703,71 @@ namespace HlaeObsTools.ViewModels.Docks
 
         #region ==== Freecam Settings ====
 
+        private void OnFreecamSettingsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (!string.IsNullOrEmpty(e.PropertyName))
+                OnPropertyChanged(e.PropertyName);
+
+            if (!_suppressFreecamSave)
+                SaveSettings();
+        }
+
+        public ICommand ResetFreecamSettingsCommand => new Relay(ResetFreecamSettings);
+
+        private void ResetFreecamSettings()
+        {
+            _suppressFreecamSave = true;
+            _freecamSettings.ResetToDefaults();
+            _suppressFreecamSave = false;
+            SaveSettings();
+            _ = SendAllFreecamConfigAsync();
+        }
+
         // Helper method to send freecam config updates
         private async Task SendFreecamConfigAsync(object config)
         {
+            if (_ws == null)
+                return;
+
+            await _ws.SendCommandAsync("freecam_config", config);
+        }
+
+        private async Task SendAllFreecamConfigAsync()
+        {
+            if (_ws == null)
+                return;
+
+            var config = new
+            {
+                mouseSensitivity = (float)_freecamSettings.MouseSensitivity,
+                moveSpeed = (float)_freecamSettings.MoveSpeed,
+                sprintMultiplier = (float)_freecamSettings.SprintMultiplier,
+                verticalSpeed = (float)_freecamSettings.VerticalSpeed,
+                speedAdjustRate = (float)_freecamSettings.SpeedAdjustRate,
+                speedMinMultiplier = (float)_freecamSettings.SpeedMinMultiplier,
+                speedMaxMultiplier = (float)_freecamSettings.SpeedMaxMultiplier,
+                rollSpeed = (float)_freecamSettings.RollSpeed,
+                rollSmoothing = (float)_freecamSettings.RollSmoothing,
+                leanStrength = (float)_freecamSettings.LeanStrength,
+                leanAccelScale = (float)_freecamSettings.LeanAccelScale,
+                leanVelocityScale = (float)_freecamSettings.LeanVelocityScale,
+                leanMaxAngle = (float)_freecamSettings.LeanMaxAngle,
+                leanHalfTime = (float)_freecamSettings.LeanHalfTime,
+                fovMin = (float)_freecamSettings.FovMin,
+                fovMax = (float)_freecamSettings.FovMax,
+                fovStep = (float)_freecamSettings.FovStep,
+                defaultFov = (float)_freecamSettings.DefaultFov,
+                smoothEnabled = _freecamSettings.SmoothEnabled,
+                halfVec = (float)_freecamSettings.HalfVec,
+                halfRot = (float)_freecamSettings.HalfRot,
+                lockHalfRot = (float)_freecamSettings.LockHalfRot,
+                lockHalfRotTransition = (float)_freecamSettings.LockHalfRotTransition,
+                halfFov = (float)_freecamSettings.HalfFov,
+                rotCriticalDamping = _freecamSettings.RotCriticalDamping,
+                rotDampingRatio = (float)_freecamSettings.RotDampingRatio,
+                clampPitch = _freecamSettings.ClampPitch
+            };
+
             await _ws.SendCommandAsync("freecam_config", config);
         }
 

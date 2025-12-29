@@ -124,6 +124,10 @@ public class MainDockFactory : Factory, IDisposable
         };
         hudSettings.ApplyAttachPresets(_storedSettings.AttachPresets);
         var freecamSettings = new FreecamSettings();
+        if (_storedSettings.FreecamSettings != null)
+        {
+            freecamSettings.Apply(_storedSettings.FreecamSettings);
+        }
         _freecamSettings = freecamSettings;
         var viewport3DSettings = new Viewport3DSettings
         {

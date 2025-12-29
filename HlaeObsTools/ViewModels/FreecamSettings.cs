@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using HlaeObsTools.Services.Settings;
 using HlaeObsTools.ViewModels;
 
 namespace HlaeObsTools.ViewModels;
@@ -23,10 +24,10 @@ public sealed class FreecamSettings : ViewModelBase
     private double _rollSpeed = 45.0;
     private double _rollSmoothing = 0.8;
     private double _leanStrength = 1.0;
-    private double _leanAccelScale = 0.0015;
-    private double _leanVelocityScale = 0.01;
+    private double _leanAccelScale = 0.025;
+    private double _leanVelocityScale = 0.005;
     private double _leanMaxAngle = 20.0;
-    private double _leanHalfTime = 0.18;
+    private double _leanHalfTime = 0.30;
 
     // FOV settings
     private double _fovMin = 10.0;
@@ -38,9 +39,9 @@ public sealed class FreecamSettings : ViewModelBase
     private bool _smoothEnabled = true;
     private double _halfVec = 0.5;
     private double _halfRot = 0.5;
-    private double _lockHalfRot = 0.2;
+    private double _lockHalfRot = 0.1;
     private double _lockHalfRotTransition = 1.0;
-    private double _halfFov = 0.5;
+    private double _halfFov = 0.8;
     private bool _rotCriticalDamping = false;
     private double _rotDampingRatio = 1.0;
 
@@ -377,4 +378,87 @@ public sealed class FreecamSettings : ViewModelBase
     }
 
     #endregion
+
+    public FreecamSettingsData ToData()
+    {
+        return new FreecamSettingsData
+        {
+            MouseSensitivity = MouseSensitivity,
+            MoveSpeed = MoveSpeed,
+            SprintMultiplier = SprintMultiplier,
+            VerticalSpeed = VerticalSpeed,
+            SpeedAdjustRate = SpeedAdjustRate,
+            SpeedMinMultiplier = SpeedMinMultiplier,
+            SpeedMaxMultiplier = SpeedMaxMultiplier,
+            RollSpeed = RollSpeed,
+            RollSmoothing = RollSmoothing,
+            LeanStrength = LeanStrength,
+            LeanAccelScale = LeanAccelScale,
+            LeanVelocityScale = LeanVelocityScale,
+            LeanMaxAngle = LeanMaxAngle,
+            LeanHalfTime = LeanHalfTime,
+            FovMin = FovMin,
+            FovMax = FovMax,
+            FovStep = FovStep,
+            DefaultFov = DefaultFov,
+            SmoothEnabled = SmoothEnabled,
+            HalfVec = HalfVec,
+            HalfRot = HalfRot,
+            LockHalfRot = LockHalfRot,
+            LockHalfRotTransition = LockHalfRotTransition,
+            HalfFov = HalfFov,
+            RotCriticalDamping = RotCriticalDamping,
+            RotDampingRatio = RotDampingRatio,
+            HoldMovementFollowsCamera = HoldMovementFollowsCamera,
+            AnalogKeyboardEnabled = AnalogKeyboardEnabled,
+            AnalogLeftDeadzone = AnalogLeftDeadzone,
+            AnalogRightDeadzone = AnalogRightDeadzone,
+            AnalogCurve = AnalogCurve,
+            ClampPitch = ClampPitch
+        };
+    }
+
+    public void Apply(FreecamSettingsData data)
+    {
+        if (data == null)
+            return;
+
+        MouseSensitivity = data.MouseSensitivity;
+        MoveSpeed = data.MoveSpeed;
+        SprintMultiplier = data.SprintMultiplier;
+        VerticalSpeed = data.VerticalSpeed;
+        SpeedAdjustRate = data.SpeedAdjustRate;
+        SpeedMinMultiplier = data.SpeedMinMultiplier;
+        SpeedMaxMultiplier = data.SpeedMaxMultiplier;
+        RollSpeed = data.RollSpeed;
+        RollSmoothing = data.RollSmoothing;
+        LeanStrength = data.LeanStrength;
+        LeanAccelScale = data.LeanAccelScale;
+        LeanVelocityScale = data.LeanVelocityScale;
+        LeanMaxAngle = data.LeanMaxAngle;
+        LeanHalfTime = data.LeanHalfTime;
+        FovMin = data.FovMin;
+        FovMax = data.FovMax;
+        FovStep = data.FovStep;
+        DefaultFov = data.DefaultFov;
+        SmoothEnabled = data.SmoothEnabled;
+        HalfVec = data.HalfVec;
+        HalfRot = data.HalfRot;
+        LockHalfRot = data.LockHalfRot;
+        LockHalfRotTransition = data.LockHalfRotTransition;
+        HalfFov = data.HalfFov;
+        RotCriticalDamping = data.RotCriticalDamping;
+        RotDampingRatio = data.RotDampingRatio;
+        HoldMovementFollowsCamera = data.HoldMovementFollowsCamera;
+        AnalogKeyboardEnabled = data.AnalogKeyboardEnabled;
+        AnalogLeftDeadzone = data.AnalogLeftDeadzone;
+        AnalogRightDeadzone = data.AnalogRightDeadzone;
+        AnalogCurve = data.AnalogCurve;
+        ClampPitch = data.ClampPitch;
+    }
+
+    public void ResetToDefaults()
+    {
+        Apply(new FreecamSettings().ToData());
+    }
 }
