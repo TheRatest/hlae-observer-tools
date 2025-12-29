@@ -1022,7 +1022,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private void ResetCameraToBounds(Vector3 min, Vector3 max)
     {
-        _target = (min + max) * 0.5f;
+        _target = Vector3.Zero;
         var radius = (max - min).Length * 0.5f;
         if (radius < 0.1f)
             radius = 0.1f;
