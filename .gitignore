@@ -37,9 +37,6 @@ bld/
 !.vscode/launch.json
 !.vscode/extensions.json
 
-# FFmpeg binaries (users must download these)
-FFmpeg/
-
 # NuGet
 *.nupkg
 *.snupkg
