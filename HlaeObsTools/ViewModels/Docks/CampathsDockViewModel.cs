@@ -60,7 +60,7 @@ public class CampathsDockViewModel : Tool
         CanPin = true;
 
         _addProfileCommand = new DelegateCommand(async _ => await AddProfileAsync());
-        _removeProfileCommand = new DelegateCommand(_ => { RemoveProfile(); return Task.CompletedTask; }, _ => SelectedProfile != null);
+        _removeProfileCommand = new DelegateCommand(async _ => await RemoveProfileAsync(), _ => SelectedProfile != null);
         _addCampathCommand = new DelegateCommand(async _ => await AddCampathAsync(), _ => SelectedProfile != null);
         _populateFromFolderCommand = new DelegateCommand(async _ => await PopulateFromFolderAsync(), _ => SelectedProfile != null);
         _addGroupCommand = new DelegateCommand(async _ => await AddGroupAsync(), _ => SelectedProfile != null);
@@ -70,7 +70,7 @@ public class CampathsDockViewModel : Tool
         _browseImageCommand = new DelegateCommand(async param => await BrowseImageAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
         _screenShotCommand = new DelegateCommand(async param => await ScreenShotCampathAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
         _setOffsetCommand = new DelegateCommand(async param => await SetCampathOffsetAsync(param as CampathItemViewModel), _ => SelectedProfile != null);
-        _deleteGroupCommand = new DelegateCommand(param => { DeleteGroup(param as CampathGroupViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
+        _deleteGroupCommand = new DelegateCommand(async param => await DeleteGroupAsync(param as CampathGroupViewModel), _ => SelectedProfile != null);
         _toggleGroupModeCommand = new DelegateCommand(param => { ToggleGroupMode(param as CampathGroupViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
         _viewGroupCommand = new DelegateCommand(param => { ViewGroupRequested?.Invoke(this, param as CampathGroupViewModel); return Task.CompletedTask; }, _ => SelectedProfile != null);
 
@@ -140,9 +140,14 @@ public class CampathsDockViewModel : Tool
         Save();
     }
 
-    public void RemoveProfile()
+    public async Task RemoveProfileAsync()
     {
         if (SelectedProfile == null)
+            return;
+
+        var name = SelectedProfile.Name;
+        var confirmed = await ConfirmAsync("Delete Profile", $"Are you sure you want to delete profile \"{name}\"?");
+        if (!confirmed)
             return;
 
         var toRemove = SelectedProfile;
@@ -261,6 +266,7 @@ public class CampathsDockViewModel : Tool
 
     // The view wires these to actual UI dialogs to avoid viewmodel knowing about UI
     public Func<string, string, int, int, Task<string?>> PromptAsync { get; set; } = (_, _, _, _) => Task.FromResult<string?>(null);
+    public Func<string, string, Task<bool>> ConfirmAsync { get; set; } = (_, _) => Task.FromResult(true);
     public Func<Task<CampathPopulateSource?>> SelectPopulateSourceAsync { get; set; } = () => Task.FromResult<CampathPopulateSource?>(CampathPopulateSource.Folder);
     public Func<string, Task<string?>> BrowseFileAsync { get; set; } = _ => Task.FromResult<string?>(null);
     public Func<string, Task<IEnumerable<string>?>> BrowseFilesAsync { get; set; } = _ => Task.FromResult<IEnumerable<string>?>(null);
@@ -507,9 +513,13 @@ public class CampathsDockViewModel : Tool
         }
     }
 
-    public void DeleteGroup(CampathGroupViewModel? group)
+    public async Task DeleteGroupAsync(CampathGroupViewModel? group)
     {
         if (group == null || SelectedProfile == null)
+            return;
+
+        var confirmed = await ConfirmAsync("Delete Group", $"Are you sure you want to delete group \"{group.Name}\"?");
+        if (!confirmed)
             return;
 
         SelectedProfile.Groups.Remove(group);

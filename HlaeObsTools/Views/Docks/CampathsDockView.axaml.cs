@@ -35,6 +35,7 @@ public partial class CampathsDockView : UserControl
         if (DataContext is CampathsDockViewModel vm)
         {
             vm.PromptAsync = PromptAsync;
+            vm.ConfirmAsync = ConfirmAsync;
             vm.SelectPopulateSourceAsync = SelectPopulateSourceAsync;
             vm.BrowseFileAsync = BrowseFileAsync;
             vm.BrowseFilesAsync = BrowseFilesAsync;
@@ -81,6 +82,44 @@ public partial class CampathsDockView : UserControl
 
         await dialog.ShowDialog<bool?>(host);
         return result;
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message)
+    {
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 360,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+
+        var okButton = new Button { Content = "Delete", IsDefault = true, Width = 90 };
+        var cancelButton = new Button { Content = "Cancel", IsCancel = true, Width = 90 };
+
+        var panel = new StackPanel { Margin = new Thickness(16), Spacing = 10 };
+        panel.Children.Add(new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right
+        };
+        buttons.Children.Add(okButton);
+        buttons.Children.Add(cancelButton);
+        panel.Children.Add(buttons);
+
+        dialog.Content = panel;
+
+        okButton.Click += (_, _) => dialog.Close(true);
+        cancelButton.Click += (_, _) => dialog.Close(false);
+
+        var host = TopLevel.GetTopLevel(this) as Window;
+        if (host == null)
+            return false;
+
+        var result = await dialog.ShowDialog<bool?>(host);
+        return result == true;
     }
 
     private async Task<string?> BrowseFileAsync(string title)
