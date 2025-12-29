@@ -115,19 +115,32 @@ public partial class VideoDisplayDockView : UserControl
         if (!vm.UseD3DHost)
             return;
 
+        if (!this.IsAttachedToVisualTree() || !SharedTextureAspect.IsAttachedToVisualTree())
+            return;
+
         try
         {
             var bounds = SharedTextureAspect.Bounds;
+            PixelPoint topLeft;
+            PixelSize size;
             if (bounds.Width <= 0 || bounds.Height <= 0)
-                return;
+            {
+                if (VideoContainer == null || !VideoContainer.IsAttachedToVisualTree() || !TryGetLetterboxedRect(VideoContainer, 16.0 / 9.0, out var rect))
+                    return;
 
-            // Get screen position of the SharedTextureAspect control
-            var topLeft = SharedTextureAspect.PointToScreen(new Point(0, 0));
+                var fallbackTopLeft = VideoContainer.PointToScreen(new Point(rect.X, rect.Y));
+                topLeft = new PixelPoint((int)fallbackTopLeft.X, (int)fallbackTopLeft.Y);
+                size = new PixelSize((int)rect.Width, (int)rect.Height);
+            }
+            else
+            {
+                // Get screen position of the SharedTextureAspect control
+                var controlTopLeft = SharedTextureAspect.PointToScreen(new Point(0, 0));
+                topLeft = new PixelPoint((int)controlTopLeft.X, (int)controlTopLeft.Y);
+                size = new PixelSize((int)bounds.Width, (int)bounds.Height);
+            }
 
-            var position = new PixelPoint((int)topLeft.X, (int)topLeft.Y);
-            var size = new PixelSize((int)bounds.Width, (int)bounds.Height);
-
-            vm.UpdateHudOverlayBounds(position, size);
+            vm.UpdateHudOverlayBounds(topLeft, size);
         }
         catch
         {
@@ -525,14 +538,36 @@ public partial class VideoDisplayDockView : UserControl
         if (!vm.UseRtpSwapchain || vm.UseD3DHost)
             return;
 
-        var targetControl = (Control?)RtpSwapchainAspect ?? RtpSwapchainHost;
-        var b = targetControl.Bounds;
-        if (b.Width <= 0 || b.Height <= 0)
+        if (!this.IsAttachedToVisualTree())
             return;
 
+        var targetControl = (Control?)RtpSwapchainAspect ?? RtpSwapchainHost;
+        var b = targetControl.Bounds;
+        var hasValidBounds = b.Width > 0 && b.Height > 0;
+        Rect rect;
+        PixelPoint screenTopLeft;
+        if (!hasValidBounds)
+        {
+            if (VideoContainer == null || !VideoContainer.IsAttachedToVisualTree() || !TryGetLetterboxedRect(VideoContainer, vm.RtpFrameAspect > 0 ? vm.RtpFrameAspect : 16.0 / 9.0, out rect))
+                return;
+
+            var topLeft = VideoContainer.PointToScreen(new Point(rect.X, rect.Y));
+            screenTopLeft = new PixelPoint((int)topLeft.X, (int)topLeft.Y);
+            b = rect;
+        }
+        else
+        {
+            if (!targetControl.IsAttachedToVisualTree())
+                return;
+
+            rect = b;
+            var topLeft = targetControl.PointToScreen(new Point(0, 0));
+            screenTopLeft = new PixelPoint((int)topLeft.X, (int)topLeft.Y);
+        }
+
         double scale = (this.VisualRoot as IRenderRoot)?.RenderScaling ?? 1.0;
-        int w = (int)Math.Round(b.Width * scale);
-        int h = (int)Math.Round(b.Height * scale);
+        int w = (int)Math.Round(rect.Width * scale);
+        int h = (int)Math.Round(rect.Height * scale);
 
         vm.UpdateRtpViewerBounds(0, 0, w, h);
         RtpSwapchainHost.SetContainerLayout(0, 0, w, h);
@@ -543,16 +578,35 @@ public partial class VideoDisplayDockView : UserControl
         {
             try
             {
-                var screenTopLeft = targetControl.PointToScreen(new Point(0, 0));
-                var position = new PixelPoint((int)screenTopLeft.X, (int)screenTopLeft.Y);
-                var size = new PixelSize((int)Math.Round(b.Width), (int)Math.Round(b.Height));
-                vm.UpdateHudOverlayBounds(position, size);
+                var size = new PixelSize((int)Math.Round(rect.Width), (int)Math.Round(rect.Height));
+                vm.UpdateHudOverlayBounds(screenTopLeft, size);
             }
             catch
             {
                 // ignore overlay positioning failures during layout
             }
         }
+    }
+
+    private static bool TryGetLetterboxedRect(Control container, double aspect, out Rect rect)
+    {
+        rect = default;
+        var bounds = container.Bounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0 || aspect <= 0)
+            return false;
+
+        double targetW = bounds.Width;
+        double targetH = targetW / aspect;
+        if (targetH > bounds.Height)
+        {
+            targetH = bounds.Height;
+            targetW = targetH * aspect;
+        }
+
+        var left = (bounds.Width - targetW) * 0.5;
+        var top = (bounds.Height - targetH) * 0.5;
+        rect = new Rect(left, top, targetW, targetH);
+        return true;
     }
 
     private void BeginFreecam()
@@ -748,6 +802,11 @@ public partial class VideoDisplayDockView : UserControl
             UpdateSpeedScale();
         }
         else if (e.PropertyName == nameof(VideoDisplayDockViewModel.RtpFrameAspect))
+        {
+            UpdateRtpSwapchainAspectSize();
+            UpdateRtpSwapchainBounds();
+        }
+        else if (e.PropertyName == nameof(VideoDisplayDockViewModel.IsStreaming))
         {
             UpdateRtpSwapchainAspectSize();
             UpdateRtpSwapchainBounds();

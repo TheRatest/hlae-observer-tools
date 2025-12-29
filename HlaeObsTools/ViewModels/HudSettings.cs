@@ -22,7 +22,7 @@ public sealed class HudSettings : ViewModelBase
         public double Fov { get; init; } = 90.0;
     }
 
-    private bool _isHudEnabled;
+    private bool _isHudEnabled = true;
     private bool _useAltPlayerBinds;
 
     /// <summary>
