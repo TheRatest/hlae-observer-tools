@@ -28,11 +28,12 @@ namespace HlaeObsTools.ViewModels.Docks
         private readonly SettingsStorage _settingsStorage;
         private readonly HlaeWebSocketClient? _ws;
         private readonly Func<NetworkSettingsData, Task>? _applyNetworkSettingsAsync;
+        private readonly Action<AttachPresetViewModel>? _openAttachPresetAnimation;
         private bool _suppressFreecamSave;
 
         public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, int GsiPort);
 
-        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null)
+        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Action<AttachPresetViewModel>? openAttachPresetAnimation = null, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null)
         {
             _radarSettings = radarSettings;
             _hudSettings = hudSettings;
@@ -40,6 +41,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _viewport3DSettings = viewport3DSettings;
             _settingsStorage = settingsStorage;
             _ws = wsClient;
+            _openAttachPresetAnimation = openAttachPresetAnimation;
             _applyNetworkSettingsAsync = applyNetworkSettingsAsync;
 
             Title = "Settings";
@@ -85,6 +87,14 @@ namespace HlaeObsTools.ViewModels.Docks
             {
                 _ws.Connected += OnWebSocketConnected;
             }
+
+            OpenAttachPresetAnimationCommand = new RelayParam<AttachPresetViewModel>(
+                preset =>
+                {
+                    if (preset == null) return;
+                    _openAttachPresetAnimation?.Invoke(preset);
+                },
+                preset => preset != null && _openAttachPresetAnimation != null);
 
             LoadAttachPresets();
             SendAltPlayerBindsMode();
@@ -516,6 +526,8 @@ namespace HlaeObsTools.ViewModels.Docks
         public ObservableCollection<AttachPresetViewModel> AttachPresets { get; }
             = new ObservableCollection<AttachPresetViewModel>(
                 Enumerable.Range(0, 5).Select(i => new AttachPresetViewModel($"Preset {i + 1}")));
+
+        public ICommand OpenAttachPresetAnimationCommand { get; }
 
         private void LoadAttachPresets()
         {
@@ -1229,6 +1241,24 @@ namespace HlaeObsTools.ViewModels.Docks
             public bool CanExecute(object parameter) => true;
             public void Execute(object parameter) => _action();
             public event EventHandler CanExecuteChanged { add { } remove { } }
+        }
+
+        private sealed class RelayParam<T> : ICommand where T : class
+        {
+            private readonly Action<T?> _action;
+            private readonly Func<T?, bool>? _canExecute;
+
+            public RelayParam(Action<T?> action, Func<T?, bool>? canExecute = null)
+            {
+                _action = action;
+                _canExecute = canExecute;
+            }
+
+            public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter as T) ?? true;
+
+            public void Execute(object? parameter) => _action(parameter as T);
+
+            public event EventHandler? CanExecuteChanged { add { } remove { } }
         }
     }
 }

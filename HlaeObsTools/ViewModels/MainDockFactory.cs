@@ -149,6 +149,9 @@ public class MainDockFactory : Factory, IDisposable
         var topLeft = new RadarDockViewModel(_gsiServer, _radarConfigProvider, radarSettings, bottomRight, _webSocketClient) { Id = "TopLeft", Title = "Radar" };
         _videoDisplayVm = new VideoDisplayDockViewModel { Id = "TopCenter", Title = "Video Stream" };
         var topRight = new NetConsoleDockViewModel { Id = "TopRight", Title = "Console" };
+        var presetAnimationDock = new AttachPresetAnimationDockViewModel { Id = "PresetAnimation", Title = "Animation" };
+
+        ToolDock? bottomLeftDockRef = null;
         var bottomLeft = new SettingsDockViewModel(
             radarSettings,
             hudSettings,
@@ -156,6 +159,14 @@ public class MainDockFactory : Factory, IDisposable
             viewport3DSettings,
             _settingsStorage,
             _webSocketClient,
+            openAttachPresetAnimation: preset =>
+            {
+                presetAnimationDock.OpenPreset(preset);
+                if (bottomLeftDockRef != null)
+                {
+                    bottomLeftDockRef.ActiveDockable = presetAnimationDock;
+                }
+            },
             ApplyNetworkSettingsAsync,
             _storedSettings)
         { Id = "BottomLeft", Title = "Settings" };
@@ -211,8 +222,9 @@ public class MainDockFactory : Factory, IDisposable
             Id = "BottomLeftDock",
             Proportion = 0.3,
             ActiveDockable = bottomLeft,
-            VisibleDockables = CreateList<IDockable>(bottomLeft)
+            VisibleDockables = CreateList<IDockable>(bottomLeft, presetAnimationDock)
         };
+        bottomLeftDockRef = bottomLeftDock;
 
         var bottomCenterDock = new ToolDock
         {

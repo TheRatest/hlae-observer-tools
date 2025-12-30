@@ -18,6 +18,7 @@ using Avalonia.Media;
 using System.Linq;
 using HlaeObsTools.Views;
 using System.Threading.Tasks;
+using System.Windows.Input;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -69,6 +70,10 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     private readonly Dictionary<string, HudWeaponViewModel> _weaponCache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HudPlayerCardViewModel> _hudPlayerCache = new(StringComparer.Ordinal);
     private HudOverlayWindow? _hudOverlayWindow;
+    private bool _isAwaitingAttachTarget;
+    private int _pendingAttachSourceObserverSlot;
+    private int _pendingAttachPresetIndex = -1;
+    private string _hudPromptText = string.Empty;
     private static readonly HashSet<string> PrimaryWeaponTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "Machine Gun",
@@ -89,6 +94,22 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     };
     private const int DefaultPlayerActionCount = 5;
     private const string AttachActionId = "player_action_attach";
+
+    public ICommand CancelHudPromptCommand { get; }
+
+    public string HudPromptText
+    {
+        get => _hudPromptText;
+        private set
+        {
+            if (_hudPromptText == value) return;
+            _hudPromptText = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasHudPrompt));
+        }
+    }
+
+    public bool HasHudPrompt => !string.IsNullOrWhiteSpace(HudPromptText);
 
     public bool ShowNoSignal => !_isStreaming && !_useD3DHost;
     public bool CanStart => !_isStreaming && !_useD3DHost;
@@ -173,6 +194,7 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         _speedTicks = BuildTicks();
         _teamCt.Players.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHudData));
         _teamT.Players.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHudData));
+        CancelHudPromptCommand = new Relay(_ => CancelPendingAttachTargetSelection());
     }
 
     /// <summary>
@@ -678,6 +700,11 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
 
         player.PlayerActionRequested -= OnPlayerActionRequested;
         player.PlayerActionRequested += OnPlayerActionRequested;
+
+        player.AttachTargetSelected -= OnAttachTargetSelected;
+        player.AttachTargetSelected += OnAttachTargetSelected;
+
+        player.IsAttachTargetSelectionActive = _isAwaitingAttachTarget;
     }
 
     private IEnumerable<HudPlayerCardViewModel> BuildTeamPlayers(IEnumerable<GsiPlayer> players, string team, string? focusedSteamId)
@@ -1071,6 +1098,13 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     {
         if (_webSocketClient == null || option == null)
             return;
+        if (_hudSettings == null)
+            return;
+
+        if (_isAwaitingAttachTarget)
+        {
+            CancelPendingAttachTargetSelection();
+        }
 
         // Attach action opens submenu; presets execute immediately.
         if (option.Id == AttachActionId)
@@ -1085,19 +1119,120 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
             var preset = _hudSettings.AttachPresets.ElementAtOrDefault(presetIndex);
             if (preset == null) return;
 
-            var args = new
+            if (PresetRequiresTarget(preset))
             {
-                observer_slot = player.ObserverSlot,
-                attachment = preset.AttachmentName,
-                offset_pos = new { x = preset.OffsetPosX, y = preset.OffsetPosY, z = preset.OffsetPosZ },
-                offset_angles = new { pitch = preset.OffsetPitch, yaw = preset.OffsetYaw, roll = preset.OffsetRoll },
-                fov = preset.Fov
-            };
+                BeginAwaitAttachTargetSelection(player.ObserverSlot, presetIndex);
+                player.CloseAttachSubMenu();
+                return;
+            }
 
-            _ = _webSocketClient.SendCommandAsync("attach_camera", args);
+            _ = _webSocketClient.SendCommandAsync("attach_camera", BuildAttachCameraArgs(player.ObserverSlot, preset, targetObserverSlot: null));
             player.CloseAttachSubMenu();
             return;
         }
+    }
+
+    private void OnAttachTargetSelected(object? sender, EventArgs e)
+    {
+        if (!_isAwaitingAttachTarget) return;
+        if (_webSocketClient == null) return;
+        if (_hudSettings == null) return;
+        if (sender is not HudPlayerCardViewModel targetPlayer) return;
+
+        var preset = _hudSettings.AttachPresets.ElementAtOrDefault(_pendingAttachPresetIndex);
+        if (preset == null)
+        {
+            CancelPendingAttachTargetSelection();
+            return;
+        }
+
+        _ = _webSocketClient.SendCommandAsync(
+            "attach_camera",
+            BuildAttachCameraArgs(_pendingAttachSourceObserverSlot, preset, targetObserverSlot: targetPlayer.ObserverSlot));
+
+        CancelPendingAttachTargetSelection();
+    }
+
+    private void BeginAwaitAttachTargetSelection(int sourceObserverSlot, int presetIndex)
+    {
+        _pendingAttachSourceObserverSlot = sourceObserverSlot;
+        _pendingAttachPresetIndex = presetIndex;
+        _isAwaitingAttachTarget = true;
+
+        SetAttachTargetSelectionMode(true);
+        HudPromptText = "Select target player for transition (click a player card)";
+    }
+
+    private void CancelPendingAttachTargetSelection()
+    {
+        _isAwaitingAttachTarget = false;
+        _pendingAttachSourceObserverSlot = 0;
+        _pendingAttachPresetIndex = -1;
+        SetAttachTargetSelectionMode(false);
+        HudPromptText = string.Empty;
+    }
+
+    private void SetAttachTargetSelectionMode(bool enabled)
+    {
+        foreach (var vm in _hudPlayerCache.Values)
+        {
+            vm.IsAttachTargetSelectionActive = enabled;
+        }
+    }
+
+    private static bool PresetRequiresTarget(HudSettings.AttachmentPreset preset)
+    {
+        return preset.Animation.Enabled &&
+               preset.Animation.Events.Any(e => e.Type == HudSettings.AttachmentPresetAnimationEventType.Transition);
+    }
+
+    private static object BuildAttachCameraArgs(int observerSlot, HudSettings.AttachmentPreset preset, int? targetObserverSlot)
+    {
+        object? animation = null;
+        if (preset.Animation.Enabled)
+        {
+            var events = (preset.Animation.Events ?? new List<HudSettings.AttachmentPresetAnimationEvent>())
+                .Select(ev =>
+                {
+                    if (ev.Type == HudSettings.AttachmentPresetAnimationEventType.Transition)
+                    {
+                        return (object)new
+                        {
+                            type = "transition",
+                            time = ev.Time,
+                            order = ev.Order
+                        };
+                    }
+
+                    return (object)new
+                    {
+                        type = "keyframe",
+                        time = ev.Time,
+                        order = ev.Order,
+                        delta_pos = new { x = ev.DeltaPosX, y = ev.DeltaPosY, z = ev.DeltaPosZ },
+                        delta_angles = new { pitch = ev.DeltaPitch, yaw = ev.DeltaYaw, roll = ev.DeltaRoll },
+                        fov = ev.Fov
+                    };
+                })
+                .ToList();
+
+            animation = new
+            {
+                enabled = preset.Animation.Enabled,
+                events
+            };
+        }
+
+        return new
+        {
+            observer_slot = observerSlot,
+            target_observer_slot = targetObserverSlot,
+            attachment = preset.AttachmentName,
+            offset_pos = new { x = preset.OffsetPosX, y = preset.OffsetPosY, z = preset.OffsetPosZ },
+            offset_angles = new { pitch = preset.OffsetPitch, yaw = preset.OffsetYaw, roll = preset.OffsetRoll },
+            fov = preset.Fov,
+            animation
+        };
     }
 
     private void OnWebSocketMessage(object? sender, string message)
@@ -1134,5 +1269,21 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         // Send the modified speed to HLAE
         var command = $"freecam_speed {effectiveSpeed:F1}";
         await _webSocketClient.SendCommandAsync(command);
+    }
+
+    private sealed class Relay : ICommand
+    {
+        private readonly Action<object?> _action;
+
+        public Relay(Action<object?> action)
+        {
+            _action = action;
+        }
+
+        public bool CanExecute(object? parameter) => true;
+
+        public void Execute(object? parameter) => _action(parameter);
+
+        public event EventHandler? CanExecuteChanged { add { } remove { } }
     }
 }

@@ -170,6 +170,7 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
     private IBrush _radialCenterBrush = new SolidColorBrush(Color.FromArgb(150, 25, 25, 30));
     private bool _isInAttachSubMenu;
     private bool _useAltBindings;
+    private bool _isAttachTargetSelectionActive;
     private readonly ObservableCollection<HudPlayerActionOption> _attachSubMenuOptions = new();
     private readonly ReadOnlyObservableCollection<HudPlayerActionOption> _attachSubMenuOptionsReadonly;
     private HudPlayerActionOption? _hoveredAttachOption;
@@ -381,6 +382,7 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
     }
 
     public event EventHandler<HudPlayerActionRequestedEventArgs>? PlayerActionRequested;
+    public event EventHandler? AttachTargetSelected;
 
     public IBrush DisplayBorderBrush => IsFocused
         ? new SolidColorBrush(Color.FromArgb(255, 255, 255, 255))
@@ -471,6 +473,17 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
     public void RequestPlayerAction(HudPlayerActionOption? option)
     {
         PlayerActionRequested?.Invoke(this, new HudPlayerActionRequestedEventArgs(this, option));
+    }
+
+    public bool IsAttachTargetSelectionActive
+    {
+        get => _isAttachTargetSelectionActive;
+        set => SetProperty(ref _isAttachTargetSelectionActive, value);
+    }
+
+    public void RequestAttachTargetSelection()
+    {
+        AttachTargetSelected?.Invoke(this, EventArgs.Empty);
     }
 
     public void OpenAttachSubMenu(IEnumerable<HlaeObsTools.ViewModels.HudSettings.AttachmentPreset> presets)

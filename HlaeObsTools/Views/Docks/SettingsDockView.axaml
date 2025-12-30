@@ -233,7 +233,16 @@
                                         <DataTemplate>
                                             <Border BorderBrush="#333" BorderThickness="1" Padding="8" Margin="0,0,0,8">
                                                 <StackPanel Spacing="6">
-                                                    <TextBlock Text="{Binding Title}" Foreground="#E6E6E6" FontWeight="SemiBold"/>
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                                        <StackPanel Spacing="2">
+                                                            <TextBlock Text="{Binding Title}" Foreground="#E6E6E6" FontWeight="SemiBold"/>
+                                                            <TextBlock Text="{Binding AnimationSummary}" Foreground="#888888" FontSize="12"/>
+                                                        </StackPanel>
+                                                        <Button Grid.Column="1"
+                                                                Content="Animation"
+                                                                Click="OpenAnimationEditor_Click"
+                                                                HorizontalAlignment="Right"/>
+                                                    </Grid>
                                                     <ComboBox ItemsSource="{Binding AttachmentOptions}"
                                                               SelectedItem="{Binding AttachmentName, Mode=TwoWay}"
                                                               Width="300"

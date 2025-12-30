@@ -91,6 +91,30 @@ public class AttachmentPresetData
     public double OffsetYaw { get; set; }
     public double OffsetRoll { get; set; }
     public double Fov { get; set; } = 90.0;
+    public AttachmentPresetAnimationData? Animation { get; set; }
+}
+
+public class AttachmentPresetAnimationData
+{
+    public bool Enabled { get; set; }
+    public List<AttachmentPresetAnimationEventData> Events { get; set; } = new();
+}
+
+public class AttachmentPresetAnimationEventData
+{
+    public string Type { get; set; } = "keyframe"; // "keyframe" | "transition"
+    public double Time { get; set; }
+    public int Order { get; set; }
+
+    public double? DeltaPosX { get; set; }
+    public double? DeltaPosY { get; set; }
+    public double? DeltaPosZ { get; set; }
+
+    public double? DeltaPitch { get; set; }
+    public double? DeltaYaw { get; set; }
+    public double? DeltaRoll { get; set; }
+
+    public double? Fov { get; set; }
 }
 
 public class FreecamSettingsData

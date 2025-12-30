@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
 using HlaeObsTools.ViewModels;
 
 namespace HlaeObsTools.ViewModels;
@@ -23,11 +25,19 @@ public sealed class AttachPresetViewModel : ViewModelBase
     private double _offsetYaw;
     private double _offsetRoll;
     private double _fov = 90.0;
+    private bool _animationEnabled;
+    private readonly ObservableCollection<AttachPresetAnimationEventViewModel> _animationEvents = new();
     public IReadOnlyList<string> AttachmentOptions { get; } = DefaultAttachmentOptions;
 
     public AttachPresetViewModel(string title)
     {
         _title = title;
+        EnsureBaseKeyframe();
+        _animationEvents.CollectionChanged += (_, _) =>
+        {
+            HookAnimationEventChanges();
+            OnPropertyChanged(nameof(AnimationSummary));
+        };
     }
 
     public string Title
@@ -84,6 +94,27 @@ public sealed class AttachPresetViewModel : ViewModelBase
         set => SetProperty(ref _fov, value);
     }
 
+    public bool AnimationEnabled
+    {
+        get => _animationEnabled;
+        set => SetProperty(ref _animationEnabled, value);
+    }
+
+    public ObservableCollection<AttachPresetAnimationEventViewModel> AnimationEvents => _animationEvents;
+
+    public string AnimationSummary
+    {
+        get
+        {
+            if (!AnimationEnabled && AnimationEvents.Count <= 1) return "Anim: off";
+            var transitionCount = AnimationEvents.Count(e => e.IsTransition);
+            var keyCount = AnimationEvents.Count(e => e.IsKeyframe);
+            var duration = AnimationEvents.Count > 0 ? AnimationEvents.Max(e => e.Time) : 0.0;
+            var transitionText = transitionCount > 0 ? ", 1 transition" : string.Empty;
+            return $"Anim: {(AnimationEnabled ? "on" : "off")} ({keyCount} keys{transitionText}, {duration:0.###}s)";
+        }
+    }
+
     public void LoadFrom(HudSettings.AttachmentPreset preset)
     {
         AttachmentName = preset.AttachmentName;
@@ -94,6 +125,8 @@ public sealed class AttachPresetViewModel : ViewModelBase
         OffsetYaw = preset.OffsetYaw;
         OffsetRoll = preset.OffsetRoll;
         Fov = preset.Fov;
+
+        LoadAnimationFrom(preset.Animation);
     }
 
     public HudSettings.AttachmentPreset ToModel()
@@ -107,7 +140,94 @@ public sealed class AttachPresetViewModel : ViewModelBase
             OffsetPitch = OffsetPitch,
             OffsetYaw = OffsetYaw,
             OffsetRoll = OffsetRoll,
-            Fov = Fov
+            Fov = Fov,
+            Animation = ToAnimationModel()
         };
+    }
+
+    public void EnsureBaseKeyframe()
+    {
+        if (_animationEvents.Count > 0 && _animationEvents[0].IsBaseKeyframe)
+            return;
+
+        _animationEvents.Insert(0, new AttachPresetAnimationEventViewModel(isBaseKeyframe: true));
+        OnPropertyChanged(nameof(AnimationSummary));
+    }
+
+    private void LoadAnimationFrom(HudSettings.AttachmentPresetAnimation animation)
+    {
+        AnimationEnabled = animation.Enabled;
+
+        _animationEvents.Clear();
+        EnsureBaseKeyframe();
+
+        foreach (var e in animation.Events.OrderBy(e => e.Time).ThenBy(e => e.Order))
+        {
+            // Base keyframe is implicit and uneditable.
+            if (e.Type == HudSettings.AttachmentPresetAnimationEventType.Keyframe && e.Time == 0.0 && e.Order == 0)
+                continue;
+
+            _animationEvents.Add(new AttachPresetAnimationEventViewModel
+            {
+                Type = e.Type == HudSettings.AttachmentPresetAnimationEventType.Transition
+                    ? AttachPresetAnimationEventType.Transition
+                    : AttachPresetAnimationEventType.Keyframe,
+                Time = e.Time,
+                Order = e.Order,
+                DeltaPosX = e.DeltaPosX,
+                DeltaPosY = e.DeltaPosY,
+                DeltaPosZ = e.DeltaPosZ,
+                DeltaPitch = e.DeltaPitch,
+                DeltaYaw = e.DeltaYaw,
+                DeltaRoll = e.DeltaRoll,
+                Fov = e.Fov
+            });
+        }
+
+        HookAnimationEventChanges();
+        OnPropertyChanged(nameof(AnimationSummary));
+    }
+
+    private HudSettings.AttachmentPresetAnimation ToAnimationModel()
+    {
+        EnsureBaseKeyframe();
+
+        var events = _animationEvents
+            .Select(e => new HudSettings.AttachmentPresetAnimationEvent
+            {
+                Type = e.Type == AttachPresetAnimationEventType.Transition
+                    ? HudSettings.AttachmentPresetAnimationEventType.Transition
+                    : HudSettings.AttachmentPresetAnimationEventType.Keyframe,
+                Time = e.Time,
+                Order = e.Order,
+                DeltaPosX = e.IsKeyframe ? e.DeltaPosX : null,
+                DeltaPosY = e.IsKeyframe ? e.DeltaPosY : null,
+                DeltaPosZ = e.IsKeyframe ? e.DeltaPosZ : null,
+                DeltaPitch = e.IsKeyframe ? e.DeltaPitch : null,
+                DeltaYaw = e.IsKeyframe ? e.DeltaYaw : null,
+                DeltaRoll = e.IsKeyframe ? e.DeltaRoll : null,
+                Fov = e.IsKeyframe ? e.Fov : null
+            })
+            .ToList();
+
+        return new HudSettings.AttachmentPresetAnimation
+        {
+            Enabled = AnimationEnabled,
+            Events = events
+        };
+    }
+
+    private void HookAnimationEventChanges()
+    {
+        foreach (var e in _animationEvents)
+        {
+            e.PropertyChanged -= OnAnimationEventChanged;
+            e.PropertyChanged += OnAnimationEventChanged;
+        }
+    }
+
+    private void OnAnimationEventChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(AnimationSummary));
     }
 }

@@ -45,6 +45,11 @@
         <DataTemplate DataType="vmd:Viewport3DDockViewModel">
             <vd:Viewport3DDockView />
         </DataTemplate>
+
+        <!-- Data template for AttachPresetAnimationDockViewModel -->
+        <DataTemplate DataType="vmd:AttachPresetAnimationDockViewModel">
+            <vd:AttachPresetAnimationDockView />
+        </DataTemplate>
     </Window.DataTemplates>
 
     <Grid RowDefinitions="Auto,*">

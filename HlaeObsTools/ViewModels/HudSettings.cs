@@ -20,6 +20,36 @@ public sealed class HudSettings : ViewModelBase
         public double OffsetYaw { get; init; }
         public double OffsetRoll { get; init; }
         public double Fov { get; init; } = 90.0;
+        public AttachmentPresetAnimation Animation { get; init; } = new();
+    }
+
+    public record AttachmentPresetAnimation
+    {
+        public bool Enabled { get; init; }
+        public List<AttachmentPresetAnimationEvent> Events { get; init; } = new();
+    }
+
+    public enum AttachmentPresetAnimationEventType
+    {
+        Keyframe,
+        Transition
+    }
+
+    public record AttachmentPresetAnimationEvent
+    {
+        public AttachmentPresetAnimationEventType Type { get; init; } = AttachmentPresetAnimationEventType.Keyframe;
+        public double Time { get; init; }
+        public int Order { get; init; }
+
+        public double? DeltaPosX { get; init; }
+        public double? DeltaPosY { get; init; }
+        public double? DeltaPosZ { get; init; }
+
+        public double? DeltaPitch { get; init; }
+        public double? DeltaYaw { get; init; }
+        public double? DeltaRoll { get; init; }
+
+        public double? Fov { get; init; }
     }
 
     private bool _isHudEnabled = true;
@@ -64,7 +94,8 @@ public sealed class HudSettings : ViewModelBase
                 OffsetPitch = preset.OffsetPitch,
                 OffsetYaw = preset.OffsetYaw,
                 OffsetRoll = preset.OffsetRoll,
-                Fov = preset.Fov
+                Fov = preset.Fov,
+                Animation = FromData(preset.Animation)
             });
         }
 
@@ -85,7 +116,68 @@ public sealed class HudSettings : ViewModelBase
             OffsetPitch = p.OffsetPitch,
             OffsetYaw = p.OffsetYaw,
             OffsetRoll = p.OffsetRoll,
-            Fov = p.Fov
+            Fov = p.Fov,
+            Animation = ToData(p.Animation)
         });
+    }
+
+    private static AttachmentPresetAnimation FromData(AttachmentPresetAnimationData? data)
+    {
+        if (data == null)
+        {
+            return new AttachmentPresetAnimation();
+        }
+
+        var events = (data.Events ?? new List<AttachmentPresetAnimationEventData>())
+            .Select(e => new AttachmentPresetAnimationEvent
+            {
+                Type = string.Equals(e.Type, "transition", System.StringComparison.OrdinalIgnoreCase)
+                    ? AttachmentPresetAnimationEventType.Transition
+                    : AttachmentPresetAnimationEventType.Keyframe,
+                Time = e.Time,
+                Order = e.Order,
+                DeltaPosX = e.DeltaPosX,
+                DeltaPosY = e.DeltaPosY,
+                DeltaPosZ = e.DeltaPosZ,
+                DeltaPitch = e.DeltaPitch,
+                DeltaYaw = e.DeltaYaw,
+                DeltaRoll = e.DeltaRoll,
+                Fov = e.Fov
+            })
+            .ToList();
+
+        return new AttachmentPresetAnimation
+        {
+            Enabled = data.Enabled,
+            Events = events
+        };
+    }
+
+    private static AttachmentPresetAnimationData? ToData(AttachmentPresetAnimation animation)
+    {
+        if (!animation.Enabled && (animation.Events == null || animation.Events.Count == 0))
+        {
+            return null;
+        }
+
+        return new AttachmentPresetAnimationData
+        {
+            Enabled = animation.Enabled,
+            Events = (animation.Events ?? new List<AttachmentPresetAnimationEvent>())
+                .Select(e => new AttachmentPresetAnimationEventData
+                {
+                    Type = e.Type == AttachmentPresetAnimationEventType.Transition ? "transition" : "keyframe",
+                    Time = e.Time,
+                    Order = e.Order,
+                    DeltaPosX = e.DeltaPosX,
+                    DeltaPosY = e.DeltaPosY,
+                    DeltaPosZ = e.DeltaPosZ,
+                    DeltaPitch = e.DeltaPitch,
+                    DeltaYaw = e.DeltaYaw,
+                    DeltaRoll = e.DeltaRoll,
+                    Fov = e.Fov
+                })
+                .ToList()
+        };
     }
 }

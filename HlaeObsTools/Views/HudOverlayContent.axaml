@@ -159,6 +159,26 @@
                 IsHitTestVisible="False"
                 Margin="-1,-1,-1,-1"/>
 
+        <!-- HUD prompt (e.g. attach animation target selection) -->
+        <Border Background="#AA000000"
+                CornerRadius="6"
+                Padding="10"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="0,60,0,0"
+                ZIndex="20"
+                IsVisible="{Binding HasHudPrompt}">
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <TextBlock Text="{Binding HudPromptText}"
+                           Foreground="#E6E6E6"
+                           FontWeight="SemiBold"/>
+                <Button Content="Cancel"
+                        Command="{Binding CancelHudPromptCommand}"
+                        Background="#333333"
+                        Foreground="#E6E6E6"/>
+            </StackPanel>
+        </Border>
+
         <!-- Freecam speed scale overlay -->
         <Grid x:Name="SpeedScaleRegion"
               HorizontalAlignment="Right"

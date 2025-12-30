@@ -152,6 +152,13 @@ public partial class HudPlayerCardControl : UserControl
         if (_currentViewModel == null)
             return;
 
+        if (_currentViewModel.IsAttachTargetSelectionActive && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            _currentViewModel.RequestAttachTargetSelection();
+            e.Handled = true;
+            return;
+        }
+
         // In submenu: single click selects preset or closes.
         if (_currentViewModel.IsInAttachSubMenu && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
