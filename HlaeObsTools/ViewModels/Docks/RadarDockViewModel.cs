@@ -1153,11 +1153,12 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         if (parsed.Points.Count == 0 || string.IsNullOrWhiteSpace(_currentMap))
             return result;
 
+        var forcedLevel = GetCampathForcedLevel(parsed);
         bool useLinear = parsed.IsLinearPosition || parsed.Points.Count < 3;
 
         void AddProjected(Vec3 pos)
         {
-            if (_projector.TryProject(_currentMap!, pos, out var px, out var py, out _))
+            if (_projector.TryProject(_currentMap!, pos, forcedLevel, out var px, out var py, out _))
             {
                 var pt = new Point(px * 1024.0, py * 1024.0);
                 if (result.Count == 0 || result[^1] != pt)
@@ -1195,6 +1196,43 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         }
 
         return result;
+    }
+
+    private string? GetCampathForcedLevel(CampathFile parsed)
+    {
+        if (string.IsNullOrWhiteSpace(_currentMap))
+            return null;
+
+        if (!_configProvider.TryGet(_currentMap, out var config) || config.Levels.Count == 0)
+            return null;
+
+        RadarLevel? lowest = null;
+        foreach (var point in parsed.Points)
+        {
+            var level = ResolveLevel(config, point.Position.Z);
+            if (level == null)
+                continue;
+
+            if (lowest == null || level.AltitudeMin < lowest.AltitudeMin)
+            {
+                lowest = level;
+            }
+        }
+
+        return lowest?.Name;
+    }
+
+    private static RadarLevel? ResolveLevel(RadarConfig config, double altitude)
+    {
+        foreach (var level in config.Levels)
+        {
+            if (altitude > level.AltitudeMin)
+            {
+                return level;
+            }
+        }
+
+        return null;
     }
 
     private static Vec3 CatmullRom(in Vec3 p0, in Vec3 p1, in Vec3 p2, in Vec3 p3, double t)

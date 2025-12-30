@@ -17,7 +17,16 @@ public sealed class RadarConfig
     public double Scale { get; init; }
     public bool TransparentBackground { get; init; }
     public string? ImagePath { get; init; }
-    public IReadOnlyList<(string Name, double AltitudeMin)> Levels { get; init; } = Array.Empty<(string, double)>();
+    public IReadOnlyList<RadarLevel> Levels { get; init; } = Array.Empty<RadarLevel>();
+}
+
+public sealed class RadarLevel
+{
+    public string Name { get; init; } = "default";
+    public double AltitudeMin { get; init; }
+    public double AltitudeMax { get; init; }
+    public double OffsetX { get; init; }
+    public double OffsetY { get; init; }
 }
 
 /// <summary>
@@ -63,15 +72,25 @@ public sealed class RadarConfigProvider
                 var transparent = obj.TryGetProperty("radarImageTransparentBackgrond", out var tb) && tb.GetBoolean();
                 string? imageUrl = obj.TryGetProperty("radarImageUrl", out var ru) ? ru.GetString() : null;
 
-                var levels = new List<(string, double)>();
+                var levels = new List<RadarLevel>();
                 if (obj.TryGetProperty("verticalsections", out var vsElem))
                 {
                     foreach (var level in vsElem.EnumerateObject())
                     {
-                        if (level.Value.TryGetProperty("AltitudeMin", out var altMin))
+                        var levelObj = level.Value;
+                        var altMin = levelObj.TryGetProperty("AltitudeMin", out var altMinProp) ? GetDouble(altMinProp) : 0;
+                        var altMax = levelObj.TryGetProperty("AltitudeMax", out var altMaxProp) ? GetDouble(altMaxProp) : 0;
+                        var offsetX = levelObj.TryGetProperty("OffsetX", out var offsetXProp) ? GetDouble(offsetXProp) : 0;
+                        var offsetY = levelObj.TryGetProperty("OffsetY", out var offsetYProp) ? GetDouble(offsetYProp) : 0;
+
+                        levels.Add(new RadarLevel
                         {
-                            levels.Add((level.Name, GetDouble(altMin)));
-                        }
+                            Name = level.Name,
+                            AltitudeMin = altMin,
+                            AltitudeMax = altMax,
+                            OffsetX = offsetX,
+                            OffsetY = offsetY
+                        });
                     }
                 }
 
@@ -83,7 +102,7 @@ public sealed class RadarConfigProvider
                     Scale = scale,
                     TransparentBackground = transparent,
                     ImagePath = imageUrl,
-                    Levels = levels.OrderByDescending(l => l.Item2).ToList()
+                    Levels = levels.OrderByDescending(l => l.AltitudeMin).ToList()
                 };
             }
         }
