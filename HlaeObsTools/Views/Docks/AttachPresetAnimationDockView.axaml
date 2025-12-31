@@ -2,10 +2,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HlaeObsTools.ViewModels.Docks"
              xmlns:local="using:HlaeObsTools.ViewModels"
+             xmlns:conv="using:HlaeObsTools.Converters"
              x:Class="HlaeObsTools.Views.Docks.AttachPresetAnimationDockView"
              x:DataType="vm:AttachPresetAnimationDockViewModel">
 
     <UserControl.Resources>
+        <conv:DoubleTextConverter x:Key="Double0" DefaultValue="0" />
+        <conv:NullableDoubleTextConverter x:Key="NullableDouble" />
         <DataTemplate x:Key="EventTemplate" x:DataType="local:AttachPresetAnimationEventViewModel">
             <Border BorderBrush="#333" BorderThickness="1" Padding="8" Margin="0,0,0,8">
                 <StackPanel Spacing="8">
@@ -13,7 +16,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock Text="Time" Foreground="#AAAAAA" VerticalAlignment="Center"/>
                             <TextBox Width="90"
-                                     Text="{Binding Time, Mode=TwoWay}"
+                                     Text="{Binding Time, Mode=TwoWay, Converter={StaticResource Double0}}"
                                      IsEnabled="{Binding !IsBaseKeyframe}"/>
                         </StackPanel>
 
@@ -44,22 +47,22 @@
                         <TextBlock Text="Δ Position (camera space)"
                                    Foreground="#CCCCCC"/>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBox Width="80" Watermark="X" Text="{Binding DeltaPosX, Mode=TwoWay, TargetNullValue=''}" />
-                            <TextBox Width="80" Watermark="Y" Text="{Binding DeltaPosY, Mode=TwoWay, TargetNullValue=''}" />
-                            <TextBox Width="80" Watermark="Z" Text="{Binding DeltaPosZ, Mode=TwoWay, TargetNullValue=''}" />
+                            <TextBox Width="80" Watermark="X" Text="{Binding DeltaPosX, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
+                            <TextBox Width="80" Watermark="Y" Text="{Binding DeltaPosY, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
+                            <TextBox Width="80" Watermark="Z" Text="{Binding DeltaPosZ, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
                         </StackPanel>
 
                         <TextBlock Text="Δ Rotation (deg)"
                                    Foreground="#CCCCCC"/>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBox Width="80" Watermark="Pitch" Text="{Binding DeltaPitch, Mode=TwoWay, TargetNullValue=''}" />
-                            <TextBox Width="80" Watermark="Yaw" Text="{Binding DeltaYaw, Mode=TwoWay, TargetNullValue=''}" />
-                            <TextBox Width="80" Watermark="Roll" Text="{Binding DeltaRoll, Mode=TwoWay, TargetNullValue=''}" />
+                            <TextBox Width="80" Watermark="Pitch" Text="{Binding DeltaPitch, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
+                            <TextBox Width="80" Watermark="Yaw" Text="{Binding DeltaYaw, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
+                            <TextBox Width="80" Watermark="Roll" Text="{Binding DeltaRoll, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
                         </StackPanel>
 
                         <TextBlock Text="FOV (absolute)"
                                    Foreground="#CCCCCC"/>
-                        <TextBox Width="100" Watermark="(base)" Text="{Binding Fov, Mode=TwoWay, TargetNullValue=''}" />
+                        <TextBox Width="100" Watermark="(base)" Text="{Binding Fov, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
                     </StackPanel>
 
                     <TextBlock IsVisible="{Binding IsTransition}"

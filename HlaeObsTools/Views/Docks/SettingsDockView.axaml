@@ -1,8 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HlaeObsTools.ViewModels.Docks"
+             xmlns:conv="using:HlaeObsTools.Converters"
              x:Class="HlaeObsTools.Views.Docks.SettingsDockView"
              x:DataType="vm:SettingsDockViewModel">
+    <UserControl.Resources>
+        <conv:NullableDoubleTextConverter x:Key="NullableDouble" />
+    </UserControl.Resources>
     <Border Background="#1E1E1E" Padding="10" Focusable="True">
         <TabControl>
 
@@ -250,20 +254,20 @@
 
                                                     <TextBlock Text="Position Offset" Foreground="#AAAAAA" FontSize="12"/>
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                                        <TextBox Width="80" Watermark="X" Text="{Binding OffsetPosX, Mode=TwoWay}" />
-                                                        <TextBox Width="80" Watermark="Y" Text="{Binding OffsetPosY, Mode=TwoWay}" />
-                                                        <TextBox Width="80" Watermark="Z" Text="{Binding OffsetPosZ, Mode=TwoWay}" />
+                                                        <TextBox Width="80" Watermark="X" Text="{Binding OffsetPosX, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
+                                                        <TextBox Width="80" Watermark="Y" Text="{Binding OffsetPosY, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
+                                                        <TextBox Width="80" Watermark="Z" Text="{Binding OffsetPosZ, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
                                                     </StackPanel>
 
                                                     <TextBlock Text="Rotation Offset (deg)" Foreground="#AAAAAA" FontSize="12"/>
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                                        <TextBox Width="80" Watermark="Pitch" Text="{Binding OffsetPitch, Mode=TwoWay}" />
-                                                        <TextBox Width="80" Watermark="Yaw" Text="{Binding OffsetYaw, Mode=TwoWay}" />
-                                                        <TextBox Width="80" Watermark="Roll" Text="{Binding OffsetRoll, Mode=TwoWay}" />
+                                                        <TextBox Width="80" Watermark="Pitch" Text="{Binding OffsetPitch, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
+                                                        <TextBox Width="80" Watermark="Yaw" Text="{Binding OffsetYaw, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
+                                                        <TextBox Width="80" Watermark="Roll" Text="{Binding OffsetRoll, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
                                                     </StackPanel>
 
                                                     <TextBlock Text="FOV" Foreground="#AAAAAA" FontSize="12"/>
-                                                    <TextBox Width="100" Watermark="90" HorizontalAlignment="Left" Text="{Binding Fov, Mode=TwoWay}" />
+                                                    <TextBox Width="100" Watermark="90" HorizontalAlignment="Left" Text="{Binding Fov, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>

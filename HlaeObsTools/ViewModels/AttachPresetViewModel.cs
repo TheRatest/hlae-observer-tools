@@ -18,13 +18,13 @@ public sealed class AttachPresetViewModel : ViewModelBase
     };
     private string _title;
     private string _attachmentName = string.Empty;
-    private double _offsetPosX;
-    private double _offsetPosY;
-    private double _offsetPosZ;
-    private double _offsetPitch;
-    private double _offsetYaw;
-    private double _offsetRoll;
-    private double _fov = 90.0;
+    private double? _offsetPosX;
+    private double? _offsetPosY;
+    private double? _offsetPosZ;
+    private double? _offsetPitch;
+    private double? _offsetYaw;
+    private double? _offsetRoll;
+    private double? _fov;
     private bool _animationEnabled;
     private readonly ObservableCollection<AttachPresetAnimationEventViewModel> _animationEvents = new();
     public IReadOnlyList<string> AttachmentOptions { get; } = DefaultAttachmentOptions;
@@ -52,43 +52,43 @@ public sealed class AttachPresetViewModel : ViewModelBase
         set => SetProperty(ref _attachmentName, value);
     }
 
-    public double OffsetPosX
+    public double? OffsetPosX
     {
         get => _offsetPosX;
         set => SetProperty(ref _offsetPosX, value);
     }
 
-    public double OffsetPosY
+    public double? OffsetPosY
     {
         get => _offsetPosY;
         set => SetProperty(ref _offsetPosY, value);
     }
 
-    public double OffsetPosZ
+    public double? OffsetPosZ
     {
         get => _offsetPosZ;
         set => SetProperty(ref _offsetPosZ, value);
     }
 
-    public double OffsetPitch
+    public double? OffsetPitch
     {
         get => _offsetPitch;
         set => SetProperty(ref _offsetPitch, value);
     }
 
-    public double OffsetYaw
+    public double? OffsetYaw
     {
         get => _offsetYaw;
         set => SetProperty(ref _offsetYaw, value);
     }
 
-    public double OffsetRoll
+    public double? OffsetRoll
     {
         get => _offsetRoll;
         set => SetProperty(ref _offsetRoll, value);
     }
 
-    public double Fov
+    public double? Fov
     {
         get => _fov;
         set => SetProperty(ref _fov, value);
@@ -118,13 +118,13 @@ public sealed class AttachPresetViewModel : ViewModelBase
     public void LoadFrom(HudSettings.AttachmentPreset preset)
     {
         AttachmentName = preset.AttachmentName;
-        OffsetPosX = preset.OffsetPosX;
-        OffsetPosY = preset.OffsetPosY;
-        OffsetPosZ = preset.OffsetPosZ;
-        OffsetPitch = preset.OffsetPitch;
-        OffsetYaw = preset.OffsetYaw;
-        OffsetRoll = preset.OffsetRoll;
-        Fov = preset.Fov;
+        OffsetPosX = preset.OffsetPosX == 0.0 ? null : preset.OffsetPosX;
+        OffsetPosY = preset.OffsetPosY == 0.0 ? null : preset.OffsetPosY;
+        OffsetPosZ = preset.OffsetPosZ == 0.0 ? null : preset.OffsetPosZ;
+        OffsetPitch = preset.OffsetPitch == 0.0 ? null : preset.OffsetPitch;
+        OffsetYaw = preset.OffsetYaw == 0.0 ? null : preset.OffsetYaw;
+        OffsetRoll = preset.OffsetRoll == 0.0 ? null : preset.OffsetRoll;
+        Fov = preset.Fov == 90.0 ? null : preset.Fov;
 
         LoadAnimationFrom(preset.Animation);
     }
@@ -134,13 +134,13 @@ public sealed class AttachPresetViewModel : ViewModelBase
         return new HudSettings.AttachmentPreset
         {
             AttachmentName = AttachmentName ?? string.Empty,
-            OffsetPosX = OffsetPosX,
-            OffsetPosY = OffsetPosY,
-            OffsetPosZ = OffsetPosZ,
-            OffsetPitch = OffsetPitch,
-            OffsetYaw = OffsetYaw,
-            OffsetRoll = OffsetRoll,
-            Fov = Fov,
+            OffsetPosX = OffsetPosX ?? 0.0,
+            OffsetPosY = OffsetPosY ?? 0.0,
+            OffsetPosZ = OffsetPosZ ?? 0.0,
+            OffsetPitch = OffsetPitch ?? 0.0,
+            OffsetYaw = OffsetYaw ?? 0.0,
+            OffsetRoll = OffsetRoll ?? 0.0,
+            Fov = Fov ?? 90.0,
             Animation = ToAnimationModel()
         };
     }
