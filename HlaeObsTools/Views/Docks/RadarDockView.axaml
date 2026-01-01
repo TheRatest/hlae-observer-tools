@@ -275,49 +275,34 @@
                   <!-- Dropped bomb icon (red) -->
                   <Border Width="24"
                           Height="24"
-                          Background="#FF5353"
+                          Background="Transparent"
                           IsVisible="{Binding IsDropped}">
-                    <Border.OpacityMask>
-                      <VisualBrush Stretch="Uniform">
-                        <VisualBrush.Visual>
-                          <svg:Svg Path="avares://HlaeObsTools/Assets/hud/icons/radar/dropped-bomb.svg"
-                                   Width="24"
-                                   Height="24" />
-                        </VisualBrush.Visual>
-                      </VisualBrush>
-                    </Border.OpacityMask>
+                    <svg:Svg  Path="avares://HlaeObsTools/Assets/hud/icons/radar/dropped-bomb.svg"
+                              Css="path { fill: #FF5353; }"
+                              Width="24"
+                              Height="24" />
                   </Border>
 
                   <!-- Planted/Defusing bomb icon (red) -->
                   <Border Width="24"
                           Height="24"
-                          Background="#FF5353"
+                          Background="Transparent"
                           IsVisible="{Binding IsPlanted}">
-                    <Border.OpacityMask>
-                      <VisualBrush Stretch="Uniform">
-                        <VisualBrush.Visual>
-                          <svg:Svg Path="avares://HlaeObsTools/Assets/hud/icons/radar/planted-bomb.svg"
-                                   Width="24"
-                                   Height="24" />
-                        </VisualBrush.Visual>
-                      </VisualBrush>
-                    </Border.OpacityMask>
+                    <svg:Svg  Path="avares://HlaeObsTools/Assets/hud/icons/radar/planted-bomb.svg"
+                              Css="path { fill: #FF5353; }"
+                              Width="24"
+                              Height="24" />
                   </Border>
 
                   <!-- Defused bomb icon (green) -->
                   <Border Width="24"
                           Height="24"
-                          Background="#5FD35F"
+                          Background="Transparent"
                           IsVisible="{Binding IsDefused}">
-                    <Border.OpacityMask>
-                      <VisualBrush Stretch="Uniform">
-                        <VisualBrush.Visual>
-                          <svg:Svg Path="avares://HlaeObsTools/Assets/hud/icons/radar/planted-bomb.svg"
-                                   Width="24"
-                                   Height="24" />
-                        </VisualBrush.Visual>
-                      </VisualBrush>
-                    </Border.OpacityMask>
+                    <svg:Svg  Path="avares://HlaeObsTools/Assets/hud/icons/radar/planted-bomb.svg"
+                              Css="path { fill: #5FD35F; }"
+                              Width="24"
+                              Height="24" />
                   </Border>
                 </Canvas>
               </DataTemplate>
@@ -371,19 +356,14 @@
                   <Border x:Name="GrenadeIconMask"
                           Width="14"
                           Height="14"
-                          Canvas.Left="16"
+                          Canvas.Left="20"
                           Canvas.Top="14"
-                          Background="#FFD04A"
+                          Background="Transparent"
                           IsVisible="{Binding HasActiveGrenadeIcon}">
-                    <Border.OpacityMask>
-                      <VisualBrush Stretch="Uniform">
-                        <VisualBrush.Visual>
-                          <svg:Svg Path="{Binding DataContext.ActiveGrenadeIconPath, ElementName=GrenadeIconMask}"
-                                   Width="14"
-                                   Height="14" />
-                        </VisualBrush.Visual>
-                      </VisualBrush>
-                    </Border.OpacityMask>
+                    <svg:Svg Path="{Binding DataContext.ActiveGrenadeIconPath, ElementName=GrenadeIconMask}"
+                              Css="path { fill: rgba(255, 255, 0, 1); }"
+                              Width="14"
+                              Height="14" />
                   </Border>
                 </Canvas>
               </DataTemplate>
