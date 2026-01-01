@@ -37,6 +37,8 @@ public sealed class RadarPlayerViewModel : ViewModelBase
     private DateTime _shootingExpiryTime;
     private bool _useAltBindings;
     private string? _activeGrenadeIconPath;
+    private IBrush _fill;
+    private IBrush _border;
     private static readonly string[] AltBindLabels = { "Q", "E", "R", "T", "Z" };
 
     public RadarPlayerViewModel(string id, string name, string team, int slot, IBrush fill, IBrush border)
@@ -45,16 +47,25 @@ public sealed class RadarPlayerViewModel : ViewModelBase
         Name = name;
         Team = team;
         Slot = slot;
-        Fill = fill;
-        Border = border;
+        _fill = fill;
+        _border = border;
     }
 
     public string Id { get; }
     public string Name { get; }
     public string Team { get; }
     public int Slot { get; }
-    public IBrush Fill { get; }
-    public IBrush Border { get; }
+    public IBrush Fill
+    {
+        get => _fill;
+        set => SetProperty(ref _fill, value);
+    }
+
+    public IBrush Border
+    {
+        get => _border;
+        set => SetProperty(ref _border, value);
+    }
     public double Altitude { get; set; }
 
     /// <summary>
@@ -456,6 +467,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
     private readonly RadarProjector _projector;
     private readonly Dictionary<int, SmokeTracker> _smokeTrackers = new();
     private readonly Dictionary<string, PlayerWeaponState> _playerWeaponStates = new();
+    private readonly Dictionary<string, RadarPlayerViewModel> _playerMarkers = new();
     private readonly Dictionary<string, RadarDeadPlayerViewModel> _deadPlayerMarkers = new();
     private readonly Dictionary<string, Vec3> _lastAlivePositions = new();
     private readonly Dictionary<string, int> _playerHeightBuckets = new();
@@ -556,10 +568,12 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         {
             HasRadar = false;
             Players.Clear();
+            _playerMarkers.Clear();
             DeadPlayers.Clear();
             CampathPaths.Clear();
             _deadPlayerMarkers.Clear();
             _lastAlivePositions.Clear();
+            _playerHeightBuckets.Clear();
             return;
         }
 
@@ -567,11 +581,12 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         var aliveColorCt = new SolidColorBrush(Color.Parse("#4DB3FF"));
         var border = new SolidColorBrush(Color.Parse("#0D1015"));
         var bombColor = new SolidColorBrush(Color.Parse("#FF5353"));
-        Players.Clear();
         var pendingPlayers = new List<(RadarPlayerViewModel Vm, int HeightBucket)>();
 
         if (mapChanged)
         {
+            Players.Clear();
+            _playerMarkers.Clear();
             DeadPlayers.Clear();
             _deadPlayerMarkers.Clear();
             _lastAlivePositions.Clear();
@@ -599,6 +614,17 @@ public sealed class RadarDockViewModel : Tool, IDisposable
             _lastAlivePositions.Remove(key);
         }
 
+        var aliveIds = new HashSet<string>(state.Players.Where(p => p.IsAlive).Select(p => p.SteamId));
+        var playerKeysToRemove = _playerMarkers.Keys
+            .Where(id => !currentPlayerIds.Contains(id) || !aliveIds.Contains(id))
+            .ToList();
+        foreach (var key in playerKeysToRemove)
+        {
+            Players.Remove(_playerMarkers[key]);
+            _playerMarkers.Remove(key);
+            _playerHeightBuckets.Remove(key);
+        }
+
         foreach (var p in state.Players)
         {
             if (p.IsAlive)
@@ -620,21 +646,26 @@ public sealed class RadarDockViewModel : Tool, IDisposable
                     w.State.Equals("active", StringComparison.OrdinalIgnoreCase));
                 var activeGrenadeIcon = GetActiveGrenadeIconPath(p.Weapons);
 
-                var vm = new RadarPlayerViewModel(p.SteamId, p.Name, p.Team, p.Slot, brush, border)
+                if (!_playerMarkers.TryGetValue(p.SteamId, out var vm))
                 {
-                    RelativeX = x,
-                    RelativeY = y,
-                    CanvasX = x * 1024.0 - 18.0, // center the 36px marker on the projected point
-                    CanvasY = y * 1024.0 - 22.0,
-                    Rotation = NormalizeDegrees(Math.Atan2(p.Forward.X, p.Forward.Y) * 180.0 / Math.PI),
-                    IsAlive = p.IsAlive,
-                    HasBomb = p.HasBomb,
-                    IsFocused = p.SteamId == state.FocusedPlayerSteamId,
-                    Level = level,
-                    UseAltBindings = _settings.UseAltPlayerBinds,
-                    ActiveGrenadeIconPath = activeGrenadeIcon,
-                    Altitude = p.Position.Z
-                };
+                    vm = new RadarPlayerViewModel(p.SteamId, p.Name, p.Team, p.Slot, brush, border);
+                    _playerMarkers[p.SteamId] = vm;
+                }
+
+                vm.Fill = brush;
+                vm.Border = border;
+                vm.RelativeX = x;
+                vm.RelativeY = y;
+                vm.CanvasX = x * 1024.0 - 18.0; // center the 36px marker on the projected point
+                vm.CanvasY = y * 1024.0 - 22.0;
+                vm.Rotation = NormalizeDegrees(Math.Atan2(p.Forward.X, p.Forward.Y) * 180.0 / Math.PI);
+                vm.IsAlive = p.IsAlive;
+                vm.HasBomb = p.HasBomb;
+                vm.IsFocused = p.SteamId == state.FocusedPlayerSteamId;
+                vm.Level = level;
+                vm.UseAltBindings = _settings.UseAltPlayerBinds;
+                vm.ActiveGrenadeIconPath = activeGrenadeIcon;
+                vm.Altitude = p.Position.Z;
                 vm.SetHeightScale(ResolveHeightScale(state.MapName, p.Position.Z, level));
                 vm.SetBaseScale(_settings.MarkerScale);
 
@@ -712,10 +743,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
                 .Select(p => p.Vm)
                 .ToList();
 
-            foreach (var player in orderedPlayers)
-            {
-                Players.Add(player);
-            }
+            SyncPlayers(Players, orderedPlayers);
         }
 
         // Process grenades
@@ -1383,6 +1411,43 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         var baseScale = HeightScaleMin + t * (HeightScaleMax - HeightScaleMin);
         var multiplier = _settings.HeightScaleMultiplier;
         return 1.0 + (baseScale - 1.0) * multiplier;
+    }
+
+    private static void SyncPlayers(ObservableCollection<RadarPlayerViewModel> target, IReadOnlyList<RadarPlayerViewModel> ordered)
+    {
+        if (ordered.Count == 0)
+        {
+            target.Clear();
+            return;
+        }
+
+        var orderedSet = new HashSet<RadarPlayerViewModel>(ordered);
+        for (int i = target.Count - 1; i >= 0; i--)
+        {
+            if (!orderedSet.Contains(target[i]))
+            {
+                target.RemoveAt(i);
+            }
+        }
+
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            var desired = ordered[i];
+            if (i < target.Count && ReferenceEquals(target[i], desired))
+            {
+                continue;
+            }
+
+            var existingIndex = target.IndexOf(desired);
+            if (existingIndex >= 0)
+            {
+                target.Move(existingIndex, i);
+            }
+            else
+            {
+                target.Insert(i, desired);
+            }
+        }
     }
 
 
