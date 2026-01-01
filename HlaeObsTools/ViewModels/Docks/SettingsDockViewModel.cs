@@ -607,6 +607,7 @@ namespace HlaeObsTools.ViewModels.Docks
             {
                 AttachPresets = _hudSettings.ToAttachPresetData().ToList(),
                 MarkerScale = _radarSettings.MarkerScale,
+                HeightScaleMultiplier = _radarSettings.HeightScaleMultiplier,
                 UseAltPlayerBinds = _useAltPlayerBinds,
                 WebSocketHost = WebSocketHost,
                 WebSocketPort = WebSocketPort,
@@ -1263,6 +1264,22 @@ namespace HlaeObsTools.ViewModels.Docks
                 {
                     _freecamSettings.AnalogCurve = value;
                     OnPropertyChanged();
+                }
+            }
+        }
+
+        public double HeightScaleMultiplier
+        {
+            get => _radarSettings.HeightScaleMultiplier;
+            set
+            {
+                if (value < 0.0) value = 0.0;
+                if (value > 2.0) value = 2.0;
+                if (Math.Abs(_radarSettings.HeightScaleMultiplier - value) > 0.0001)
+                {
+                    _radarSettings.HeightScaleMultiplier = value;
+                    OnPropertyChanged();
+                    SaveSettings();
                 }
             }
         }

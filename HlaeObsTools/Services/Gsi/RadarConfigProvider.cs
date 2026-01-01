@@ -17,6 +17,8 @@ public sealed class RadarConfig
     public double Scale { get; init; }
     public bool TransparentBackground { get; init; }
     public string? ImagePath { get; init; }
+    public double? ScaleMinAltitude { get; init; }
+    public double? ScaleMaxAltitude { get; init; }
     public IReadOnlyList<RadarLevel> Levels { get; init; } = Array.Empty<RadarLevel>();
 }
 
@@ -27,6 +29,8 @@ public sealed class RadarLevel
     public double AltitudeMax { get; init; }
     public double OffsetX { get; init; }
     public double OffsetY { get; init; }
+    public double? ScaleMinAltitude { get; init; }
+    public double? ScaleMaxAltitude { get; init; }
 }
 
 /// <summary>
@@ -71,6 +75,8 @@ public sealed class RadarConfigProvider
                 var scale = obj.TryGetProperty("scale", out var sc) ? GetDouble(sc) : 1;
                 var transparent = obj.TryGetProperty("radarImageTransparentBackgrond", out var tb) && tb.GetBoolean();
                 string? imageUrl = obj.TryGetProperty("radarImageUrl", out var ru) ? ru.GetString() : null;
+                var scaleMinAltitude = GetNullableDouble(obj, "ScaleMinAltitude", "ScaleAltitudeMin");
+                var scaleMaxAltitude = GetNullableDouble(obj, "ScaleMaxAltitude", "ScaleAltitudeMax");
 
                 var levels = new List<RadarLevel>();
                 if (obj.TryGetProperty("verticalsections", out var vsElem))
@@ -82,6 +88,8 @@ public sealed class RadarConfigProvider
                         var altMax = levelObj.TryGetProperty("AltitudeMax", out var altMaxProp) ? GetDouble(altMaxProp) : 0;
                         var offsetX = levelObj.TryGetProperty("OffsetX", out var offsetXProp) ? GetDouble(offsetXProp) : 0;
                         var offsetY = levelObj.TryGetProperty("OffsetY", out var offsetYProp) ? GetDouble(offsetYProp) : 0;
+                        var levelScaleMin = GetNullableDouble(levelObj, "ScaleMinAltitude", "ScaleAltitudeMin");
+                        var levelScaleMax = GetNullableDouble(levelObj, "ScaleMaxAltitude", "ScaleAltitudeMax");
 
                         levels.Add(new RadarLevel
                         {
@@ -89,7 +97,9 @@ public sealed class RadarConfigProvider
                             AltitudeMin = altMin,
                             AltitudeMax = altMax,
                             OffsetX = offsetX,
-                            OffsetY = offsetY
+                            OffsetY = offsetY,
+                            ScaleMinAltitude = levelScaleMin,
+                            ScaleMaxAltitude = levelScaleMax
                         });
                     }
                 }
@@ -102,6 +112,8 @@ public sealed class RadarConfigProvider
                     Scale = scale,
                     TransparentBackground = transparent,
                     ImagePath = imageUrl,
+                    ScaleMinAltitude = scaleMinAltitude,
+                    ScaleMaxAltitude = scaleMaxAltitude,
                     Levels = levels.OrderByDescending(l => l.AltitudeMin).ToList()
                 };
             }
@@ -132,5 +144,18 @@ public sealed class RadarConfigProvider
         {
             return 0d;
         }
+    }
+
+    private static double? GetNullableDouble(JsonElement obj, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (obj.TryGetProperty(name, out var prop))
+            {
+                return GetDouble(prop);
+            }
+        }
+
+        return null;
     }
 }

@@ -130,6 +130,23 @@
                     <TextBlock Text="Adjusts player marker size on the radar."
                                Foreground="#888888"
                                FontSize="12"/>
+                    <TextBlock Text="Height scale strength"
+                               Foreground="#CCCCCC"
+                               FontWeight="SemiBold"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Slider Minimum="0"
+                                Maximum="2"
+                                SmallChange="0.05"
+                                LargeChange="0.25"
+                                Width="200"
+                                Value="{Binding HeightScaleMultiplier, Mode=TwoWay}"/>
+                        <TextBlock Text="{Binding HeightScaleMultiplier, StringFormat={}{0:F2}}"
+                                   Width="50"
+                                   Foreground="#E6E6E6"/>
+                    </StackPanel>
+                    <TextBlock Text="Controls how strongly height affects marker scale."
+                               Foreground="#888888"
+                               FontSize="12"/>
                 </StackPanel>
             </TabItem>
 

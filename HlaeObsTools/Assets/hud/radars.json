@@ -111,12 +111,16 @@
 		"verticalsections": {
 			"default": {
 				"AltitudeMax": 10000,
-				"AltitudeMin": -495
+				"AltitudeMin": -495,
+				"ScaleAltitudeMax": 0,
+				"ScaleAltitudeMin": -495
 			},
 
 			"lower": {
 				"AltitudeMax": -495,
 				"AltitudeMin": -10000,
+				"ScaleAltitudeMax": -495,
+				"ScaleAltitudeMin": -800,
 				"OffsetX": -350,
 				"OffsetY": -300
 			}

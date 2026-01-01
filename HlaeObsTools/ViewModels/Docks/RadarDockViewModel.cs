@@ -20,6 +20,7 @@ namespace HlaeObsTools.ViewModels.Docks;
 
 public sealed class RadarPlayerViewModel : ViewModelBase
 {
+    private const double MarkerWidth = 36.0;
     private double _relativeX;
     private double _relativeY;
     private double _rotation;
@@ -30,6 +31,8 @@ public sealed class RadarPlayerViewModel : ViewModelBase
     private double _canvasX;
     private double _canvasY;
     private double _markerScale = 1.0;
+    private double _baseScale = 1.0;
+    private double _heightScale = 1.0;
     private bool _isShooting;
     private DateTime _shootingExpiryTime;
     private bool _useAltBindings;
@@ -52,6 +55,7 @@ public sealed class RadarPlayerViewModel : ViewModelBase
     public int Slot { get; }
     public IBrush Fill { get; }
     public IBrush Border { get; }
+    public double Altitude { get; set; }
 
     /// <summary>
     /// Gets the display number for the hotkey binding.
@@ -206,10 +210,27 @@ public sealed class RadarPlayerViewModel : ViewModelBase
 
     public bool HasActiveGrenadeIcon => !string.IsNullOrWhiteSpace(ActiveGrenadeIconPath);
 
+    public void SetBaseScale(double scale)
+    {
+        if (Math.Abs(_baseScale - scale) < 0.0001)
+            return;
+
+        _baseScale = scale;
+        UpdateMarkerScale();
+    }
+
+    public void SetHeightScale(double scale)
+    {
+        if (Math.Abs(_heightScale - scale) < 0.0001)
+            return;
+
+        _heightScale = scale;
+        UpdateMarkerScale();
+    }
 
     public void SetMarkerScale(double scale)
     {
-        MarkerScale = scale;
+        SetBaseScale(scale);
     }
 
     public void TriggerShootingFlash(int durationMs = 100)
@@ -225,6 +246,11 @@ public sealed class RadarPlayerViewModel : ViewModelBase
             IsShooting = false;
         }
     }
+
+    private void UpdateMarkerScale()
+    {
+        MarkerScale = _baseScale * _heightScale;
+    }
 }
 
 public sealed class RadarDeadPlayerViewModel : ViewModelBase
@@ -232,6 +258,8 @@ public sealed class RadarDeadPlayerViewModel : ViewModelBase
     private double _canvasX;
     private double _canvasY;
     private double _markerScale = 1.0;
+    private double _baseScale = 1.0;
+    private double _heightScale = 1.0;
 
     public RadarDeadPlayerViewModel(string id, string team, IBrush stroke)
     {
@@ -243,6 +271,7 @@ public sealed class RadarDeadPlayerViewModel : ViewModelBase
     public string Id { get; }
     public string Team { get; }
     public IBrush Stroke { get; }
+    public double Altitude { get; set; }
 
     public double CanvasX
     {
@@ -284,9 +313,32 @@ public sealed class RadarDeadPlayerViewModel : ViewModelBase
     public double ScaledCanvasX => CanvasX - 6.0 * (MarkerScale - 1.0);
     public double ScaledCanvasY => CanvasY - 6.0 * (MarkerScale - 1.0);
 
+    public void SetBaseScale(double scale)
+    {
+        if (Math.Abs(_baseScale - scale) < 0.0001)
+            return;
+
+        _baseScale = scale;
+        UpdateMarkerScale();
+    }
+
+    public void SetHeightScale(double scale)
+    {
+        if (Math.Abs(_heightScale - scale) < 0.0001)
+            return;
+
+        _heightScale = scale;
+        UpdateMarkerScale();
+    }
+
     public void SetMarkerScale(double scale)
     {
-        MarkerScale = scale;
+        SetBaseScale(scale);
+    }
+
+    private void UpdateMarkerScale()
+    {
+        MarkerScale = _baseScale * _heightScale;
     }
 }
 
@@ -406,6 +458,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
     private readonly Dictionary<string, PlayerWeaponState> _playerWeaponStates = new();
     private readonly Dictionary<string, RadarDeadPlayerViewModel> _deadPlayerMarkers = new();
     private readonly Dictionary<string, Vec3> _lastAlivePositions = new();
+    private readonly Dictionary<string, int> _playerHeightBuckets = new();
     private readonly CampathsDockViewModel? _campathsVm;
     private readonly HlaeWebSocketClient? _webSocketClient;
     private readonly RadarSettings _settings;
@@ -420,6 +473,10 @@ public sealed class RadarDockViewModel : Tool, IDisposable
     private const double PositionThreshold = 1.0; // Units of movement to consider stationary
     private const int StationaryUpdatesRequired = 2; // Number of updates smoke must be stationary to be detonated
     private const double SmokeDurationSeconds = 20.0;
+    private const double HeightScaleMin = 0.85;
+    private const double HeightScaleMax = 1.15;
+    private const double HeightBucketSize = 64.0;
+    private const double HeightBucketHysteresisRatio = 0.6;
 
     public ObservableCollection<RadarPlayerViewModel> Players { get; } = new();
     public ObservableCollection<RadarDeadPlayerViewModel> DeadPlayers { get; } = new();
@@ -511,12 +568,14 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         var border = new SolidColorBrush(Color.Parse("#0D1015"));
         var bombColor = new SolidColorBrush(Color.Parse("#FF5353"));
         Players.Clear();
+        var pendingPlayers = new List<(RadarPlayerViewModel Vm, int HeightBucket)>();
 
         if (mapChanged)
         {
             DeadPlayers.Clear();
             _deadPlayerMarkers.Clear();
             _lastAlivePositions.Clear();
+            _playerHeightBuckets.Clear();
         }
 
         // Clean up weapon states for disconnected players
@@ -527,6 +586,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         foreach (var key in stateKeysToRemove)
         {
             _playerWeaponStates.Remove(key);
+            _playerHeightBuckets.Remove(key);
         }
 
         var deadKeysToRemove = _deadPlayerMarkers.Keys
@@ -572,11 +632,14 @@ public sealed class RadarDockViewModel : Tool, IDisposable
                     IsFocused = p.SteamId == state.FocusedPlayerSteamId,
                     Level = level,
                     UseAltBindings = _settings.UseAltPlayerBinds,
-                    ActiveGrenadeIconPath = activeGrenadeIcon
+                    ActiveGrenadeIconPath = activeGrenadeIcon,
+                    Altitude = p.Position.Z
                 };
-                vm.SetMarkerScale(_settings.MarkerScale);
+                vm.SetHeightScale(ResolveHeightScale(state.MapName, p.Position.Z, level));
+                vm.SetBaseScale(_settings.MarkerScale);
 
-                Players.Add(vm);
+                var heightBucket = ResolveHeightBucket(p.SteamId, p.Position.Z);
+                pendingPlayers.Add((vm, heightBucket));
 
                 // Track weapon state and detect shots
                 if (!_playerWeaponStates.TryGetValue(p.SteamId, out var weaponState))
@@ -619,7 +682,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
                 }
 
                 var deathPos = _lastAlivePositions.TryGetValue(p.SteamId, out var lastPos) ? lastPos : p.Position;
-                if (!_projector.TryProject(state.MapName, deathPos, out var x, out var y, out _))
+                if (!_projector.TryProject(state.MapName, deathPos, out var x, out var y, out var deathLevel))
                 {
                     continue;
                 }
@@ -628,12 +691,30 @@ public sealed class RadarDockViewModel : Tool, IDisposable
                 var deadVm = new RadarDeadPlayerViewModel(p.SteamId, p.Team, stroke)
                 {
                     CanvasX = x * 1024.0 - 6.0, // center the 12px cross on the projected point
-                    CanvasY = y * 1024.0 - 6.0
+                    CanvasY = y * 1024.0 - 6.0,
+                    Altitude = deathPos.Z
                 };
-                deadVm.SetMarkerScale(_settings.MarkerScale);
+                deadVm.SetHeightScale(ResolveHeightScale(state.MapName, deathPos.Z, deathLevel));
+                deadVm.SetBaseScale(_settings.MarkerScale);
 
                 _deadPlayerMarkers[p.SteamId] = deadVm;
                 DeadPlayers.Add(deadVm);
+            }
+        }
+
+        if (pendingPlayers.Count > 0)
+        {
+            var orderedPlayers = pendingPlayers
+                .OrderBy(p => p.Vm.IsFocused ? 1 : 0)
+                .ThenBy(p => p.HeightBucket)
+                .ThenBy(p => p.Vm.Slot < 0 ? int.MaxValue : p.Vm.Slot)
+                .ThenBy(p => p.Vm.Id, StringComparer.Ordinal)
+                .Select(p => p.Vm)
+                .ToList();
+
+            foreach (var player in orderedPlayers)
+            {
+                Players.Add(player);
             }
         }
 
@@ -998,11 +1079,11 @@ public sealed class RadarDockViewModel : Tool, IDisposable
             OnPropertyChanged(nameof(MarkerScale));
             foreach (var player in Players)
             {
-                player.SetMarkerScale(_settings.MarkerScale);
+                player.SetBaseScale(_settings.MarkerScale);
             }
             foreach (var dead in DeadPlayers)
             {
-                dead.SetMarkerScale(_settings.MarkerScale);
+                dead.SetBaseScale(_settings.MarkerScale);
             }
         }
         else if (e.PropertyName == nameof(RadarSettings.UseAltPlayerBinds))
@@ -1010,6 +1091,20 @@ public sealed class RadarDockViewModel : Tool, IDisposable
             foreach (var player in Players)
             {
                 player.UseAltBindings = _settings.UseAltPlayerBinds;
+            }
+        }
+        else if (e.PropertyName == nameof(RadarSettings.HeightScaleMultiplier))
+        {
+            if (string.IsNullOrWhiteSpace(_currentMap))
+                return;
+
+            foreach (var player in Players)
+            {
+                player.SetHeightScale(ResolveHeightScale(_currentMap, player.Altitude, player.Level));
+            }
+            foreach (var dead in DeadPlayers)
+            {
+                dead.SetHeightScale(ResolveHeightScale(_currentMap, dead.Altitude, null));
             }
         }
     }
@@ -1234,6 +1329,62 @@ public sealed class RadarDockViewModel : Tool, IDisposable
 
         return null;
     }
+
+    private int ResolveHeightBucket(string playerId, double altitude)
+    {
+        var bucket = (int)Math.Round(altitude / HeightBucketSize, MidpointRounding.AwayFromZero);
+        if (_playerHeightBuckets.TryGetValue(playerId, out var previous))
+        {
+            if (bucket != previous)
+            {
+                var previousCenter = previous * HeightBucketSize;
+                if (Math.Abs(altitude - previousCenter) < HeightBucketSize * HeightBucketHysteresisRatio)
+                {
+                    bucket = previous;
+                }
+            }
+        }
+
+        _playerHeightBuckets[playerId] = bucket;
+        return bucket;
+    }
+
+    private double ResolveHeightScale(string mapName, double altitude, string? levelName)
+    {
+        if (!_configProvider.TryGet(mapName, out var config))
+        {
+            return 1.0;
+        }
+
+        RadarLevel? level = null;
+        if (!string.IsNullOrWhiteSpace(levelName))
+        {
+            level = config.Levels.FirstOrDefault(l =>
+                string.Equals(l.Name, levelName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        level ??= ResolveLevel(config, altitude);
+
+        double? min = level?.ScaleMinAltitude ?? config.ScaleMinAltitude;
+        double? max = level?.ScaleMaxAltitude ?? config.ScaleMaxAltitude;
+
+        if (min == null || max == null)
+        {
+            return 1.0;
+        }
+
+        if (max.Value <= min.Value || Math.Abs(max.Value - min.Value) < 0.0001)
+        {
+            return 1.0;
+        }
+
+        var t = (altitude - min.Value) / (max.Value - min.Value);
+        t = Math.Clamp(t, 0.0, 1.0);
+        var baseScale = HeightScaleMin + t * (HeightScaleMax - HeightScaleMin);
+        var multiplier = _settings.HeightScaleMultiplier;
+        return 1.0 + (baseScale - 1.0) * multiplier;
+    }
+
 
     private static Vec3 CatmullRom(in Vec3 p0, in Vec3 p1, in Vec3 p2, in Vec3 p3, double t)
     {

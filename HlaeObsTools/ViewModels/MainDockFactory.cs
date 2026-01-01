@@ -116,6 +116,7 @@ public class MainDockFactory : Factory, IDisposable
         var radarSettings = new RadarSettings
         {
             MarkerScale = _storedSettings.MarkerScale,
+            HeightScaleMultiplier = _storedSettings.HeightScaleMultiplier,
             UseAltPlayerBinds = _storedSettings.UseAltPlayerBinds
         };
         var hudSettings = new HudSettings

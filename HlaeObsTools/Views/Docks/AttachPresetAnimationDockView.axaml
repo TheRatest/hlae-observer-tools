@@ -62,7 +62,8 @@
 
                         <TextBlock Text="FOV (absolute)"
                                    Foreground="#CCCCCC"/>
-                        <TextBox Width="100" Watermark="(base)" Text="{Binding Fov, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
+                        <TextBox Width="100" Watermark="(base)" Text="{Binding Fov, Mode=TwoWay, Converter={StaticResource NullableDouble}}"
+                                HorizontalAlignment="Left" />
                     </StackPanel>
 
                     <TextBlock IsVisible="{Binding IsTransition}"
