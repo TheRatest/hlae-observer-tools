@@ -24,6 +24,12 @@
                             <ToggleSwitch IsChecked="{Binding IsOnlyDeathnotesEnabled, Mode=TwoWay}"
                                         Content="Only Deathnotices"
                                         Foreground="#E6E6E6"/>
+                            <StackPanel Orientation="Vertical" Spacing="2" Margin="6,0,0,0">
+                                <TextBlock Text="Force Deathnotices"
+                                           Foreground="#E6E6E6"/>
+                                <Button Command="{Binding CycleForceDeathnoticesCommand}"
+                                        Content="{Binding ForceDeathnoticesLabel}"/>
+                            </StackPanel>
                         </StackPanel>
                         <ToggleSwitch IsChecked="{Binding UseAltPlayerBinds, Mode=TwoWay}"
                                       Content="Use alt player binds"
@@ -217,10 +223,12 @@
                     <ToggleSwitch IsChecked="{Binding IsHudEnabled, Mode=TwoWay}"
                                   Content="Enable HUD"
                                   Foreground="#E6E6E6"/>
-                    <TextBlock Text="Shows player cards, scores, and round information overlay."
-                               Foreground="#888888"
-                               FontSize="12"
-                               Margin="0,4,0,0"/>
+                    <ToggleSwitch IsChecked="{Binding ShowKillfeed, Mode=TwoWay}"
+                                  Content="Show killfeed"
+                                  Foreground="#E6E6E6"/>
+                    <ToggleSwitch IsChecked="{Binding ShowKillfeedAttackerSlot, Mode=TwoWay}"
+                                  Content="Show killfeed attacker bind"
+                                  Foreground="#E6E6E6"/>
                 </StackPanel>
             </TabItem>
 

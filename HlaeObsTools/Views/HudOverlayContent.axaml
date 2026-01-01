@@ -147,6 +147,102 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+
+        <DataTemplate x:Key="KillfeedEntryTemplate" x:DataType="hud:HudKillfeedEntryViewModel">
+            <Border Background="#66000000"
+                    BorderBrush="#44FFFFFF"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="6,4"
+                    HorizontalAlignment="Right"
+                    Opacity="{Binding Opacity}">
+                <Border.Transitions>
+                    <Transitions>
+                        <DoubleTransition Property="Opacity" Duration="0:0:0.2" />
+                    </Transitions>
+                </Border.Transitions>
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Border Background="{Binding AttackerBrush}"
+                            CornerRadius="4"
+                            Width="24"
+                            Height="24"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsVisible="{Binding HasAttackerSlot}">
+                        <TextBlock Text="{Binding AttackerSlotLabel}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontWeight="Bold"
+                                   Foreground="#0D1015" />
+                    </Border>
+
+                    <svg:Svg Width="16"
+                             Height="16"
+                             Path="{Binding BlindIconPath}"
+                             IsVisible="{Binding IsBlind}" />
+
+                    <TextBlock Text="{Binding AttackerName}"
+                               Foreground="{Binding AttackerBrush}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding HasAttacker}" />
+
+                    <TextBlock Text="+"
+                               Foreground="#E6E6E6"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding HasAssister}" />
+
+                    <svg:Svg Width="16"
+                             Height="16"
+                             Path="{Binding FlashAssistIconPath}"
+                             IsVisible="{Binding ShowFlashAssist}" />
+
+                    <TextBlock Text="{Binding AssisterName}"
+                               Foreground="{Binding AssisterBrush}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding HasAssister}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                        <svg:Svg Width="16"
+                                 Height="16"
+                                 Path="{Binding InAirIconPath}"
+                                 Margin="0,0,-4,0"
+                                 IsVisible="{Binding IsInAir}" />
+                        <svg:Svg Height="20"
+                                 Stretch="Uniform"
+                                 Path="{Binding WeaponIconPath}"
+                                 IsVisible="{Binding HasWeapon}" />
+                    </StackPanel>
+
+                    <svg:Svg Width="16"
+                             Height="16"
+                             Path="{Binding NoScopeIconPath}"
+                             IsVisible="{Binding IsNoScope}" />
+
+                    <svg:Svg Width="16"
+                             Height="16"
+                             Path="{Binding ThroughSmokeIconPath}"
+                             IsVisible="{Binding IsThroughSmoke}" />
+
+                    <svg:Svg Width="16"
+                             Height="16"
+                             Path="{Binding WallbangIconPath}"
+                             IsVisible="{Binding IsWallbang}" />
+
+                    <svg:Svg Width="16"
+                             Height="16"
+                             Path="{Binding HeadshotIconPath}"
+                             IsVisible="{Binding IsHeadshot}" />
+
+                    <TextBlock Text="{Binding VictimName}"
+                               Foreground="{Binding VictimBrush}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid>
@@ -181,13 +277,13 @@
 
         <!-- Freecam speed scale overlay -->
         <Grid x:Name="SpeedScaleRegion"
-              HorizontalAlignment="Right"
+              HorizontalAlignment="Left"
               VerticalAlignment="Top"
               Margin="16"
               IsHitTestVisible="False"
               ZIndex="15">
             <Canvas x:Name="SpeedScaleCanvas"
-                    HorizontalAlignment="Right"
+                    HorizontalAlignment="Left"
                     VerticalAlignment="Stretch"
                     Margin="0,32,0,32">
                 <Canvas.Effect>
@@ -237,7 +333,7 @@
 
                 <!-- Top bar -->
                 <Border Grid.Row="0"
-                        Grid.ColumnSpan="3"
+                        Grid.Column="1"
                         Background="Transparent"
                         CornerRadius="8"
                         Padding="8,6"
@@ -391,6 +487,24 @@
                                 IsVisible="{Binding HasFocusedHudPlayer}"
                                 Content="{Binding FocusedHudPlayer}"
                                 ContentTemplate="{StaticResource FocusedPlayerCardTemplate}" />
+
+                <!-- Killfeed overlay -->
+                <Canvas Grid.RowSpan="2"
+                        Grid.ColumnSpan="3"
+                        IsHitTestVisible="False"
+                        ZIndex="12">
+                    <ItemsControl ItemsSource="{Binding KillfeedEntries}"
+                                  ItemTemplate="{StaticResource KillfeedEntryTemplate}"
+                                  IsVisible="{Binding ShowKillfeed}"
+                                  Canvas.Right="16"
+                                  Canvas.Top="44">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="6" HorizontalAlignment="Right" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </Canvas>
             </Grid>
         </ac:LayoutTransformControl>
         </Grid>

@@ -701,3 +701,131 @@ public sealed class HudTeamViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasPlayers));
     }
 }
+
+public sealed class HudKillfeedEntryViewModel : ViewModelBase
+{
+    private static readonly string[] AltBindLabels = { "Q", "E", "R", "T", "Z" };
+    private double _opacity = 1.0;
+    private bool _useAltBindings;
+    private bool _showAttackerSlot;
+
+    public HudKillfeedEntryViewModel(
+        int attackerObserverSlot,
+        string attackerName,
+        IBrush attackerBrush,
+        string victimName,
+        IBrush victimBrush,
+        string assisterName,
+        IBrush assisterBrush,
+        string weaponIconPath,
+        bool isBlind,
+        bool isFlashAssist,
+        bool isInAir,
+        bool isNoScope,
+        bool isThroughSmoke,
+        bool isWallbang,
+        bool isHeadshot,
+        bool useAltBindings,
+        bool showAttackerSlot)
+    {
+        AttackerObserverSlot = attackerObserverSlot;
+        AttackerName = attackerName ?? string.Empty;
+        AttackerBrush = attackerBrush;
+        VictimName = victimName ?? string.Empty;
+        VictimBrush = victimBrush;
+        AssisterName = assisterName ?? string.Empty;
+        AssisterBrush = assisterBrush;
+        WeaponIconPath = weaponIconPath ?? string.Empty;
+        IsBlind = isBlind;
+        IsFlashAssist = isFlashAssist;
+        IsInAir = isInAir;
+        IsNoScope = isNoScope;
+        IsThroughSmoke = isThroughSmoke;
+        IsWallbang = isWallbang;
+        IsHeadshot = isHeadshot;
+        UseAltBindings = useAltBindings;
+        _showAttackerSlot = showAttackerSlot;
+        CreatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public DateTimeOffset CreatedAt { get; }
+
+    public int AttackerObserverSlot { get; }
+    public string AttackerName { get; }
+    public IBrush AttackerBrush { get; }
+    public string VictimName { get; }
+    public IBrush VictimBrush { get; }
+    public string AssisterName { get; }
+    public IBrush AssisterBrush { get; }
+    public string WeaponIconPath { get; }
+    public bool IsBlind { get; }
+    public bool IsFlashAssist { get; }
+    public bool IsInAir { get; }
+    public bool IsNoScope { get; }
+    public bool IsThroughSmoke { get; }
+    public bool IsWallbang { get; }
+    public bool IsHeadshot { get; }
+    public bool UseAltBindings
+    {
+        get => _useAltBindings;
+        set
+        {
+            if (SetProperty(ref _useAltBindings, value))
+            {
+                OnPropertyChanged(nameof(AttackerSlotLabel));
+            }
+        }
+    }
+
+    public bool ShowAttackerSlot
+    {
+        get => _showAttackerSlot;
+        set
+        {
+            if (SetProperty(ref _showAttackerSlot, value))
+            {
+                OnPropertyChanged(nameof(HasAttackerSlot));
+            }
+        }
+    }
+
+    public bool HasAttacker => !string.IsNullOrWhiteSpace(AttackerName);
+    public bool HasAttackerSlot => ShowAttackerSlot && HasAttacker && AttackerObserverSlot is >= 0 and <= 9;
+    public bool HasAssister => !string.IsNullOrWhiteSpace(AssisterName);
+    public bool HasWeapon => !string.IsNullOrWhiteSpace(WeaponIconPath);
+    public bool ShowFlashAssist => IsFlashAssist && HasAssister;
+
+    public string BlindIconPath => "avares://HlaeObsTools/Assets/hud/deathnotice/blind_kill.svg";
+    public string FlashAssistIconPath => "avares://HlaeObsTools/Assets/hud/weapons/flashbang_assist.svg";
+    public string InAirIconPath => "avares://HlaeObsTools/Assets/hud/deathnotice/inairkill.svg";
+    public string NoScopeIconPath => "avares://HlaeObsTools/Assets/hud/deathnotice/noscope.svg";
+    public string ThroughSmokeIconPath => "avares://HlaeObsTools/Assets/hud/deathnotice/smoke_kill.svg";
+    public string WallbangIconPath => "avares://HlaeObsTools/Assets/hud/deathnotice/penetrate.svg";
+    public string HeadshotIconPath => "avares://HlaeObsTools/Assets/hud/deathnotice/icon_headshot.svg";
+
+    public string AttackerSlotLabel
+    {
+        get
+        {
+            if (AttackerObserverSlot < 0 || AttackerObserverSlot > 9)
+            {
+                return string.Empty;
+            }
+
+            var slotIndex = AttackerObserverSlot == 0 ? 9 : AttackerObserverSlot - 1;
+
+            if (UseAltBindings && slotIndex >= 5)
+            {
+                return AltBindLabels[slotIndex - 5];
+            }
+
+            return ((slotIndex + 1) % 10).ToString();
+        }
+    }
+
+    public double Opacity
+    {
+        get => _opacity;
+        set => SetProperty(ref _opacity, value);
+    }
+}

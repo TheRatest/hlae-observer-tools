@@ -11,6 +11,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using System.ComponentModel;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 using HlaeObsTools.Services.Gsi;
 using HlaeObsTools.ViewModels.Hud;
@@ -69,6 +70,8 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     private string _mapName = string.Empty;
     private readonly Dictionary<string, HudWeaponViewModel> _weaponCache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HudPlayerCardViewModel> _hudPlayerCache = new(StringComparer.Ordinal);
+    private readonly ObservableCollection<HudKillfeedEntryViewModel> _killfeedEntries = new();
+    private readonly DispatcherTimer _killfeedTimer;
     private HudOverlayWindow? _hudOverlayWindow;
     private bool _isAwaitingAttachTarget;
     private int _pendingAttachSourceObserverSlot;
@@ -94,6 +97,8 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     };
     private const int DefaultPlayerActionCount = 5;
     private const string AttachActionId = "player_action_attach";
+    private const double KillfeedLifetimeSeconds = 8.0;
+    private const double KillfeedFadeSeconds = 1.0;
 
     public ICommand CancelHudPromptCommand { get; }
 
@@ -195,6 +200,12 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         _teamCt.Players.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHudData));
         _teamT.Players.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHudData));
         CancelHudPromptCommand = new Relay(_ => CancelPendingAttachTargetSelection());
+        _killfeedTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(100)
+        };
+        _killfeedTimer.Tick += OnKillfeedTimerTick;
+        _killfeedTimer.Start();
     }
 
     /// <summary>
@@ -246,6 +257,7 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
 
         OnPropertyChanged(nameof(IsHudEnabled));
         OnPropertyChanged(nameof(ShowNativeHud));
+        OnPropertyChanged(nameof(ShowKillfeed));
     }
 
     /// <summary>
@@ -313,6 +325,8 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
 
     public HudTeamViewModel TeamCt => _teamCt;
     public HudTeamViewModel TeamT => _teamT;
+    public ObservableCollection<HudKillfeedEntryViewModel> KillfeedEntries => _killfeedEntries;
+    public bool ShowKillfeed => _hudSettings?.ShowKillfeed ?? true;
 
     public HudPlayerCardViewModel? FocusedHudPlayer
     {
@@ -881,6 +895,16 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
             : new SolidColorBrush(Color.Parse("#FF9B4A"));
     }
 
+    private static SolidColorBrush CreateTeamBrush(int teamId)
+    {
+        return teamId switch
+        {
+            3 => new SolidColorBrush(Color.Parse("#6EB4FF")),
+            2 => new SolidColorBrush(Color.Parse("#FF9B4A")),
+            _ => new SolidColorBrush(Color.Parse("#E6E6E6"))
+        };
+    }
+
     private static SolidColorBrush CreateCardBackground(string team)
     {
         return string.Equals(team, "CT", StringComparison.OrdinalIgnoreCase)
@@ -1006,6 +1030,8 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         {
             _gsiServer.GameStateUpdated -= OnHudGameStateUpdated;
         }
+        _killfeedTimer.Tick -= OnKillfeedTimerTick;
+        _killfeedTimer.Stop();
         _hudOverlayWindow?.Close();
         _hudOverlayWindow = null;
         StopStream();
@@ -1018,12 +1044,28 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
             OnPropertyChanged(nameof(IsHudEnabled));
             OnPropertyChanged(nameof(ShowNativeHud));
         }
+        else if (e.PropertyName == nameof(HudSettings.ShowKillfeed))
+        {
+            OnPropertyChanged(nameof(ShowKillfeed));
+        }
         else if (e.PropertyName == nameof(HudSettings.UseAltPlayerBinds))
         {
             var useAlt = _hudSettings?.UseAltPlayerBinds ?? false;
             foreach (var vm in _hudPlayerCache.Values)
             {
                 vm.UseAltBindings = useAlt;
+            }
+            foreach (var entry in _killfeedEntries)
+            {
+                entry.UseAltBindings = useAlt;
+            }
+        }
+        else if (e.PropertyName == nameof(HudSettings.ShowKillfeedAttackerSlot))
+        {
+            var show = _hudSettings?.ShowKillfeedAttackerSlot ?? true;
+            foreach (var entry in _killfeedEntries)
+            {
+                entry.ShowAttackerSlot = show;
             }
         }
     }
@@ -1241,17 +1283,192 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         {
             using var doc = JsonDocument.Parse(message);
             var root = doc.RootElement;
-            if (root.TryGetProperty("type", out var typeProp) &&
-                typeProp.GetString() == "freecam_speed" &&
-                root.TryGetProperty("speed", out var speedProp) &&
-                speedProp.TryGetDouble(out var speed))
+            if (!root.TryGetProperty("type", out var typeProp))
+                return;
+
+            var messageType = typeProp.GetString();
+            if (string.Equals(messageType, "freecam_speed", StringComparison.Ordinal))
             {
-                Dispatcher.UIThread.Post(() => FreecamSpeed = speed, DispatcherPriority.Background);
+                if (root.TryGetProperty("speed", out var speedProp) &&
+                    speedProp.TryGetDouble(out var speed))
+                {
+                    Dispatcher.UIThread.Post(() => FreecamSpeed = speed, DispatcherPriority.Background);
+                }
+
+                return;
+            }
+
+            if (string.Equals(messageType, "killfeed_event", StringComparison.Ordinal) &&
+                TryParseKillfeedPayload(root, out var payload))
+            {
+                Dispatcher.UIThread.Post(() => AddKillfeedEntry(payload), DispatcherPriority.Background);
             }
         }
         catch
         {
             // Ignore malformed messages
+        }
+    }
+
+    private readonly record struct KillfeedPayload(
+        int AttackerObserverSlot,
+        string AttackerName,
+        int AttackerTeam,
+        string VictimName,
+        int VictimTeam,
+        string AssisterName,
+        int AssisterTeam,
+        string Weapon,
+        bool Blind,
+        bool FlashAssist,
+        bool InAir,
+        bool NoScope,
+        bool ThroughSmoke,
+        bool Wallbang,
+        bool Headshot,
+        bool UseAltBindings,
+        bool ShowAttackerSlot);
+
+    private bool TryParseKillfeedPayload(JsonElement root, out KillfeedPayload payload)
+    {
+        payload = default;
+
+        var attacker = ReadPlayer(root, "attacker");
+        var victim = ReadPlayer(root, "victim");
+        var assister = ReadPlayer(root, "assister");
+        var weapon = ReadString(root, "weapon");
+        var attackerObserverSlot = attacker.raw.ValueKind == JsonValueKind.Object
+            ? ReadInt(attacker.raw, "observer_slot")
+            : -1;
+
+        payload = new KillfeedPayload(
+            attackerObserverSlot,
+            attacker.name,
+            attacker.team,
+            victim.name,
+            victim.team,
+            assister.name,
+            assister.team,
+            weapon,
+            ReadBool(root, "blind"),
+            ReadBool(root, "flash_assist"),
+            ReadBool(root, "in_air"),
+            ReadBool(root, "noscope"),
+            ReadBool(root, "through_smoke"),
+            ReadBool(root, "wallbang"),
+            ReadBool(root, "headshot"),
+            _hudSettings?.UseAltPlayerBinds ?? false,
+            _hudSettings?.ShowKillfeedAttackerSlot ?? true);
+
+        return true;
+    }
+
+    private static (string name, int team, JsonElement raw) ReadPlayer(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var playerProp) ||
+            playerProp.ValueKind != JsonValueKind.Object)
+        {
+            return (string.Empty, 0, default);
+        }
+
+        var name = ReadString(playerProp, "name");
+        var team = ReadInt(playerProp, "team");
+        return (name, team, playerProp);
+    }
+
+    private static string ReadString(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var prop) ||
+            prop.ValueKind != JsonValueKind.String)
+        {
+            return string.Empty;
+        }
+
+        return prop.GetString() ?? string.Empty;
+    }
+
+    private static int ReadInt(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var prop))
+            return 0;
+
+        return prop.ValueKind switch
+        {
+            JsonValueKind.Number when prop.TryGetInt32(out var value) => value,
+            JsonValueKind.String when int.TryParse(prop.GetString(), out var value) => value,
+            _ => 0
+        };
+    }
+
+    private static bool ReadBool(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var prop))
+            return false;
+
+        return prop.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Number when prop.TryGetInt32(out var value) => value != 0,
+            JsonValueKind.String when bool.TryParse(prop.GetString(), out var value) => value,
+            _ => false
+        };
+    }
+
+    private void AddKillfeedEntry(KillfeedPayload payload)
+    {
+        var weaponIcon = string.IsNullOrWhiteSpace(payload.Weapon)
+            ? string.Empty
+            : GetWeaponIconPath(payload.Weapon);
+
+        var entry = new HudKillfeedEntryViewModel(
+            payload.AttackerObserverSlot,
+            payload.AttackerName,
+            CreateTeamBrush(payload.AttackerTeam),
+            payload.VictimName,
+            CreateTeamBrush(payload.VictimTeam),
+            payload.AssisterName,
+            CreateTeamBrush(payload.AssisterTeam),
+            weaponIcon,
+            payload.Blind,
+            payload.FlashAssist,
+            payload.InAir,
+            payload.NoScope,
+            payload.ThroughSmoke,
+            payload.Wallbang,
+            payload.Headshot,
+            payload.UseAltBindings,
+            payload.ShowAttackerSlot);
+
+        _killfeedEntries.Add(entry);
+    }
+
+    private void OnKillfeedTimerTick(object? sender, EventArgs e)
+    {
+        if (_killfeedEntries.Count == 0)
+            return;
+
+        var now = DateTimeOffset.UtcNow;
+        var fadeStart = KillfeedLifetimeSeconds - KillfeedFadeSeconds;
+
+        for (int i = _killfeedEntries.Count - 1; i >= 0; i--)
+        {
+            var entry = _killfeedEntries[i];
+            var ageSeconds = (now - entry.CreatedAt).TotalSeconds;
+
+            if (ageSeconds >= KillfeedLifetimeSeconds)
+            {
+                _killfeedEntries.RemoveAt(i);
+                continue;
+            }
+
+            var opacity = 1.0;
+            if (KillfeedFadeSeconds > 0 && ageSeconds > fadeStart)
+            {
+                opacity = Math.Clamp((KillfeedLifetimeSeconds - ageSeconds) / KillfeedFadeSeconds, 0.0, 1.0);
+            }
+
+            entry.Opacity = opacity;
         }
     }
 

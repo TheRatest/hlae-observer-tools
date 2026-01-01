@@ -54,6 +54,8 @@ public sealed class HudSettings : ViewModelBase
 
     private bool _isHudEnabled = true;
     private bool _useAltPlayerBinds;
+    private bool _showKillfeed = true;
+    private bool _showKillfeedAttackerSlot = true;
 
     /// <summary>
     /// Whether the native HUD overlay in the video display is shown.
@@ -71,6 +73,24 @@ public sealed class HudSettings : ViewModelBase
     {
         get => _useAltPlayerBinds;
         set => SetProperty(ref _useAltPlayerBinds, value);
+    }
+
+    /// <summary>
+    /// Whether the killfeed overlay is shown.
+    /// </summary>
+    public bool ShowKillfeed
+    {
+        get => _showKillfeed;
+        set => SetProperty(ref _showKillfeed, value);
+    }
+
+    /// <summary>
+    /// Whether to show attacker bind labels in the killfeed.
+    /// </summary>
+    public bool ShowKillfeedAttackerSlot
+    {
+        get => _showKillfeedAttackerSlot;
+        set => SetProperty(ref _showKillfeedAttackerSlot, value);
     }
 
     /// <summary>

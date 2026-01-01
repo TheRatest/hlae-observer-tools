@@ -468,6 +468,30 @@ namespace HlaeObsTools.ViewModels.Docks
                 }
             }
         }
+
+        private int _forceDeathnoticesMode;
+        public string ForceDeathnoticesLabel => _forceDeathnoticesMode.ToString();
+
+        public ICommand CycleForceDeathnoticesCommand => new Relay(CycleForceDeathnoticesMode);
+
+        private void CycleForceDeathnoticesMode()
+        {
+            var nextMode = _forceDeathnoticesMode switch
+            {
+                0 => 1,
+                1 => -1,
+                _ => 0
+            };
+
+            if (_forceDeathnoticesMode == nextMode)
+                return;
+
+            _forceDeathnoticesMode = nextMode;
+            OnPropertyChanged(nameof(ForceDeathnoticesLabel));
+
+            var cmd = $"cl_drawhud_force_deathnotices {_forceDeathnoticesMode}";
+            _ws.SendExecCommandAsync(cmd);
+        }
         public ICommand ToggleDemouiCommand => new AsyncRelay(() => _ws.SendExecCommandAsync("demoui"));
 
         private void OnWebSocketConnected(object? sender, EventArgs e)
@@ -514,6 +538,32 @@ namespace HlaeObsTools.ViewModels.Docks
                 if (_hudSettings.IsHudEnabled != value)
                 {
                     _hudSettings.IsHudEnabled = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public bool ShowKillfeed
+        {
+            get => _hudSettings.ShowKillfeed;
+            set
+            {
+                if (_hudSettings.ShowKillfeed != value)
+                {
+                    _hudSettings.ShowKillfeed = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public bool ShowKillfeedAttackerSlot
+        {
+            get => _hudSettings.ShowKillfeedAttackerSlot;
+            set
+            {
+                if (_hudSettings.ShowKillfeedAttackerSlot != value)
+                {
+                    _hudSettings.ShowKillfeedAttackerSlot = value;
                     OnPropertyChanged();
                 }
             }
