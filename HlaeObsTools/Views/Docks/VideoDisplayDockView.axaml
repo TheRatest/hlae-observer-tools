@@ -6,6 +6,7 @@
              xmlns:conv="using:HlaeObsTools.Converters"
              xmlns:ac="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls"
              x:Class="HlaeObsTools.Views.Docks.VideoDisplayDockView"
+             x:Name="Root"
              x:DataType="vm:VideoDisplayDockViewModel">
 
     <Grid>
@@ -78,15 +79,21 @@
             </Border>
 
             <!-- HUD overlay with freecam indicator and speed scale (only when NOT using D3DHost - overlay window used instead) -->
-            <views:HudOverlayContent x:Name="HudContent" ZIndex="10">
+            <views:HudOverlayContent x:Name="HudContent"
+                                     ZIndex="10"
+                                     DataContext="{Binding HudOverlay}">
                 <views:HudOverlayContent.IsVisible>
                     <MultiBinding>
                         <MultiBinding.Converter>
                             <conv:BooleanAndConverter/>
                         </MultiBinding.Converter>
                         <Binding Path="ShowNativeHud"/>
-                        <Binding Path="!UseD3DHost"/>
-                        <Binding Path="!UseRtpSwapchain"/>
+                        <Binding Path="DataContext.UseD3DHost"
+                                 ElementName="Root"
+                                 Converter="{StaticResource BooleanNegationConverter}"/>
+                        <Binding Path="DataContext.UseRtpSwapchain"
+                                 ElementName="Root"
+                                 Converter="{StaticResource BooleanNegationConverter}"/>
                     </MultiBinding>
                 </views:HudOverlayContent.IsVisible>
             </views:HudOverlayContent>

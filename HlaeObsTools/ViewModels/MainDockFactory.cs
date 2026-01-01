@@ -15,6 +15,7 @@ using HlaeObsTools.ViewModels.Docks;
 using HlaeObsTools.Services.Gsi;
 using HlaeObsTools.ViewModels;
 using HlaeObsTools.Services.Settings;
+using HlaeObsTools.ViewModels.Hud;
 
 namespace HlaeObsTools.ViewModels;
 
@@ -178,9 +179,9 @@ public class MainDockFactory : Factory, IDisposable
         _videoDisplayVm.SetWebSocketClient(_webSocketClient);
         _videoDisplayVm.SetInputSender(_inputSender);
         _videoDisplayVm.SetFreecamSettings(freecamSettings);
+        var hudOverlayVm = new HudOverlayViewModel(_gsiServer, hudSettings, _webSocketClient);
+        _videoDisplayVm.SetHudOverlay(hudOverlayVm);
         ConfigureAnalogInput(freecamSettings);
-        _videoDisplayVm.SetHudSettings(hudSettings);
-        _videoDisplayVm.SetGsiServer(_gsiServer);
         _videoDisplayVm.SetRtpConfig(new Services.Video.RTP.RtpReceiverConfig
         {
             Address = "0.0.0.0",

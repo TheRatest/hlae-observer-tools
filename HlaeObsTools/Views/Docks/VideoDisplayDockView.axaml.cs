@@ -15,6 +15,7 @@ using Avalonia.Animation.Easings;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Rendering;
+using HlaeObsTools.ViewModels.Hud;
 
 namespace HlaeObsTools.Views.Docks;
 
@@ -25,6 +26,8 @@ public partial class VideoDisplayDockView : UserControl
     private Point? _lastMousePosition;
     private INotifyPropertyChanged? _currentVmNotifier;
     private VideoDisplayDockViewModel? _currentViewModel;
+    private INotifyPropertyChanged? _currentHudOverlayNotifier;
+    private HudOverlayViewModel? _currentHudOverlay;
     private bool _cursorHidden;
     private bool _isShiftPressed;
     private bool _isDemoPaused;
@@ -196,6 +199,57 @@ public partial class VideoDisplayDockView : UserControl
         vm.FreecamSprintStateChanged -= OnFreecamSprintStateChanged;
         vm.FreecamInputLockRequested -= OnFreecamInputLockRequested;
         vm.FreecamInputReleaseRequested -= OnFreecamInputReleaseRequested;
+    }
+
+    private void SubscribeToHudOverlay(HudOverlayViewModel? overlay)
+    {
+        if (_currentHudOverlayNotifier != null)
+        {
+            _currentHudOverlayNotifier.PropertyChanged -= OnHudOverlayPropertyChanged;
+            _currentHudOverlayNotifier = null;
+            _currentHudOverlay = null;
+        }
+
+        if (overlay is INotifyPropertyChanged notifier)
+        {
+            _currentHudOverlayNotifier = notifier;
+            _currentHudOverlay = overlay;
+            notifier.PropertyChanged += OnHudOverlayPropertyChanged;
+        }
+
+        UpdateHudOverlayVisibility();
+    }
+
+    private void OnHudOverlayPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(HudOverlayViewModel.ShowNativeHud))
+        {
+            UpdateHudOverlayVisibility();
+        }
+    }
+
+    private bool IsHudOverlayVisible(VideoDisplayDockViewModel vm)
+    {
+        return vm.HudOverlay?.ShowNativeHud ?? false;
+    }
+
+    private void UpdateHudOverlayVisibility()
+    {
+        if (DataContext is not VideoDisplayDockViewModel vm)
+            return;
+
+        if (IsHudOverlayVisible(vm) && (vm.UseD3DHost || (vm.UseRtpSwapchain && !vm.UseD3DHost)))
+        {
+            vm.ShowHudOverlay();
+            if (vm.UseD3DHost)
+                UpdateHudOverlayPosition();
+            else
+                UpdateRtpSwapchainBounds();
+        }
+        else
+        {
+            vm.HideHudOverlay();
+        }
     }
 
     private void OnRtpViewerWindowChanged(object? sender, IntPtr hwnd)
@@ -574,7 +628,7 @@ public partial class VideoDisplayDockView : UserControl
         RtpSwapchainHost.SetChildLayout(0, 0, w, h);
         RtpSwapchainHost.UpdateChildBounds();
 
-        if (vm.ShowNativeHud && vm.UseRtpSwapchain && !vm.UseD3DHost)
+        if (IsHudOverlayVisible(vm) && vm.UseRtpSwapchain && !vm.UseD3DHost)
         {
             try
             {
@@ -696,6 +750,13 @@ public partial class VideoDisplayDockView : UserControl
             _currentVmNotifier = null;
         }
 
+        if (_currentHudOverlayNotifier != null)
+        {
+            _currentHudOverlayNotifier.PropertyChanged -= OnHudOverlayPropertyChanged;
+            _currentHudOverlayNotifier = null;
+            _currentHudOverlay = null;
+        }
+
         if (_currentViewModel != null)
         {
             UnsubscribeFromOverlayEvents(_currentViewModel);
@@ -715,6 +776,7 @@ public partial class VideoDisplayDockView : UserControl
             _currentViewModel = vm;
             SubscribeToOverlayEvents(vm);
             vm.RtpViewerWindowChanged += OnRtpViewerWindowChanged;
+            SubscribeToHudOverlay(vm.HudOverlay);
             if (RtpSwapchainHost != null && RtpSwapchainHost.ContainerHwnd != IntPtr.Zero)
             {
                 vm.SetRtpParentWindowHandle(RtpSwapchainHost.ContainerHwnd);
@@ -724,19 +786,11 @@ public partial class VideoDisplayDockView : UserControl
             if (vm.UseD3DHost)
             {
                 SharedTextureHost?.StartRenderer();
-                if (vm.ShowNativeHud)
-                {
-                    vm.ShowHudOverlay();
-                    UpdateHudOverlayPosition();
-                }
+                UpdateHudOverlayVisibility();
             }
             else if (vm.UseRtpSwapchain)
             {
-                if (vm.ShowNativeHud)
-                {
-                    vm.ShowHudOverlay();
-                    UpdateRtpSwapchainBounds();
-                }
+                UpdateHudOverlayVisibility();
             }
         }
 
@@ -753,32 +807,13 @@ public partial class VideoDisplayDockView : UserControl
                 {
                     SharedTextureHost?.StartRenderer();
                     if (vm.IsStreaming) vm.StopStream();
-                    if (vm.ShowNativeHud)
-                    {
-                        vm.ShowHudOverlay();
-                        UpdateHudOverlayPosition();
-                    }
+                    UpdateHudOverlayVisibility();
                 }
                 else
                 {
                     SharedTextureHost?.StopRenderer();
-                    vm.HideHudOverlay();
+                    UpdateHudOverlayVisibility();
                 }
-            }
-        }
-        else if (e.PropertyName == nameof(VideoDisplayDockViewModel.ShowNativeHud))
-        {
-            if (DataContext is VideoDisplayDockViewModel vm && vm.ShowNativeHud && (vm.UseD3DHost || (vm.UseRtpSwapchain && !vm.UseD3DHost)))
-            {
-                vm.ShowHudOverlay();
-                if (vm.UseD3DHost)
-                    UpdateHudOverlayPosition();
-                else
-                    UpdateRtpSwapchainBounds();
-            }
-            else if (DataContext is VideoDisplayDockViewModel vmHidden)
-            {
-                vmHidden.HideHudOverlay();
             }
         }
         else if (e.PropertyName == nameof(VideoDisplayDockViewModel.UseRtpSwapchain))
@@ -787,14 +822,14 @@ public partial class VideoDisplayDockView : UserControl
             {
                 UpdateRtpSwapchainAspectSize();
                 UpdateRtpSwapchainBounds();
-                if (vm.UseRtpSwapchain && !vm.UseD3DHost && vm.ShowNativeHud)
-                {
-                    vm.ShowHudOverlay();
-                }
-                else if (!vm.UseRtpSwapchain || vm.UseD3DHost)
-                {
-                    vm.HideHudOverlay();
-                }
+                UpdateHudOverlayVisibility();
+            }
+        }
+        else if (e.PropertyName == nameof(VideoDisplayDockViewModel.HudOverlay))
+        {
+            if (DataContext is VideoDisplayDockViewModel vm)
+            {
+                SubscribeToHudOverlay(vm.HudOverlay);
             }
         }
         else if (e.PropertyName == nameof(VideoDisplayDockViewModel.FreecamSpeed))

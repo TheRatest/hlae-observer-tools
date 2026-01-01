@@ -1,13 +1,13 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:HlaeObsTools.ViewModels.Docks"
+             xmlns:vm="using:HlaeObsTools.ViewModels.Hud"
              xmlns:svg="using:Avalonia.Svg.Skia"
              xmlns:hud="using:HlaeObsTools.ViewModels.Hud"
              xmlns:conv="using:HlaeObsTools.Converters"
              xmlns:controls="using:HlaeObsTools.Views.Controls"
              xmlns:ac="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls"
              x:Class="HlaeObsTools.Views.HudOverlayContent"
-             x:DataType="vm:VideoDisplayDockViewModel">
+             x:DataType="vm:HudOverlayViewModel">
     <UserControl.Resources>
         <conv:BooleanToOpacityConverter x:Key="ActiveOpacityConverter"
                                         TrueOpacity="1"
