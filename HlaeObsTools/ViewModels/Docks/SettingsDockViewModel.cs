@@ -256,6 +256,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 }
             }
         }
+
         private bool _IsOnlyDeathnotesEnabled;
         public bool IsOnlyDeathnotesEnabled
         {
@@ -270,6 +271,25 @@ namespace HlaeObsTools.ViewModels.Docks
                     var cmd = value
                         ? "cl_draw_only_deathnotices 1"
                         : "cl_draw_only_deathnotices 0";
+                    _ws.SendExecCommandAsync(cmd);
+                }
+            }
+        }
+
+        private bool _IsXrayEnabled = true;
+        public bool IsXrayEnabled
+        {
+            get => _IsXrayEnabled;
+            set
+            {
+                if (_IsXrayEnabled != value)
+                {
+                    _IsXrayEnabled = value;
+                    OnPropertyChanged();
+
+                    var cmd = value
+                        ? "spec_show_xray 1"
+                        : "spec_show_xray 0";
                     _ws.SendExecCommandAsync(cmd);
                 }
             }

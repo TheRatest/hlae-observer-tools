@@ -31,6 +31,16 @@
                                         Content="{Binding ForceDeathnoticesLabel}"/>
                             </StackPanel>
                         </StackPanel>
+
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="6"
+                                    Margin="0,8,0,0"
+                                    VerticalAlignment="Center">
+                            <ToggleSwitch IsChecked="{Binding IsXrayEnabled, Mode=TwoWay}"
+                                        Content="Show Xray"
+                                        Foreground="#E6E6E6"/>
+                        </StackPanel>
+
                         <ToggleSwitch IsChecked="{Binding UseAltPlayerBinds, Mode=TwoWay}"
                                       Content="Use alt player binds"
                                       Foreground="#E6E6E6"/>
@@ -68,92 +78,115 @@
             </TabItem>
 
             <TabItem Header="Create">
-                <StackPanel Margin="10" Spacing="8">
+                    <ScrollViewer>
+                    <StackPanel Margin="10" Spacing="8">
 
-                    <StackPanel Orientation="Horizontal"
-                                Spacing="6"
-                                Margin="0,8,0,0"
-                                VerticalAlignment="Center">
-                        <ToggleSwitch IsChecked="{Binding IsCameraPathPreviewEnabled, Mode=TwoWay}"
-                                    Content="Enable path preview"
-                                    Foreground="#E6E6E6"
-                                    HorizontalAlignment="Left"
-                                    Margin="0,0,10,0"/>
-                        <ToggleSwitch IsChecked="{Binding IsCampathEnabled, Mode=TwoWay}"
-                                        Content="Campath enabled"
-                                        Foreground="#E6E6E6"/>
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="6"
+                                    Margin="0,8,0,0"
+                                    VerticalAlignment="Center">
+                            <ToggleSwitch IsChecked="{Binding IsCameraPathPreviewEnabled, Mode=TwoWay}"
+                                        Content="Enable path preview"
+                                        Foreground="#E6E6E6"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,10,0"/>
+                            <ToggleSwitch IsChecked="{Binding IsCampathEnabled, Mode=TwoWay}"
+                                            Content="Campath enabled"
+                                            Foreground="#E6E6E6"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="6"
+                                    Margin="0,8,0,0"
+                                    VerticalAlignment="Center">
+                            <Button Content="Add point"
+                                    Command="{Binding AddPointCommand}"/>
+                            <Button Content="Clear"
+                                    Command="{Binding ClearCampathCommand}"/>
+                            <Button Content="Goto Start"
+                                    Command="{Binding GotoStartCommand}"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="6"
+                                    Margin="0,4,0,0"
+                                    VerticalAlignment="Center">
+                            <Button Content="{Binding InterpLabel}"
+                                    Command="{Binding ToggleInterpModeCommand}"/>
+                            <Button Content="Load Campath"
+                                    Command="{Binding LoadCampathCommand}"/>
+                            <Button Content="Save Campath"
+                                    Command="{Binding SaveCampathCommand}"/>
+                        </StackPanel>
+
                     </StackPanel>
-
-                    <StackPanel Orientation="Horizontal"
-                                Spacing="6"
-                                Margin="0,8,0,0"
-                                VerticalAlignment="Center">
-                        <Button Content="Add point"
-                                Command="{Binding AddPointCommand}"/>
-                        <Button Content="Clear"
-                                Command="{Binding ClearCampathCommand}"/>
-                        <Button Content="Goto Start"
-                                Command="{Binding GotoStartCommand}"/>
-                    </StackPanel>
-
-                    <StackPanel Orientation="Horizontal"
-                                Spacing="6"
-                                Margin="0,4,0,0"
-                                VerticalAlignment="Center">
-                        <Button Content="{Binding InterpLabel}"
-                                Command="{Binding ToggleInterpModeCommand}"/>
-                        <Button Content="Load Campath"
-                                Command="{Binding LoadCampathCommand}"/>
-                        <Button Content="Save Campath"
-                                Command="{Binding SaveCampathCommand}"/>
-                    </StackPanel>
-
-                </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <TabItem Header="Radar">
-                <StackPanel Margin="10" Spacing="10">
-                    <TextBlock Text="Marker size"
-                               Foreground="#CCCCCC"
-                               FontWeight="SemiBold"/>
-                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <Slider Minimum="0.5"
-                                Maximum="2.5"
-                                SmallChange="0.05"
-                                LargeChange="0.25"
-                                Width="200"
-                                Value="{Binding RadarSettings.MarkerScale, Mode=TwoWay}"/>
-                        <TextBlock Text="{Binding RadarSettings.MarkerScale, StringFormat={}{0:F2}}"
-                                   Width="50"
-                                   Foreground="#E6E6E6"/>
+                <ScrollViewer>
+                    <StackPanel Margin="10" Spacing="10">
+                        <TextBlock Text="Marker size"
+                                Foreground="#CCCCCC"
+                                FontWeight="SemiBold"/>
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <Slider Minimum="0.5"
+                                    Maximum="2.5"
+                                    SmallChange="0.05"
+                                    LargeChange="0.25"
+                                    Width="200"
+                                    Value="{Binding RadarSettings.MarkerScale, Mode=TwoWay}"/>
+                            <TextBlock Text="{Binding RadarSettings.MarkerScale, StringFormat={}{0:F2}}"
+                                    Width="50"
+                                    Foreground="#E6E6E6"/>
+                        </StackPanel>
+                        <TextBlock Text="Adjusts player marker size on the radar."
+                                Foreground="#888888"
+                                FontSize="12"/>
+                        <TextBlock Text="Height scale strength"
+                                Foreground="#CCCCCC"
+                                FontWeight="SemiBold"/>
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <Slider Minimum="0"
+                                    Maximum="2"
+                                    SmallChange="0.05"
+                                    LargeChange="0.25"
+                                    Width="200"
+                                    Value="{Binding RadarSettings.HeightScaleMultiplier, Mode=TwoWay}"/>
+                            <TextBlock Text="{Binding RadarSettings.HeightScaleMultiplier, StringFormat={}{0:F2}}"
+                                    Width="50"
+                                    Foreground="#E6E6E6"/>
+                        </StackPanel>
+                        <TextBlock Text="Controls how strongly height affects marker scale."
+                                Foreground="#888888"
+                                FontSize="12"/>
+                        <ToggleSwitch IsChecked="{Binding RadarSettings.DisplayNumbersTopmost, Mode=TwoWay}"
+                                    Content="Observer-Slot on top"
+                                    Foreground="#E6E6E6"/>
+                        <ToggleSwitch IsChecked="{Binding RadarSettings.ShowPlayerNames, Mode=TwoWay}"
+                                    Content="Show player names"
+                                    Foreground="#E6E6E6"/>
                     </StackPanel>
-                    <TextBlock Text="Adjusts player marker size on the radar."
-                               Foreground="#888888"
-                               FontSize="12"/>
-                    <TextBlock Text="Height scale strength"
-                               Foreground="#CCCCCC"
-                               FontWeight="SemiBold"/>
-                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <Slider Minimum="0"
-                                Maximum="2"
-                                SmallChange="0.05"
-                                LargeChange="0.25"
-                                Width="200"
-                                Value="{Binding RadarSettings.HeightScaleMultiplier, Mode=TwoWay}"/>
-                        <TextBlock Text="{Binding RadarSettings.HeightScaleMultiplier, StringFormat={}{0:F2}}"
-                                   Width="50"
-                                   Foreground="#E6E6E6"/>
+                </ScrollViewer>
+            </TabItem>
+            
+            <TabItem Header="HUD">
+                <ScrollViewer>
+                    <StackPanel Margin="10" Spacing="10">
+                        <TextBlock Text="Video HUD Overlay"
+                                Foreground="#CCCCCC"
+                                FontWeight="SemiBold"/>
+                        <ToggleSwitch IsChecked="{Binding HudSettings.IsHudEnabled, Mode=TwoWay}"
+                                    Content="Enable HUD"
+                                    Foreground="#E6E6E6"/>
+                        <ToggleSwitch IsChecked="{Binding HudSettings.ShowKillfeed, Mode=TwoWay}"
+                                    Content="Show killfeed"
+                                    Foreground="#E6E6E6"/>
+                        <ToggleSwitch IsChecked="{Binding HudSettings.ShowKillfeedAttackerSlot, Mode=TwoWay}"
+                                    Content="Show killfeed attacker bind"
+                                    Foreground="#E6E6E6"/>
                     </StackPanel>
-                    <TextBlock Text="Controls how strongly height affects marker scale."
-                               Foreground="#888888"
-                               FontSize="12"/>
-                    <ToggleSwitch IsChecked="{Binding RadarSettings.DisplayNumbersTopmost, Mode=TwoWay}"
-                                  Content="Observer-Slot on top"
-                                  Foreground="#E6E6E6"/>
-                    <ToggleSwitch IsChecked="{Binding RadarSettings.ShowPlayerNames, Mode=TwoWay}"
-                                  Content="Show player names"
-                                  Foreground="#E6E6E6"/>
-                </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <TabItem Header="3D">
@@ -236,23 +269,6 @@
 
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
-
-            <TabItem Header="HUD">
-                <StackPanel Margin="10" Spacing="10">
-                    <TextBlock Text="Video HUD Overlay"
-                               Foreground="#CCCCCC"
-                               FontWeight="SemiBold"/>
-                    <ToggleSwitch IsChecked="{Binding HudSettings.IsHudEnabled, Mode=TwoWay}"
-                                  Content="Enable HUD"
-                                  Foreground="#E6E6E6"/>
-                    <ToggleSwitch IsChecked="{Binding HudSettings.ShowKillfeed, Mode=TwoWay}"
-                                  Content="Show killfeed"
-                                  Foreground="#E6E6E6"/>
-                    <ToggleSwitch IsChecked="{Binding HudSettings.ShowKillfeedAttackerSlot, Mode=TwoWay}"
-                                  Content="Show killfeed attacker bind"
-                                  Foreground="#E6E6E6"/>
-                </StackPanel>
             </TabItem>
 
             <TabItem Header="Actions">
