@@ -122,8 +122,8 @@
                                 SmallChange="0.05"
                                 LargeChange="0.25"
                                 Width="200"
-                                Value="{Binding MarkerScale, Mode=TwoWay}"/>
-                        <TextBlock Text="{Binding MarkerScale, StringFormat={}{0:F2}}"
+                                Value="{Binding RadarSettings.MarkerScale, Mode=TwoWay}"/>
+                        <TextBlock Text="{Binding RadarSettings.MarkerScale, StringFormat={}{0:F2}}"
                                    Width="50"
                                    Foreground="#E6E6E6"/>
                     </StackPanel>
@@ -139,18 +139,18 @@
                                 SmallChange="0.05"
                                 LargeChange="0.25"
                                 Width="200"
-                                Value="{Binding HeightScaleMultiplier, Mode=TwoWay}"/>
-                        <TextBlock Text="{Binding HeightScaleMultiplier, StringFormat={}{0:F2}}"
+                                Value="{Binding RadarSettings.HeightScaleMultiplier, Mode=TwoWay}"/>
+                        <TextBlock Text="{Binding RadarSettings.HeightScaleMultiplier, StringFormat={}{0:F2}}"
                                    Width="50"
                                    Foreground="#E6E6E6"/>
                     </StackPanel>
                     <TextBlock Text="Controls how strongly height affects marker scale."
                                Foreground="#888888"
                                FontSize="12"/>
-                    <ToggleSwitch IsChecked="{Binding DisplayNumbersTopmost, Mode=TwoWay}"
+                    <ToggleSwitch IsChecked="{Binding RadarSettings.DisplayNumbersTopmost, Mode=TwoWay}"
                                   Content="Observer-Slot on top"
                                   Foreground="#E6E6E6"/>
-                    <ToggleSwitch IsChecked="{Binding ShowPlayerNames, Mode=TwoWay}"
+                    <ToggleSwitch IsChecked="{Binding RadarSettings.ShowPlayerNames, Mode=TwoWay}"
                                   Content="Show player names"
                                   Foreground="#E6E6E6"/>
                 </StackPanel>
@@ -164,7 +164,7 @@
                                 FontWeight="SemiBold"/>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBox Width="320"
-                                    Text="{Binding MapObjPath, Mode=TwoWay}"
+                                    Text="{Binding Viewport3DSettings.MapObjPath, Mode=TwoWay}"
                                     Watermark="path\\to\\map.obj"/>
                             <Button Content="Browse"
                                     Command="{Binding BrowseMapObjCommand}"/>
@@ -179,7 +179,7 @@
                                 FontWeight="SemiBold"
                                 Margin="0,10,0,0"/>
                         <TextBox Width="120"
-                                Text="{Binding ViewportMouseScale, Mode=TwoWay}"
+                                Text="{Binding Viewport3DSettings.ViewportMouseScale, Mode=TwoWay}"
                                 Watermark="1.0"
                                 HorizontalAlignment="Left" />
 
@@ -188,7 +188,7 @@
                                 FontWeight="SemiBold"
                                 Margin="0,10,0,0"/>
                         <TextBox Width="120"
-                                Text="{Binding MapScale, Mode=TwoWay}"
+                                Text="{Binding Viewport3DSettings.MapScale, Mode=TwoWay}"
                                 Watermark="1.0"
                                 HorizontalAlignment="Left" />
 
@@ -197,9 +197,9 @@
                                 FontWeight="SemiBold"
                                 Margin="0,10,0,0"/>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBox Width="80" Watermark="Yaw" Text="{Binding MapYaw, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Pitch" Text="{Binding MapPitch, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Roll" Text="{Binding MapRoll, Mode=TwoWay}" />
+                            <TextBox Width="80" Watermark="Yaw" Text="{Binding Viewport3DSettings.MapYaw, Mode=TwoWay}" />
+                            <TextBox Width="80" Watermark="Pitch" Text="{Binding Viewport3DSettings.MapPitch, Mode=TwoWay}" />
+                            <TextBox Width="80" Watermark="Roll" Text="{Binding Viewport3DSettings.MapRoll, Mode=TwoWay}" />
                         </StackPanel>
 
                         <TextBlock Text="Map offset"
@@ -207,9 +207,9 @@
                                 FontWeight="SemiBold"
                                 Margin="0,10,0,0"/>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBox Width="80" Watermark="X" Text="{Binding MapOffsetX, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Y" Text="{Binding MapOffsetY, Mode=TwoWay}" />
-                            <TextBox Width="80" Watermark="Z" Text="{Binding MapOffsetZ, Mode=TwoWay}" />
+                            <TextBox Width="80" Watermark="X" Text="{Binding Viewport3DSettings.MapOffsetX, Mode=TwoWay}" />
+                            <TextBox Width="80" Watermark="Y" Text="{Binding Viewport3DSettings.MapOffsetY, Mode=TwoWay}" />
+                            <TextBox Width="80" Watermark="Z" Text="{Binding Viewport3DSettings.MapOffsetZ, Mode=TwoWay}" />
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,10,0,0">
@@ -219,7 +219,7 @@
                                         Foreground="#CCCCCC"
                                         FontWeight="SemiBold"/>
                                 <TextBox Width="120"
-                                        Text="{Binding PinScale, Mode=TwoWay}"
+                                        Text="{Binding Viewport3DSettings.PinScale, Mode=TwoWay}"
                                         Watermark="1.0"/>
                             </StackPanel>
 
@@ -228,7 +228,7 @@
                                         Foreground="#CCCCCC"
                                         FontWeight="SemiBold"/>
                                 <TextBox Width="120"
-                                        Text="{Binding PinOffsetZ, Mode=TwoWay}"
+                                        Text="{Binding Viewport3DSettings.PinOffsetZ, Mode=TwoWay}"
                                         Watermark="Z"/>
                             </StackPanel>
 
@@ -243,13 +243,13 @@
                     <TextBlock Text="Video HUD Overlay"
                                Foreground="#CCCCCC"
                                FontWeight="SemiBold"/>
-                    <ToggleSwitch IsChecked="{Binding IsHudEnabled, Mode=TwoWay}"
+                    <ToggleSwitch IsChecked="{Binding HudSettings.IsHudEnabled, Mode=TwoWay}"
                                   Content="Enable HUD"
                                   Foreground="#E6E6E6"/>
-                    <ToggleSwitch IsChecked="{Binding ShowKillfeed, Mode=TwoWay}"
+                    <ToggleSwitch IsChecked="{Binding HudSettings.ShowKillfeed, Mode=TwoWay}"
                                   Content="Show killfeed"
                                   Foreground="#E6E6E6"/>
-                    <ToggleSwitch IsChecked="{Binding ShowKillfeedAttackerSlot, Mode=TwoWay}"
+                    <ToggleSwitch IsChecked="{Binding HudSettings.ShowKillfeedAttackerSlot, Mode=TwoWay}"
                                   Content="Show killfeed attacker bind"
                                   Foreground="#E6E6E6"/>
                 </StackPanel>
@@ -360,14 +360,14 @@
                                                     SmallChange="0.01"
                                                     LargeChange="0.1"
                                                     Width="200"
-                                                    Value="{Binding MouseSensitivity, Mode=TwoWay}"/>
-                                            <TextBlock Text="{Binding MouseSensitivity, StringFormat={}{0:F3}}"
+                                                    Value="{Binding FreecamSettings.MouseSensitivity, Mode=TwoWay}"/>
+                                            <TextBlock Text="{Binding FreecamSettings.MouseSensitivity, StringFormat={}{0:F3}}"
                                                        Width="50"
                                                        Foreground="#E6E6E6"/>
                                         </StackPanel>
                                     </StackPanel>
 
-                                    <ToggleSwitch IsChecked="{Binding ClampPitch, Mode=TwoWay}"
+                                    <ToggleSwitch IsChecked="{Binding FreecamSettings.ClampPitch, Mode=TwoWay}"
                                                   Content="Clamp Pitch"
                                                   Foreground="#E6E6E6"/>
 
@@ -386,8 +386,8 @@
                                                     SmallChange="10.0"
                                                     LargeChange="50.0"
                                                     Width="200"
-                                                    Value="{Binding MoveSpeed, Mode=TwoWay}"/>
-                                            <TextBlock Text="{Binding MoveSpeed, StringFormat={}{0:F0}}"
+                                                    Value="{Binding FreecamSettings.MoveSpeed, Mode=TwoWay}"/>
+                                            <TextBlock Text="{Binding FreecamSettings.MoveSpeed, StringFormat={}{0:F0}}"
                                                        Width="50"
                                                        Foreground="#E6E6E6"/>
                                         </StackPanel>
@@ -400,8 +400,8 @@
                                                     SmallChange="0.1"
                                                     LargeChange="0.5"
                                                     Width="200"
-                                                    Value="{Binding SprintMultiplier, Mode=TwoWay}"/>
-                                            <TextBlock Text="{Binding SprintMultiplier, StringFormat={}{0:F1}}"
+                                                    Value="{Binding FreecamSettings.SprintMultiplier, Mode=TwoWay}"/>
+                                            <TextBlock Text="{Binding FreecamSettings.SprintMultiplier, StringFormat={}{0:F1}}"
                                                        Width="50"
                                                        Foreground="#E6E6E6"/>
                                         </StackPanel>
@@ -414,8 +414,8 @@
                                                     SmallChange="10.0"
                                                     LargeChange="50.0"
                                                     Width="200"
-                                                    Value="{Binding VerticalSpeed, Mode=TwoWay}"/>
-                                            <TextBlock Text="{Binding VerticalSpeed, StringFormat={}{0:F0}}"
+                                                    Value="{Binding FreecamSettings.VerticalSpeed, Mode=TwoWay}"/>
+                                            <TextBlock Text="{Binding FreecamSettings.VerticalSpeed, StringFormat={}{0:F0}}"
                                                        Width="50"
                                                        Foreground="#E6E6E6"/>
                                         </StackPanel>
@@ -428,8 +428,8 @@
                                                     SmallChange="0.01"
                                                     LargeChange="0.1"
                                                     Width="200"
-                                                    Value="{Binding SpeedAdjustRate, Mode=TwoWay}"/>
-                                            <TextBlock Text="{Binding SpeedAdjustRate, StringFormat={}{0:F2}}"
+                                                    Value="{Binding FreecamSettings.SpeedAdjustRate, Mode=TwoWay}"/>
+                                            <TextBlock Text="{Binding FreecamSettings.SpeedAdjustRate, StringFormat={}{0:F2}}"
                                                        Width="50"
                                                        Foreground="#E6E6E6"/>
                                         </StackPanel>
@@ -442,8 +442,8 @@
                                                     SmallChange="0.01"
                                                     LargeChange="0.1"
                                                     Width="200"
-                                                    Value="{Binding SpeedMinMultiplier, Mode=TwoWay}"/>
-                                            <TextBlock Text="{Binding SpeedMinMultiplier, StringFormat={}{0:F2}}"
+                                                    Value="{Binding FreecamSettings.SpeedMinMultiplier, Mode=TwoWay}"/>
+                                            <TextBlock Text="{Binding FreecamSettings.SpeedMinMultiplier, StringFormat={}{0:F2}}"
                                                        Width="50"
                                                        Foreground="#E6E6E6"/>
                                         </StackPanel>
@@ -456,8 +456,8 @@
                                                     SmallChange="0.5"
                                                     LargeChange="1.0"
                                                     Width="200"
-                                                    Value="{Binding SpeedMaxMultiplier, Mode=TwoWay}"/>
-                                            <TextBlock Text="{Binding SpeedMaxMultiplier, StringFormat={}{0:F1}}"
+                                                    Value="{Binding FreecamSettings.SpeedMaxMultiplier, Mode=TwoWay}"/>
+                                            <TextBlock Text="{Binding FreecamSettings.SpeedMaxMultiplier, StringFormat={}{0:F1}}"
                                                        Width="50"
                                                        Foreground="#E6E6E6"/>
                                         </StackPanel>
@@ -470,10 +470,10 @@
                                            Margin="0,8,0,0"/>
 
                                 <StackPanel Spacing="8">
-                                    <ToggleSwitch IsChecked="{Binding SmoothEnabled, Mode=TwoWay}"
+                                    <ToggleSwitch IsChecked="{Binding FreecamSettings.SmoothEnabled, Mode=TwoWay}"
                                                   Content="Enable Smoothing"
                                                   Foreground="#E6E6E6"/>
-                                    <ToggleSwitch IsChecked="{Binding RotCriticalDamping, Mode=TwoWay}"
+                                    <ToggleSwitch IsChecked="{Binding FreecamSettings.RotCriticalDamping, Mode=TwoWay}"
                                                   Content="Use Damping (Rotation)"
                                                   Foreground="#E6E6E6"/>
                                     <TextBlock Text="Rotation Damping Ratio (>= 1.0)"
@@ -484,8 +484,8 @@
                                                 SmallChange="0.1"
                                                 LargeChange="0.5"
                                                 Width="200"
-                                                Value="{Binding RotDampingRatio, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding RotDampingRatio, StringFormat={}{0:F2}}"
+                                                Value="{Binding FreecamSettings.RotDampingRatio, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.RotDampingRatio, StringFormat={}{0:F2}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -498,8 +498,8 @@
                                                 SmallChange="0.05"
                                                 LargeChange="0.1"
                                                 Width="200"
-                                                Value="{Binding HalfVec, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding HalfVec, StringFormat={}{0:F2}}"
+                                                Value="{Binding FreecamSettings.HalfVec, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.HalfVec, StringFormat={}{0:F2}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -512,8 +512,8 @@
                                                 SmallChange="0.05"
                                                 LargeChange="0.1"
                                                 Width="200"
-                                                Value="{Binding HalfRot, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding HalfRot, StringFormat={}{0:F2}}"
+                                                Value="{Binding FreecamSettings.HalfRot, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.HalfRot, StringFormat={}{0:F2}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -526,8 +526,8 @@
                                                 SmallChange="0.05"
                                                 LargeChange="0.1"
                                                 Width="200"
-                                                Value="{Binding HalfFov, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding HalfFov, StringFormat={}{0:F2}}"
+                                                Value="{Binding FreecamSettings.HalfFov, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.HalfFov, StringFormat={}{0:F2}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -540,8 +540,8 @@
                                                 SmallChange="0.05"
                                                 LargeChange="0.1"
                                                 Width="200"
-                                                Value="{Binding LockHalfRot, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding LockHalfRot, StringFormat={}{0:F2}}"
+                                                Value="{Binding FreecamSettings.LockHalfRot, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.LockHalfRot, StringFormat={}{0:F2}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -554,8 +554,8 @@
                                                 SmallChange="0.05"
                                                 LargeChange="0.1"
                                                 Width="200"
-                                                Value="{Binding LockHalfRotTransition, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding LockHalfRotTransition, StringFormat={}{0:F2}}"
+                                                Value="{Binding FreecamSettings.LockHalfRotTransition, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.LockHalfRotTransition, StringFormat={}{0:F2}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -582,8 +582,8 @@
                                                 SmallChange="5.0"
                                                 LargeChange="15.0"
                                                 Width="200"
-                                                Value="{Binding RollSpeed, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding RollSpeed, StringFormat={}{0:F0}}"
+                                                Value="{Binding FreecamSettings.RollSpeed, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.RollSpeed, StringFormat={}{0:F0}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -596,8 +596,8 @@
                                                 SmallChange="0.05"
                                                 LargeChange="0.1"
                                                 Width="200"
-                                                Value="{Binding RollSmoothing, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding RollSmoothing, StringFormat={}{0:F2}}"
+                                                Value="{Binding FreecamSettings.RollSmoothing, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.RollSmoothing, StringFormat={}{0:F2}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -610,8 +610,8 @@
                                                 SmallChange="0.1"
                                                 LargeChange="0.5"
                                                 Width="200"
-                                                Value="{Binding LeanStrength, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding LeanStrength, StringFormat={}{0:F1}}"
+                                                Value="{Binding FreecamSettings.LeanStrength, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.LeanStrength, StringFormat={}{0:F1}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -624,8 +624,8 @@
                                                 SmallChange="0.001"
                                                 LargeChange="0.01"
                                                 Width="200"
-                                                Value="{Binding LeanAccelScale, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding LeanAccelScale, StringFormat={}{0:F4}}"
+                                                Value="{Binding FreecamSettings.LeanAccelScale, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.LeanAccelScale, StringFormat={}{0:F4}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -638,8 +638,8 @@
                                                 SmallChange="0.001"
                                                 LargeChange="0.01"
                                                 Width="200"
-                                                Value="{Binding LeanVelocityScale, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding LeanVelocityScale, StringFormat={}{0:F3}}"
+                                                Value="{Binding FreecamSettings.LeanVelocityScale, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.LeanVelocityScale, StringFormat={}{0:F3}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -652,8 +652,8 @@
                                                 SmallChange="1.0"
                                                 LargeChange="5.0"
                                                 Width="200"
-                                                Value="{Binding LeanMaxAngle, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding LeanMaxAngle, StringFormat={}{0:F0}}"
+                                                Value="{Binding FreecamSettings.LeanMaxAngle, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.LeanMaxAngle, StringFormat={}{0:F0}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -666,8 +666,8 @@
                                                 SmallChange="0.01"
                                                 LargeChange="0.05"
                                                 Width="200"
-                                                Value="{Binding LeanHalfTime, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding LeanHalfTime, StringFormat={}{0:F2}}"
+                                                Value="{Binding FreecamSettings.LeanHalfTime, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.LeanHalfTime, StringFormat={}{0:F2}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -688,8 +688,8 @@
                                                 SmallChange="1.0"
                                                 LargeChange="5.0"
                                                 Width="200"
-                                                Value="{Binding FovMin, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding FovMin, StringFormat={}{0:F0}}"
+                                                Value="{Binding FreecamSettings.FovMin, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.FovMin, StringFormat={}{0:F0}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -702,8 +702,8 @@
                                                 SmallChange="5.0"
                                                 LargeChange="10.0"
                                                 Width="200"
-                                                Value="{Binding FovMax, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding FovMax, StringFormat={}{0:F0}}"
+                                                Value="{Binding FreecamSettings.FovMax, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.FovMax, StringFormat={}{0:F0}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -716,8 +716,8 @@
                                                 SmallChange="0.5"
                                                 LargeChange="1.0"
                                                 Width="200"
-                                                Value="{Binding FovStep, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding FovStep, StringFormat={}{0:F1}}"
+                                                Value="{Binding FreecamSettings.FovStep, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.FovStep, StringFormat={}{0:F1}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -730,8 +730,8 @@
                                                 SmallChange="1.0"
                                                 LargeChange="5.0"
                                                 Width="200"
-                                                Value="{Binding DefaultFov, Mode=TwoWay}"/>
-                                        <TextBlock Text="{Binding DefaultFov, StringFormat={}{0:F0}}"
+                                                Value="{Binding FreecamSettings.DefaultFov, Mode=TwoWay}"/>
+                                        <TextBlock Text="{Binding FreecamSettings.DefaultFov, StringFormat={}{0:F0}}"
                                                    Width="50"
                                                    Foreground="#E6E6E6"/>
                                     </StackPanel>
@@ -741,7 +741,7 @@
                                             Foreground="#CCCCCC"
                                             FontWeight="SemiBold"
                                             Margin="0,8,0,0"/>
-                                <ToggleSwitch IsChecked="{Binding HoldMovementFollowsCamera, Mode=TwoWay}"
+                                <ToggleSwitch IsChecked="{Binding FreecamSettings.HoldMovementFollowsCamera, Mode=TwoWay}"
                                                 Content="Hold follows camera rotation"
                                                 Foreground="#E6E6E6"/>
                                 <Button Content="Reset to Default"
@@ -757,7 +757,7 @@
                                 <TextBlock Text="Analog Keyboard"
                                            Foreground="#CCCCCC"
                                            FontWeight="SemiBold"/>
-                                <ToggleSwitch IsChecked="{Binding AnalogKeyboardEnabled, Mode=TwoWay}"
+                                <ToggleSwitch IsChecked="{Binding FreecamSettings.AnalogKeyboardEnabled, Mode=TwoWay}"
                                               Content="Enable analog keyboard mode"
                                               Foreground="#E6E6E6"/>
                                 <TextBlock Text="Left Stick Deadzone"
@@ -768,8 +768,8 @@
                                             SmallChange="0.01"
                                             LargeChange="0.05"
                                             Width="200"
-                                            Value="{Binding AnalogLeftDeadzone, Mode=TwoWay}"/>
-                                    <TextBlock Text="{Binding AnalogLeftDeadzone, StringFormat={}{0:F2}}"
+                                            Value="{Binding FreecamSettings.AnalogLeftDeadzone, Mode=TwoWay}"/>
+                                    <TextBlock Text="{Binding FreecamSettings.AnalogLeftDeadzone, StringFormat={}{0:F2}}"
                                                Width="50"
                                                Foreground="#E6E6E6"/>
                                 </StackPanel>
@@ -782,8 +782,8 @@
                                             SmallChange="0.01"
                                             LargeChange="0.05"
                                             Width="200"
-                                            Value="{Binding AnalogRightDeadzone, Mode=TwoWay}"/>
-                                    <TextBlock Text="{Binding AnalogRightDeadzone, StringFormat={}{0:F2}}"
+                                            Value="{Binding FreecamSettings.AnalogRightDeadzone, Mode=TwoWay}"/>
+                                    <TextBlock Text="{Binding FreecamSettings.AnalogRightDeadzone, StringFormat={}{0:F2}}"
                                                Width="50"
                                                Foreground="#E6E6E6"/>
                                 </StackPanel>
@@ -796,8 +796,8 @@
                                             SmallChange="0.05"
                                             LargeChange="0.1"
                                             Width="200"
-                                            Value="{Binding AnalogCurve, Mode=TwoWay}"/>
-                                    <TextBlock Text="{Binding AnalogCurve, StringFormat={}{0:F2}}"
+                                            Value="{Binding FreecamSettings.AnalogCurve, Mode=TwoWay}"/>
+                                    <TextBlock Text="{Binding FreecamSettings.AnalogCurve, StringFormat={}{0:F2}}"
                                                Width="50"
                                                Foreground="#E6E6E6"/>
                                 </StackPanel>
@@ -814,3 +814,4 @@
         </TabControl>
     </Border>
 </UserControl>
+

@@ -30,6 +30,7 @@ namespace HlaeObsTools.ViewModels.Docks
         private readonly Func<NetworkSettingsData, Task>? _applyNetworkSettingsAsync;
         private readonly Action<AttachPresetViewModel>? _openAttachPresetAnimation;
         private bool _suppressFreecamSave;
+        private bool _suppressSettingsSave;
 
         public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, int GsiPort);
 
@@ -56,34 +57,6 @@ namespace HlaeObsTools.ViewModels.Docks
             _udpPort = settings.UdpPort;
             _rtpPort = settings.RtpPort;
             _gsiPort = settings.GsiPort;
-            _useAltPlayerBinds = settings.UseAltPlayerBinds;
-            _mapObjPath = settings.MapObjPath ?? string.Empty;
-            _pinScale = (float)settings.PinScale;
-            _pinOffsetZ = (float)settings.PinOffsetZ;
-            _viewportMouseScale = (float)settings.ViewportMouseScale;
-            _mapScale = (float)settings.MapScale;
-            _mapYaw = (float)settings.MapYaw;
-            _mapPitch = (float)settings.MapPitch;
-            _mapRoll = (float)settings.MapRoll;
-            _mapOffsetX = (float)settings.MapOffsetX;
-            _mapOffsetY = (float)settings.MapOffsetY;
-            _mapOffsetZ = (float)settings.MapOffsetZ;
-            _radarSettings.UseAltPlayerBinds = _useAltPlayerBinds;
-            _radarSettings.DisplayNumbersTopmost = settings.DisplayNumbersTopmost;
-            _radarSettings.ShowPlayerNames = settings.ShowPlayerNames;
-            _hudSettings.UseAltPlayerBinds = _useAltPlayerBinds;
-            _viewport3DSettings.UseAltPlayerBinds = _useAltPlayerBinds;
-            _viewport3DSettings.MapObjPath = _mapObjPath;
-            _viewport3DSettings.PinScale = _pinScale;
-            _viewport3DSettings.PinOffsetZ = _pinOffsetZ;
-            _viewport3DSettings.ViewportMouseScale = _viewportMouseScale;
-            _viewport3DSettings.MapScale = _mapScale;
-            _viewport3DSettings.MapYaw = _mapYaw;
-            _viewport3DSettings.MapPitch = _mapPitch;
-            _viewport3DSettings.MapRoll = _mapRoll;
-            _viewport3DSettings.MapOffsetX = _mapOffsetX;
-            _viewport3DSettings.MapOffsetY = _mapOffsetY;
-            _viewport3DSettings.MapOffsetZ = _mapOffsetZ;
 
             if (_ws != null)
             {
@@ -102,8 +75,16 @@ namespace HlaeObsTools.ViewModels.Docks
             SendAltPlayerBindsMode();
             if (_ws?.IsConnected == true)
                 _ = SendAllFreecamConfigAsync();
+            _radarSettings.PropertyChanged += OnRadarSettingsChanged;
+            _hudSettings.PropertyChanged += OnHudSettingsChanged;
+            _viewport3DSettings.PropertyChanged += OnViewport3DSettingsChanged;
             _freecamSettings.PropertyChanged += OnFreecamSettingsChanged;
         }
+
+        public RadarSettings RadarSettings => _radarSettings;
+        public HudSettings HudSettings => _hudSettings;
+        public FreecamSettings FreecamSettings => _freecamSettings;
+        public Viewport3DSettings Viewport3DSettings => _viewport3DSettings;
 
         #region === Network Settings ===
         private string _webSocketHost = "127.0.0.1";
@@ -191,186 +172,10 @@ namespace HlaeObsTools.ViewModels.Docks
 
         #region ==== 3D Viewport ====
 
-        private string _mapObjPath = string.Empty;
-        public string MapObjPath
-        {
-            get => _mapObjPath;
-            set
-            {
-                if (_mapObjPath != value)
-                {
-                    _mapObjPath = value ?? string.Empty;
-                    _viewport3DSettings.MapObjPath = _mapObjPath;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _pinScale = 1.0f;
-        public float PinScale
-        {
-            get => _pinScale;
-            set
-            {
-                if (Math.Abs(_pinScale - value) > 0.0001f)
-                {
-                    _pinScale = value;
-                    _viewport3DSettings.PinScale = _pinScale;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _pinOffsetZ;
-        public float PinOffsetZ
-        {
-            get => _pinOffsetZ;
-            set
-            {
-                if (Math.Abs(_pinOffsetZ - value) > 0.0001f)
-                {
-                    _pinOffsetZ = value;
-                    _viewport3DSettings.PinOffsetZ = _pinOffsetZ;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _viewportMouseScale = 1.0f;
-        public float ViewportMouseScale
-        {
-            get => _viewportMouseScale;
-            set
-            {
-                if (Math.Abs(_viewportMouseScale - value) > 0.0001f)
-                {
-                    _viewportMouseScale = value;
-                    _viewport3DSettings.ViewportMouseScale = _viewportMouseScale;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _mapScale = 1.0f;
-        public float MapScale
-        {
-            get => _mapScale;
-            set
-            {
-                if (Math.Abs(_mapScale - value) > 0.0001f)
-                {
-                    _mapScale = value;
-                    _viewport3DSettings.MapScale = _mapScale;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _mapYaw;
-        public float MapYaw
-        {
-            get => _mapYaw;
-            set
-            {
-                if (Math.Abs(_mapYaw - value) > 0.0001f)
-                {
-                    _mapYaw = value;
-                    _viewport3DSettings.MapYaw = _mapYaw;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _mapPitch;
-        public float MapPitch
-        {
-            get => _mapPitch;
-            set
-            {
-                if (Math.Abs(_mapPitch - value) > 0.0001f)
-                {
-                    _mapPitch = value;
-                    _viewport3DSettings.MapPitch = _mapPitch;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _mapRoll;
-        public float MapRoll
-        {
-            get => _mapRoll;
-            set
-            {
-                if (Math.Abs(_mapRoll - value) > 0.0001f)
-                {
-                    _mapRoll = value;
-                    _viewport3DSettings.MapRoll = _mapRoll;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _mapOffsetX;
-        public float MapOffsetX
-        {
-            get => _mapOffsetX;
-            set
-            {
-                if (Math.Abs(_mapOffsetX - value) > 0.0001f)
-                {
-                    _mapOffsetX = value;
-                    _viewport3DSettings.MapOffsetX = _mapOffsetX;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _mapOffsetY;
-        public float MapOffsetY
-        {
-            get => _mapOffsetY;
-            set
-            {
-                if (Math.Abs(_mapOffsetY - value) > 0.0001f)
-                {
-                    _mapOffsetY = value;
-                    _viewport3DSettings.MapOffsetY = _mapOffsetY;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private float _mapOffsetZ;
-        public float MapOffsetZ
-        {
-            get => _mapOffsetZ;
-            set
-            {
-                if (Math.Abs(_mapOffsetZ - value) > 0.0001f)
-                {
-                    _mapOffsetZ = value;
-                    _viewport3DSettings.MapOffsetZ = _mapOffsetZ;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
         public ICommand BrowseMapObjCommand => new AsyncRelay(BrowseMapObjAsync);
         public ICommand ClearMapObjCommand => new Relay(() =>
         {
-            MapObjPath = string.Empty;
+            _viewport3DSettings.MapObjPath = string.Empty;
         });
 
         private async Task BrowseMapObjAsync()
@@ -379,7 +184,7 @@ namespace HlaeObsTools.ViewModels.Docks
             if (string.IsNullOrWhiteSpace(path))
                 return;
 
-            MapObjPath = path;
+            _viewport3DSettings.MapObjPath = path;
         }
 
         private async Task<string?> PickObjFileToLoadAsync()
@@ -414,20 +219,19 @@ namespace HlaeObsTools.ViewModels.Docks
         #endregion
 
         #region === General Settings ===
-        private bool _useAltPlayerBinds;
         public bool UseAltPlayerBinds
         {
-            get => _useAltPlayerBinds;
+            get => _radarSettings.UseAltPlayerBinds;
             set
             {
-                if (_useAltPlayerBinds != value)
+                if (_radarSettings.UseAltPlayerBinds != value)
                 {
-                    _useAltPlayerBinds = value;
-                    OnPropertyChanged();
-
+                    _suppressSettingsSave = true;
                     _radarSettings.UseAltPlayerBinds = value;
                     _hudSettings.UseAltPlayerBinds = value;
                     _viewport3DSettings.UseAltPlayerBinds = value;
+                    _suppressSettingsSave = false;
+                    OnPropertyChanged();
                     SaveSettings();
                     SendAltPlayerBindsMode();
                 }
@@ -505,100 +309,8 @@ namespace HlaeObsTools.ViewModels.Docks
         private void SendAltPlayerBindsMode()
         {
             if (_ws == null) return;
-            _ = _ws.SendCommandAsync("spectator_bindings_mode", new { useAlt = _useAltPlayerBinds });
+            _ = _ws.SendCommandAsync("spectator_bindings_mode", new { useAlt = _radarSettings.UseAltPlayerBinds });
         }
-        #endregion
-
-        #region ==== Radar Settings ====
-
-        public double MarkerScale
-        {
-            get => _radarSettings.MarkerScale;
-            set
-            {
-                if (value < 0.3) value = 0.3;
-                if (value > 3.0) value = 3.0;
-                if (_radarSettings.MarkerScale != value)
-                {
-                    _radarSettings.MarkerScale = value;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        public bool DisplayNumbersTopmost
-        {
-            get => _radarSettings.DisplayNumbersTopmost;
-            set
-            {
-                if (_radarSettings.DisplayNumbersTopmost != value)
-                {
-                    _radarSettings.DisplayNumbersTopmost = value;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        public bool ShowPlayerNames
-        {
-            get => _radarSettings.ShowPlayerNames;
-            set
-            {
-                if (_radarSettings.ShowPlayerNames != value)
-                {
-                    _radarSettings.ShowPlayerNames = value;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
-        #endregion
-
-        #region ==== HUD ====
-
-
-        public bool IsHudEnabled
-        {
-            get => _hudSettings.IsHudEnabled;
-            set
-            {
-                if (_hudSettings.IsHudEnabled != value)
-                {
-                    _hudSettings.IsHudEnabled = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool ShowKillfeed
-        {
-            get => _hudSettings.ShowKillfeed;
-            set
-            {
-                if (_hudSettings.ShowKillfeed != value)
-                {
-                    _hudSettings.ShowKillfeed = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool ShowKillfeedAttackerSlot
-        {
-            get => _hudSettings.ShowKillfeedAttackerSlot;
-            set
-            {
-                if (_hudSettings.ShowKillfeedAttackerSlot != value)
-                {
-                    _hudSettings.ShowKillfeedAttackerSlot = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
         #endregion
 
         #region ==== Actions / Attach Presets ====
@@ -638,24 +350,24 @@ namespace HlaeObsTools.ViewModels.Docks
                 AttachPresets = _hudSettings.ToAttachPresetData().ToList(),
                 MarkerScale = _radarSettings.MarkerScale,
                 HeightScaleMultiplier = _radarSettings.HeightScaleMultiplier,
-                UseAltPlayerBinds = _useAltPlayerBinds,
+                UseAltPlayerBinds = _radarSettings.UseAltPlayerBinds,
                 DisplayNumbersTopmost = _radarSettings.DisplayNumbersTopmost,
                 ShowPlayerNames = _radarSettings.ShowPlayerNames,
                 WebSocketHost = WebSocketHost,
                 WebSocketPort = WebSocketPort,
                 UdpPort = UdpPort,
                 RtpPort = RtpPort,
-                MapObjPath = _mapObjPath,
-                PinScale = _pinScale,
-                PinOffsetZ = _pinOffsetZ,
-                ViewportMouseScale = _viewportMouseScale,
-                MapScale = _mapScale,
-                MapYaw = _mapYaw,
-                MapPitch = _mapPitch,
-                MapRoll = _mapRoll,
-                MapOffsetX = _mapOffsetX,
-                MapOffsetY = _mapOffsetY,
-                MapOffsetZ = _mapOffsetZ,
+                MapObjPath = _viewport3DSettings.MapObjPath,
+                PinScale = _viewport3DSettings.PinScale,
+                PinOffsetZ = _viewport3DSettings.PinOffsetZ,
+                ViewportMouseScale = _viewport3DSettings.ViewportMouseScale,
+                MapScale = _viewport3DSettings.MapScale,
+                MapYaw = _viewport3DSettings.MapYaw,
+                MapPitch = _viewport3DSettings.MapPitch,
+                MapRoll = _viewport3DSettings.MapRoll,
+                MapOffsetX = _viewport3DSettings.MapOffsetX,
+                MapOffsetY = _viewport3DSettings.MapOffsetY,
+                MapOffsetZ = _viewport3DSettings.MapOffsetZ,
                 FreecamSettings = _freecamSettings.ToData()
             };
             _settingsStorage.Save(data);
@@ -796,15 +508,131 @@ namespace HlaeObsTools.ViewModels.Docks
 
         #endregion
 
+        #region ==== Settings Persistence ====
+
+        private void OnRadarSettingsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_suppressSettingsSave)
+                return;
+
+            SaveSettings();
+        }
+
+        private void OnHudSettingsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_suppressSettingsSave)
+                return;
+
+            SaveSettings();
+        }
+
+        private void OnViewport3DSettingsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_suppressSettingsSave)
+                return;
+
+            SaveSettings();
+        }
+
+        #endregion
+
         #region ==== Freecam Settings ====
 
         private void OnFreecamSettingsChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (!string.IsNullOrEmpty(e.PropertyName))
-                OnPropertyChanged(e.PropertyName);
+            if (_suppressFreecamSave)
+                return;
 
-            if (!_suppressFreecamSave)
+            if (!_suppressSettingsSave)
                 SaveSettings();
+
+            if (_ws == null || string.IsNullOrEmpty(e.PropertyName))
+                return;
+
+            switch (e.PropertyName)
+            {
+                case nameof(FreecamSettings.MouseSensitivity):
+                    _ = SendFreecamConfigAsync(new { mouseSensitivity = (float)_freecamSettings.MouseSensitivity });
+                    break;
+                case nameof(FreecamSettings.MoveSpeed):
+                    _ = SendFreecamConfigAsync(new { moveSpeed = (float)_freecamSettings.MoveSpeed });
+                    break;
+                case nameof(FreecamSettings.SprintMultiplier):
+                    _ = SendFreecamConfigAsync(new { sprintMultiplier = (float)_freecamSettings.SprintMultiplier });
+                    break;
+                case nameof(FreecamSettings.VerticalSpeed):
+                    _ = SendFreecamConfigAsync(new { verticalSpeed = (float)_freecamSettings.VerticalSpeed });
+                    break;
+                case nameof(FreecamSettings.SpeedAdjustRate):
+                    _ = SendFreecamConfigAsync(new { speedAdjustRate = (float)_freecamSettings.SpeedAdjustRate });
+                    break;
+                case nameof(FreecamSettings.SpeedMinMultiplier):
+                    _ = SendFreecamConfigAsync(new { speedMinMultiplier = (float)_freecamSettings.SpeedMinMultiplier });
+                    break;
+                case nameof(FreecamSettings.SpeedMaxMultiplier):
+                    _ = SendFreecamConfigAsync(new { speedMaxMultiplier = (float)_freecamSettings.SpeedMaxMultiplier });
+                    break;
+                case nameof(FreecamSettings.RollSpeed):
+                    _ = SendFreecamConfigAsync(new { rollSpeed = (float)_freecamSettings.RollSpeed });
+                    break;
+                case nameof(FreecamSettings.RollSmoothing):
+                    _ = SendFreecamConfigAsync(new { rollSmoothing = (float)_freecamSettings.RollSmoothing });
+                    break;
+                case nameof(FreecamSettings.LeanStrength):
+                    _ = SendFreecamConfigAsync(new { leanStrength = (float)_freecamSettings.LeanStrength });
+                    break;
+                case nameof(FreecamSettings.LeanAccelScale):
+                    _ = SendFreecamConfigAsync(new { leanAccelScale = (float)_freecamSettings.LeanAccelScale });
+                    break;
+                case nameof(FreecamSettings.LeanVelocityScale):
+                    _ = SendFreecamConfigAsync(new { leanVelocityScale = (float)_freecamSettings.LeanVelocityScale });
+                    break;
+                case nameof(FreecamSettings.LeanMaxAngle):
+                    _ = SendFreecamConfigAsync(new { leanMaxAngle = (float)_freecamSettings.LeanMaxAngle });
+                    break;
+                case nameof(FreecamSettings.LeanHalfTime):
+                    _ = SendFreecamConfigAsync(new { leanHalfTime = (float)_freecamSettings.LeanHalfTime });
+                    break;
+                case nameof(FreecamSettings.FovMin):
+                    _ = SendFreecamConfigAsync(new { fovMin = (float)_freecamSettings.FovMin });
+                    break;
+                case nameof(FreecamSettings.FovMax):
+                    _ = SendFreecamConfigAsync(new { fovMax = (float)_freecamSettings.FovMax });
+                    break;
+                case nameof(FreecamSettings.FovStep):
+                    _ = SendFreecamConfigAsync(new { fovStep = (float)_freecamSettings.FovStep });
+                    break;
+                case nameof(FreecamSettings.DefaultFov):
+                    _ = SendFreecamConfigAsync(new { defaultFov = (float)_freecamSettings.DefaultFov });
+                    break;
+                case nameof(FreecamSettings.SmoothEnabled):
+                    _ = SendFreecamConfigAsync(new { smoothEnabled = _freecamSettings.SmoothEnabled });
+                    break;
+                case nameof(FreecamSettings.HalfVec):
+                    _ = SendFreecamConfigAsync(new { halfVec = (float)_freecamSettings.HalfVec });
+                    break;
+                case nameof(FreecamSettings.HalfRot):
+                    _ = SendFreecamConfigAsync(new { halfRot = (float)_freecamSettings.HalfRot });
+                    break;
+                case nameof(FreecamSettings.LockHalfRot):
+                    _ = SendFreecamConfigAsync(new { lockHalfRot = (float)_freecamSettings.LockHalfRot });
+                    break;
+                case nameof(FreecamSettings.LockHalfRotTransition):
+                    _ = SendFreecamConfigAsync(new { lockHalfRotTransition = (float)_freecamSettings.LockHalfRotTransition });
+                    break;
+                case nameof(FreecamSettings.HalfFov):
+                    _ = SendFreecamConfigAsync(new { halfFov = (float)_freecamSettings.HalfFov });
+                    break;
+                case nameof(FreecamSettings.RotCriticalDamping):
+                    _ = SendFreecamConfigAsync(new { rotCriticalDamping = _freecamSettings.RotCriticalDamping });
+                    break;
+                case nameof(FreecamSettings.RotDampingRatio):
+                    _ = SendFreecamConfigAsync(new { rotDampingRatio = (float)_freecamSettings.RotDampingRatio });
+                    break;
+                case nameof(FreecamSettings.ClampPitch):
+                    _ = SendFreecamConfigAsync(new { clampPitch = _freecamSettings.ClampPitch });
+                    break;
+            }
         }
 
         public ICommand ResetFreecamSettingsCommand => new Relay(ResetFreecamSettings);
@@ -866,471 +694,7 @@ namespace HlaeObsTools.ViewModels.Docks
             await _ws.SendCommandAsync("freecam_config", config);
         }
 
-        // Mouse Settings
-        public double MouseSensitivity
-        {
-            get => _freecamSettings.MouseSensitivity;
-            set
-            {
-                if (_freecamSettings.MouseSensitivity != value)
-                {
-                    _freecamSettings.MouseSensitivity = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { mouseSensitivity = (float)value });
-                }
-            }
-        }
-
-        // Movement Settings
-        public double MoveSpeed
-        {
-            get => _freecamSettings.MoveSpeed;
-            set
-            {
-                if (_freecamSettings.MoveSpeed != value)
-                {
-                    _freecamSettings.MoveSpeed = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { moveSpeed = (float)value });
-                }
-            }
-        }
-
-        public double SprintMultiplier
-        {
-            get => _freecamSettings.SprintMultiplier;
-            set
-            {
-                if (_freecamSettings.SprintMultiplier != value)
-                {
-                    _freecamSettings.SprintMultiplier = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { sprintMultiplier = (float)value });
-                }
-            }
-        }
-
-        public double VerticalSpeed
-        {
-            get => _freecamSettings.VerticalSpeed;
-            set
-            {
-                if (_freecamSettings.VerticalSpeed != value)
-                {
-                    _freecamSettings.VerticalSpeed = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { verticalSpeed = (float)value });
-                }
-            }
-        }
-
-        public double SpeedAdjustRate
-        {
-            get => _freecamSettings.SpeedAdjustRate;
-            set
-            {
-                if (_freecamSettings.SpeedAdjustRate != value)
-                {
-                    _freecamSettings.SpeedAdjustRate = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { speedAdjustRate = (float)value });
-                }
-            }
-        }
-
-        public double SpeedMinMultiplier
-        {
-            get => _freecamSettings.SpeedMinMultiplier;
-            set
-            {
-                if (_freecamSettings.SpeedMinMultiplier != value)
-                {
-                    _freecamSettings.SpeedMinMultiplier = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { speedMinMultiplier = (float)value });
-                }
-            }
-        }
-
-        public double SpeedMaxMultiplier
-        {
-            get => _freecamSettings.SpeedMaxMultiplier;
-            set
-            {
-                if (_freecamSettings.SpeedMaxMultiplier != value)
-                {
-                    _freecamSettings.SpeedMaxMultiplier = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { speedMaxMultiplier = (float)value });
-                }
-            }
-        }
-
-        // Roll Settings
-        public double RollSpeed
-        {
-            get => _freecamSettings.RollSpeed;
-            set
-            {
-                if (_freecamSettings.RollSpeed != value)
-                {
-                    _freecamSettings.RollSpeed = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { rollSpeed = (float)value });
-                }
-            }
-        }
-
-        public double RollSmoothing
-        {
-            get => _freecamSettings.RollSmoothing;
-            set
-            {
-                if (_freecamSettings.RollSmoothing != value)
-                {
-                    _freecamSettings.RollSmoothing = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { rollSmoothing = (float)value });
-                }
-            }
-        }
-
-        public double LeanStrength
-        {
-            get => _freecamSettings.LeanStrength;
-            set
-            {
-                if (_freecamSettings.LeanStrength != value)
-                {
-                    _freecamSettings.LeanStrength = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { leanStrength = (float)value });
-                }
-            }
-        }
-
-        public double LeanAccelScale
-        {
-            get => _freecamSettings.LeanAccelScale;
-            set
-            {
-                if (_freecamSettings.LeanAccelScale != value)
-                {
-                    _freecamSettings.LeanAccelScale = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { leanAccelScale = (float)value });
-                }
-            }
-        }
-
-        public double LeanVelocityScale
-        {
-            get => _freecamSettings.LeanVelocityScale;
-            set
-            {
-                if (_freecamSettings.LeanVelocityScale != value)
-                {
-                    _freecamSettings.LeanVelocityScale = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { leanVelocityScale = (float)value });
-                }
-            }
-        }
-
-        public double LeanMaxAngle
-        {
-            get => _freecamSettings.LeanMaxAngle;
-            set
-            {
-                if (_freecamSettings.LeanMaxAngle != value)
-                {
-                    _freecamSettings.LeanMaxAngle = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { leanMaxAngle = (float)value });
-                }
-            }
-        }
-
-        public double LeanHalfTime
-        {
-            get => _freecamSettings.LeanHalfTime;
-            set
-            {
-                if (_freecamSettings.LeanHalfTime != value)
-                {
-                    _freecamSettings.LeanHalfTime = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { leanHalfTime = (float)value });
-                }
-            }
-        }
-
-        // FOV Settings
-        public double FovMin
-        {
-            get => _freecamSettings.FovMin;
-            set
-            {
-                if (_freecamSettings.FovMin != value)
-                {
-                    _freecamSettings.FovMin = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { fovMin = (float)value });
-                }
-            }
-        }
-
-        public double FovMax
-        {
-            get => _freecamSettings.FovMax;
-            set
-            {
-                if (_freecamSettings.FovMax != value)
-                {
-                    _freecamSettings.FovMax = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { fovMax = (float)value });
-                }
-            }
-        }
-
-        public double FovStep
-        {
-            get => _freecamSettings.FovStep;
-            set
-            {
-                if (_freecamSettings.FovStep != value)
-                {
-                    _freecamSettings.FovStep = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { fovStep = (float)value });
-                }
-            }
-        }
-
-        public double DefaultFov
-        {
-            get => _freecamSettings.DefaultFov;
-            set
-            {
-                if (_freecamSettings.DefaultFov != value)
-                {
-                    _freecamSettings.DefaultFov = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { defaultFov = (float)value });
-                }
-            }
-        }
-
-        // Smoothing Settings
-        public bool SmoothEnabled
-        {
-            get => _freecamSettings.SmoothEnabled;
-            set
-            {
-                if (_freecamSettings.SmoothEnabled != value)
-                {
-                    _freecamSettings.SmoothEnabled = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { smoothEnabled = value });
-                }
-            }
-        }
-
-        public double HalfVec
-        {
-            get => _freecamSettings.HalfVec;
-            set
-            {
-                if (_freecamSettings.HalfVec != value)
-                {
-                    _freecamSettings.HalfVec = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { halfVec = (float)value });
-                }
-            }
-        }
-
-        public double HalfRot
-        {
-            get => _freecamSettings.HalfRot;
-            set
-            {
-                if (_freecamSettings.HalfRot != value)
-                {
-                    _freecamSettings.HalfRot = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { halfRot = (float)value });
-                }
-            }
-        }
-
-        public double LockHalfRot
-        {
-            get => _freecamSettings.LockHalfRot;
-            set
-            {
-                if (_freecamSettings.LockHalfRot != value)
-                {
-                    _freecamSettings.LockHalfRot = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { lockHalfRot = (float)value });
-                }
-            }
-        }
-
-        public double LockHalfRotTransition
-        {
-            get => _freecamSettings.LockHalfRotTransition;
-            set
-            {
-                if (_freecamSettings.LockHalfRotTransition != value)
-                {
-                    _freecamSettings.LockHalfRotTransition = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { lockHalfRotTransition = (float)value });
-                }
-            }
-        }
-
-        public double HalfFov
-        {
-            get => _freecamSettings.HalfFov;
-            set
-            {
-                if (_freecamSettings.HalfFov != value)
-                {
-                    _freecamSettings.HalfFov = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { halfFov = (float)value });
-                }
-            }
-        }
-
-        public bool RotCriticalDamping
-        {
-            get => _freecamSettings.RotCriticalDamping;
-            set
-            {
-                if (_freecamSettings.RotCriticalDamping != value)
-                {
-                    _freecamSettings.RotCriticalDamping = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { rotCriticalDamping = value });
-                }
-            }
-        }
-
-        public double RotDampingRatio
-        {
-            get => _freecamSettings.RotDampingRatio;
-            set
-            {
-                if (_freecamSettings.RotDampingRatio != value)
-                {
-                    _freecamSettings.RotDampingRatio = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { rotDampingRatio = (float)_freecamSettings.RotDampingRatio });
-                }
-            }
-        }
-
-        public bool HoldMovementFollowsCamera
-        {
-            get => _freecamSettings.HoldMovementFollowsCamera;
-            set
-            {
-                if (_freecamSettings.HoldMovementFollowsCamera != value)
-                {
-                    _freecamSettings.HoldMovementFollowsCamera = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public bool AnalogKeyboardEnabled
-        {
-            get => _freecamSettings.AnalogKeyboardEnabled;
-            set
-            {
-                if (_freecamSettings.AnalogKeyboardEnabled != value)
-                {
-                    _freecamSettings.AnalogKeyboardEnabled = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public double AnalogLeftDeadzone
-        {
-            get => _freecamSettings.AnalogLeftDeadzone;
-            set
-            {
-                if (_freecamSettings.AnalogLeftDeadzone != value)
-                {
-                    _freecamSettings.AnalogLeftDeadzone = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public double AnalogRightDeadzone
-        {
-            get => _freecamSettings.AnalogRightDeadzone;
-            set
-            {
-                if (_freecamSettings.AnalogRightDeadzone != value)
-                {
-                    _freecamSettings.AnalogRightDeadzone = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public double AnalogCurve
-        {
-            get => _freecamSettings.AnalogCurve;
-            set
-            {
-                if (_freecamSettings.AnalogCurve != value)
-                {
-                    _freecamSettings.AnalogCurve = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public double HeightScaleMultiplier
-        {
-            get => _radarSettings.HeightScaleMultiplier;
-            set
-            {
-                if (value < 0.0) value = 0.0;
-                if (value > 2.0) value = 2.0;
-                if (Math.Abs(_radarSettings.HeightScaleMultiplier - value) > 0.0001)
-                {
-                    _radarSettings.HeightScaleMultiplier = value;
-                    OnPropertyChanged();
-                    SaveSettings();
-                }
-            }
-        }
-
         #endregion
-
-        public bool ClampPitch
-        {
-            get => _freecamSettings.ClampPitch;
-            set
-            {
-                if (_freecamSettings.ClampPitch != value)
-                {
-                    _freecamSettings.ClampPitch = value;
-                    OnPropertyChanged();
-                    SendFreecamConfigAsync(new { clampPitch = value });
-                }
-            }
-        }
 
         // Simple ICommand helper (no MVVM library required)
         private class Relay : ICommand

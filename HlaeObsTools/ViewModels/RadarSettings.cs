@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using HlaeObsTools.ViewModels;
 
@@ -20,7 +21,11 @@ public sealed class RadarSettings : ViewModelBase
     public double MarkerScale
     {
         get => _markerScale;
-        set => SetProperty(ref _markerScale, value);
+        set
+        {
+            var clamped = Math.Clamp(value, 0.3, 3.0);
+            SetProperty(ref _markerScale, clamped);
+        }
     }
 
     /// <summary>
@@ -29,7 +34,11 @@ public sealed class RadarSettings : ViewModelBase
     public double HeightScaleMultiplier
     {
         get => _heightScaleMultiplier;
-        set => SetProperty(ref _heightScaleMultiplier, value);
+        set
+        {
+            var clamped = Math.Clamp(value, 0.0, 2.0);
+            SetProperty(ref _heightScaleMultiplier, clamped);
+        }
     }
 
     /// <summary>
