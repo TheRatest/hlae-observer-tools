@@ -17,7 +17,7 @@ public sealed class ProgressToPieGeometryConverter : IValueConverter
             return null;
         }
 
-        var radius = 40.0;
+        var radius = 30.0;
         if (parameter != null && double.TryParse(parameter.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
         {
             radius = parsed;

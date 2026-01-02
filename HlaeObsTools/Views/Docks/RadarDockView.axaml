@@ -201,23 +201,23 @@
                            IsVisible="{Binding !IsDetonated}" />
 
                   <!-- Show smoke bloom for detonated smoke -->
-                  <Ellipse Width="80"
-                           Height="80"
-                           Canvas.Left="-32"
-                           Canvas.Top="-32"
+                  <Ellipse Width="60"
+                           Height="60"
+                           Canvas.Left="-24"
+                           Canvas.Top="-24"
                            Fill="#35FFFFFF"
                            IsVisible="{Binding IsSmoke}" />
-                  <Path Data="{Binding SmokeRemainingProgress, Converter={StaticResource ProgressToPieGeometryConverter}, ConverterParameter=40}"
-                        Width="80"
-                        Height="80"
-                        Canvas.Left="-32"
-                        Canvas.Top="-32"
+                  <Path Data="{Binding SmokeRemainingProgress, Converter={StaticResource ProgressToPieGeometryConverter}, ConverterParameter=30}"
+                        Width="60"
+                        Height="60"
+                        Canvas.Left="-24"
+                        Canvas.Top="-24"
                         Fill="#45FFFFFF"
                         IsVisible="{Binding IsSmoke}" />
-                  <Ellipse Width="80"
-                           Height="80"
-                           Canvas.Left="-32"
-                           Canvas.Top="-32"
+                  <Ellipse Width="60"
+                           Height="60"
+                           Canvas.Left="-24"
+                           Canvas.Top="-24"
                            Stroke="#B0FFFFFF"
                            StrokeThickness="2"
                            IsVisible="{Binding IsSmoke}" />
