@@ -75,7 +75,8 @@
                              Background="#303540"
                              IsHitTestVisible="False" />
 
-                <Grid ColumnDefinitions="*,Auto">
+                <Grid ColumnDefinitions="*,Auto"
+                      IsVisible="{Binding HasWeaponsAndGrenades}">
                     <ItemsControl Grid.Column="0"
                                   ItemsSource="{Binding WeaponsAndGrenades}"
                                   ItemTemplate="{StaticResource WeaponChipTemplate}">

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
@@ -43,12 +44,14 @@ public partial class HudPlayerCardControl : UserControl
         if (_currentViewModel != null)
         {
             _currentViewModel.RadialActions.CollectionChanged -= OnRadialActionsChanged;
+            _currentViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         }
 
         _currentViewModel = DataContext as HudPlayerCardViewModel;
         if (_currentViewModel != null)
         {
             _currentViewModel.RadialActions.CollectionChanged += OnRadialActionsChanged;
+            _currentViewModel.PropertyChanged += OnViewModelPropertyChanged;
             BuildRadialLayout(_currentViewModel);
         }
     }
@@ -58,6 +61,21 @@ public partial class HudPlayerCardControl : UserControl
         if (_currentViewModel != null)
         {
             BuildRadialLayout(_currentViewModel);
+        }
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(HudPlayerCardViewModel.HasWeaponsAndGrenades) ||
+            e.PropertyName == nameof(HudPlayerCardViewModel.HasDefuseKit))
+        {
+            CardBorder?.InvalidateMeasure();
+            InvalidateMeasure();
+
+            if (Parent is Control parent)
+            {
+                parent.InvalidateMeasure();
+            }
         }
     }
 

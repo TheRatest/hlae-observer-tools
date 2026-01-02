@@ -165,6 +165,7 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
     private IBrush _cardBackground = Brushes.Black;
     private bool _isFocused;
     private bool _isRadialMenuOpen;
+    private bool _hasWeaponsAndGrenades;
     private HudPlayerActionOption? _hoveredRadialAction;
     private bool _isRadialCenterHighlighted;
     private IBrush _radialCenterBrush = new SolidColorBrush(Color.FromArgb(150, 25, 25, 30));
@@ -183,6 +184,8 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
         AttachSubMenuOptions = _attachSubMenuOptionsReadonly;
         RadialActions.CollectionChanged += OnRadialActionsChanged;
         _attachSubMenuOptions.CollectionChanged += OnAttachSubMenuChanged;
+        WeaponsAndGrenades.CollectionChanged += OnWeaponsAndGrenadesChanged;
+        UpdateHasWeaponsAndGrenades();
     }
 
     public string SteamId
@@ -294,6 +297,12 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
     public ObservableCollection<HudPlayerActionOption> RadialActions { get; } = new();
     public ReadOnlyObservableCollection<HudPlayerActionOption> AttachSubMenuOptions { get; }
     public IEnumerable<HudPlayerActionOption> CurrentRadialItems => IsInAttachSubMenu ? AttachSubMenuOptions : RadialActions;
+
+    public bool HasWeaponsAndGrenades
+    {
+        get => _hasWeaponsAndGrenades;
+        private set => SetProperty(ref _hasWeaponsAndGrenades, value);
+    }
 
     public IBrush AccentBrush
     {
@@ -505,7 +514,13 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
 
     public void SetRadialActions(IEnumerable<HudPlayerActionOption> actions)
     {
-        SyncCollection(RadialActions, actions);
+        var desired = actions.ToList();
+        if (RadialActions.Count == desired.Count && RadialActions.SequenceEqual(desired))
+        {
+            return;
+        }
+
+        SyncCollection(RadialActions, desired);
         ApplyAccentToRadialActions(AccentBrush);
         OnPropertyChanged(nameof(CurrentRadialItems));
     }
@@ -621,6 +636,16 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(CurrentRadialItems));
     }
+
+    private void OnWeaponsAndGrenadesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        UpdateHasWeaponsAndGrenades();
+    }
+
+    private void UpdateHasWeaponsAndGrenades()
+    {
+        HasWeaponsAndGrenades = WeaponsAndGrenades.Count > 0;
+    }
 }
 
 public sealed class HudTeamViewModel : ViewModelBase
@@ -633,6 +658,11 @@ public sealed class HudTeamViewModel : ViewModelBase
     private string _name = string.Empty;
     private int _score;
     private int _timeoutsRemaining;
+    private HudPlayerCardViewModel? _slot1;
+    private HudPlayerCardViewModel? _slot2;
+    private HudPlayerCardViewModel? _slot3;
+    private HudPlayerCardViewModel? _slot4;
+    private HudPlayerCardViewModel? _slot5;
 
     public string Side { get; }
 
@@ -662,43 +692,63 @@ public sealed class HudTeamViewModel : ViewModelBase
 
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Side : Name;
 
-    public ObservableCollection<HudPlayerCardViewModel> Players { get; } = new();
+    public HudPlayerCardViewModel? Slot1
+    {
+        get => _slot1;
+        private set => SetProperty(ref _slot1, value);
+    }
 
-    public bool HasPlayers => Players.Count > 0;
+    public HudPlayerCardViewModel? Slot2
+    {
+        get => _slot2;
+        private set => SetProperty(ref _slot2, value);
+    }
+
+    public HudPlayerCardViewModel? Slot3
+    {
+        get => _slot3;
+        private set => SetProperty(ref _slot3, value);
+    }
+
+    public HudPlayerCardViewModel? Slot4
+    {
+        get => _slot4;
+        private set => SetProperty(ref _slot4, value);
+    }
+
+    public HudPlayerCardViewModel? Slot5
+    {
+        get => _slot5;
+        private set => SetProperty(ref _slot5, value);
+    }
+
+    public bool HasPlayers =>
+        Slot1 != null || Slot2 != null || Slot3 != null || Slot4 != null || Slot5 != null;
 
     public void SetPlayers(IEnumerable<HudPlayerCardViewModel> players)
     {
         var desired = players.ToList();
+        var hadPlayers = HasPlayers;
 
-        for (int i = Players.Count - 1; i >= 0; i--)
+        Slot1 = desired.Count > 0 ? desired[0] : null;
+        Slot2 = desired.Count > 1 ? desired[1] : null;
+        Slot3 = desired.Count > 2 ? desired[2] : null;
+        Slot4 = desired.Count > 3 ? desired[3] : null;
+        Slot5 = desired.Count > 4 ? desired[4] : null;
+
+        if (hadPlayers != HasPlayers)
         {
-            if (!desired.Contains(Players[i]))
-            {
-                Players.RemoveAt(i);
-            }
+            OnPropertyChanged(nameof(HasPlayers));
         }
+    }
 
-        for (int i = 0; i < desired.Count; i++)
-        {
-            var p = desired[i];
-            if (i < Players.Count)
-            {
-                if (!ReferenceEquals(Players[i], p))
-                {
-                    if (Players.Contains(p))
-                    {
-                        Players.Remove(p);
-                    }
-                    Players.Insert(i, p);
-                }
-            }
-            else
-            {
-                Players.Add(p);
-            }
-        }
-
-        OnPropertyChanged(nameof(HasPlayers));
+    public IEnumerable<HudPlayerCardViewModel> EnumerateSlots()
+    {
+        if (Slot1 != null) yield return Slot1;
+        if (Slot2 != null) yield return Slot2;
+        if (Slot3 != null) yield return Slot3;
+        if (Slot4 != null) yield return Slot4;
+        if (Slot5 != null) yield return Slot5;
     }
 }
 

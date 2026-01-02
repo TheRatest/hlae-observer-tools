@@ -18,6 +18,7 @@
         <conv:BooleanToOpacityConverter x:Key="FocusedGlowOpacityConverter"
                                         TrueOpacity="0.9"
                                         FalseOpacity="0" />
+        <conv:NullToBoolConverter x:Key="NullToBoolConverter" />
         <conv:HudScaleConverter x:Key="HudScaleConverter"
                                 BaseWidth="1600"
                                 BaseHeight="900"
@@ -116,7 +117,8 @@
                                  Background="#303540"
                                  IsHitTestVisible="False" />
 
-                    <Grid ColumnDefinitions="*,Auto">
+                    <Grid ColumnDefinitions="*,Auto"
+                          IsVisible="{Binding HasWeaponsAndGrenades}">
                         <ItemsControl Grid.Column="0"
                                       ItemsSource="{Binding WeaponsAndGrenades}"
                                       ItemTemplate="{StaticResource WeaponChipTemplate}">
@@ -447,27 +449,61 @@
                 </Border>
 
                 <!-- Player sidebars -->
-                <ItemsControl Grid.Row="1"
-                              Grid.Column="0"
-                              ItemsSource="{Binding TeamCt.Players}"
-                              ItemTemplate="{StaticResource PlayerCardTemplate}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12,0,18,12"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
+                <StackPanel Grid.Row="1"
+                            Grid.Column="0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Bottom"
+                            Margin="12,0,18,12"
+                            ClipToBounds="False">
+                    <ContentControl Content="{Binding TeamCt.Slot1}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamCt.Slot1, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                    <ContentControl Content="{Binding TeamCt.Slot2}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamCt.Slot2, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                    <ContentControl Content="{Binding TeamCt.Slot3}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamCt.Slot3, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                    <ContentControl Content="{Binding TeamCt.Slot4}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamCt.Slot4, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                    <ContentControl Content="{Binding TeamCt.Slot5}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamCt.Slot5, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                </StackPanel>
 
-                <ItemsControl Grid.Row="1"
-                              Grid.Column="2"
-                              ItemsSource="{Binding TeamT.Players}"
-                              ItemTemplate="{StaticResource PlayerCardTemplate}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="18,0,12,12"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
+                <StackPanel Grid.Row="1"
+                            Grid.Column="2"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="18,0,12,12"
+                            ClipToBounds="False">
+                    <ContentControl Content="{Binding TeamT.Slot1}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamT.Slot1, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                    <ContentControl Content="{Binding TeamT.Slot2}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamT.Slot2, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                    <ContentControl Content="{Binding TeamT.Slot3}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamT.Slot3, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                    <ContentControl Content="{Binding TeamT.Slot4}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamT.Slot4, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                    <ContentControl Content="{Binding TeamT.Slot5}"
+                                    ContentTemplate="{StaticResource PlayerCardTemplate}"
+                                    IsVisible="{Binding TeamT.Slot5, Converter={StaticResource NullToBoolConverter}}"
+                                    ClipToBounds="False" />
+                </StackPanel>
 
                 <TextBlock Grid.Row="1"
                            Grid.Column="1"

@@ -29,11 +29,13 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
     private string _roundPhase = "LIVE";
     private int _roundNumber;
     private string _mapName = string.Empty;
+    private bool _hasHudDataCached;
     private bool _isFreecamActive;
     private bool _isAwaitingAttachTarget;
     private int _pendingAttachSourceObserverSlot;
     private int _pendingAttachPresetIndex = -1;
     private string _hudPromptText = string.Empty;
+    private DateTime _lastUiUpdateUtc;
 
     private static readonly HashSet<string> PrimaryWeaponTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -59,14 +61,16 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
     private const double KillfeedLifetimeSeconds = 8.0;
     private const double KillfeedFadeSeconds = 1.0;
 
+    private static readonly SolidColorBrush CtAccentBrush = new(Color.Parse("#6EB4FF"));
+    private static readonly SolidColorBrush TAccentBrush = new(Color.Parse("#FF9B4A"));
+    private static readonly SolidColorBrush CtCardBackgroundBrush = new(Color.Parse("#192434"));
+    private static readonly SolidColorBrush TCardBackgroundBrush = new(Color.Parse("#2E1E15"));
+
     public HudOverlayViewModel(GsiServer gsiServer, HudSettings hudSettings, HlaeWebSocketClient webSocketClient)
     {
         _gsiServer = gsiServer;
         _hudSettings = hudSettings;
         _webSocketClient = webSocketClient;
-
-        _teamCt.Players.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHudData));
-        _teamT.Players.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHudData));
 
         CancelHudPromptCommand = new Relay(_ => CancelPendingAttachTargetSelection());
 
@@ -95,6 +99,9 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         get => _focusedHudPlayer;
         private set
         {
+            if (ReferenceEquals(_focusedHudPlayer, value))
+                return;
+
             _focusedHudPlayer = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasFocusedHudPlayer));
@@ -109,8 +116,7 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         get => _roundTimerText;
         private set
         {
-            _roundTimerText = value;
-            OnPropertyChanged();
+            SetProperty(ref _roundTimerText, value);
         }
     }
 
@@ -119,8 +125,7 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         get => _roundPhase;
         private set
         {
-            _roundPhase = value;
-            OnPropertyChanged();
+            SetProperty(ref _roundPhase, value);
         }
     }
 
@@ -129,8 +134,7 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         get => _roundNumber;
         private set
         {
-            _roundNumber = value;
-            OnPropertyChanged();
+            SetProperty(ref _roundNumber, value);
         }
     }
 
@@ -139,8 +143,7 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         get => _mapName;
         private set
         {
-            _mapName = value;
-            OnPropertyChanged();
+            SetProperty(ref _mapName, value);
         }
     }
 
@@ -215,6 +218,11 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
 
     private void ApplyHudState(GsiGameState state)
     {
+        var now = DateTime.UtcNow;
+        if ((now - _lastUiUpdateUtc).TotalMilliseconds < 33)
+            return;
+        _lastUiUpdateUtc = now;
+
         TeamCt.Name = state.TeamCt?.Name ?? "CT";
         TeamCt.Score = state.TeamCt?.Score ?? 0;
         TeamCt.TimeoutsRemaining = state.TeamCt?.TimeoutsRemaining ?? 0;
@@ -234,7 +242,12 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
 
         FocusedHudPlayer = FindFocusedPlayer(focusedSteamId);
 
-        OnPropertyChanged(nameof(HasHudData));
+        var hasHudData = TeamCt.HasPlayers || TeamT.HasPlayers;
+        if (hasHudData != _hasHudDataCached)
+        {
+            _hasHudDataCached = hasHudData;
+            OnPropertyChanged(nameof(HasHudData));
+        }
     }
 
     private static IEnumerable<HudPlayerActionOption> CreateDefaultPlayerActions()
@@ -257,10 +270,6 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         if (player.RadialActions.Count == 0)
         {
             player.SetRadialActions(CreateDefaultPlayerActions());
-        }
-        else
-        {
-            player.SetRadialActions(player.RadialActions); // Ensure accent propagation
         }
 
         player.PlayerActionRequested -= OnPlayerActionRequested;
@@ -404,8 +413,8 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         if (string.IsNullOrWhiteSpace(steamId))
             return null;
 
-        return TeamCt.Players.FirstOrDefault(p => string.Equals(p.SteamId, steamId, StringComparison.Ordinal))
-               ?? TeamT.Players.FirstOrDefault(p => string.Equals(p.SteamId, steamId, StringComparison.Ordinal));
+        return TeamCt.EnumerateSlots().FirstOrDefault(p => string.Equals(p.SteamId, steamId, StringComparison.Ordinal))
+               ?? TeamT.EnumerateSlots().FirstOrDefault(p => string.Equals(p.SteamId, steamId, StringComparison.Ordinal));
     }
 
     private static string FormatPhaseTimer(double? seconds)
@@ -442,8 +451,8 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
     private static SolidColorBrush CreateAccent(string team)
     {
         return string.Equals(team, "CT", StringComparison.OrdinalIgnoreCase)
-            ? new SolidColorBrush(Color.Parse("#6EB4FF"))
-            : new SolidColorBrush(Color.Parse("#FF9B4A"));
+            ? CtAccentBrush
+            : TAccentBrush;
     }
 
     private static SolidColorBrush CreateTeamBrush(int teamId)
@@ -459,8 +468,8 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
     private static SolidColorBrush CreateCardBackground(string team)
     {
         return string.Equals(team, "CT", StringComparison.OrdinalIgnoreCase)
-            ? new SolidColorBrush(Color.Parse("#192434"))
-            : new SolidColorBrush(Color.Parse("#2E1E15"));
+            ? CtCardBackgroundBrush
+            : TCardBackgroundBrush;
     }
 
     private void OnPlayerActionRequested(object? sender, HudPlayerActionRequestedEventArgs e)
