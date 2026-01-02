@@ -138,6 +138,7 @@ public class MainDockFactory : Factory, IDisposable
             MapObjPath = _storedSettings.MapObjPath ?? string.Empty,
             UseAltPlayerBinds = _storedSettings.UseAltPlayerBinds,
             PinScale = (float)_storedSettings.PinScale,
+            PinOffsetZ = (float)_storedSettings.PinOffsetZ,
             ViewportMouseScale = (float)_storedSettings.ViewportMouseScale,
             MapScale = (float)_storedSettings.MapScale,
             MapYaw = (float)_storedSettings.MapYaw,

@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System;
 using System.Collections.Generic;
 using Avalonia.Threading;
@@ -34,7 +33,6 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         _webSocketClient = webSocketClient;
         _videoDisplay = videoDisplay;
         _gsiServer = gsiServer;
-        _settings.PropertyChanged += OnSettingsChanged;
         if (_gsiServer != null)
             _gsiServer.GameStateUpdated += OnGameStateUpdated;
 
@@ -43,19 +41,7 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         CanPin = true;
     }
 
-    public string MapObjPath
-    {
-        get => _settings.MapObjPath;
-        set
-        {
-            if (_settings.MapObjPath != value)
-            {
-                _settings.MapObjPath = value ?? string.Empty;
-                OnPropertyChanged();
-            }
-        }
-    }
-
+    public Viewport3DSettings Viewport3DSettings => _settings;
     public FreecamSettings FreecamSettings => _freecamSettings;
     public HlaeInputSender? InputSender => _inputSender;
 
@@ -139,165 +125,8 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         _videoDisplay?.RequestFreecamInputRelease();
     }
 
-    public float PinScale
-    {
-        get => _settings.PinScale;
-        set
-        {
-            if (Math.Abs(_settings.PinScale - value) > 0.0001f)
-            {
-                _settings.PinScale = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float PinOffsetZ
-    {
-        get => _settings.PinOffsetZ;
-        set
-        {
-            if (Math.Abs(_settings.PinOffsetZ - value) > 0.0001f)
-            {
-                _settings.PinOffsetZ = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float ViewportMouseScale
-    {
-        get => _settings.ViewportMouseScale;
-        set
-        {
-            if (Math.Abs(_settings.ViewportMouseScale - value) > 0.0001f)
-            {
-                _settings.ViewportMouseScale = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float MapScale
-    {
-        get => _settings.MapScale;
-        set
-        {
-            if (Math.Abs(_settings.MapScale - value) > 0.0001f)
-            {
-                _settings.MapScale = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float MapYaw
-    {
-        get => _settings.MapYaw;
-        set
-        {
-            if (Math.Abs(_settings.MapYaw - value) > 0.0001f)
-            {
-                _settings.MapYaw = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float MapPitch
-    {
-        get => _settings.MapPitch;
-        set
-        {
-            if (Math.Abs(_settings.MapPitch - value) > 0.0001f)
-            {
-                _settings.MapPitch = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float MapRoll
-    {
-        get => _settings.MapRoll;
-        set
-        {
-            if (Math.Abs(_settings.MapRoll - value) > 0.0001f)
-            {
-                _settings.MapRoll = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float MapOffsetX
-    {
-        get => _settings.MapOffsetX;
-        set
-        {
-            if (Math.Abs(_settings.MapOffsetX - value) > 0.0001f)
-            {
-                _settings.MapOffsetX = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float MapOffsetY
-    {
-        get => _settings.MapOffsetY;
-        set
-        {
-            if (Math.Abs(_settings.MapOffsetY - value) > 0.0001f)
-            {
-                _settings.MapOffsetY = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    public float MapOffsetZ
-    {
-        get => _settings.MapOffsetZ;
-        set
-        {
-            if (Math.Abs(_settings.MapOffsetZ - value) > 0.0001f)
-            {
-                _settings.MapOffsetZ = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
-    private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(Viewport3DSettings.MapObjPath))
-            OnPropertyChanged(nameof(MapObjPath));
-        else if (e.PropertyName == nameof(Viewport3DSettings.PinScale))
-            OnPropertyChanged(nameof(PinScale));
-        else if (e.PropertyName == nameof(Viewport3DSettings.PinOffsetZ))
-            OnPropertyChanged(nameof(PinOffsetZ));
-        else if (e.PropertyName == nameof(Viewport3DSettings.ViewportMouseScale))
-            OnPropertyChanged(nameof(ViewportMouseScale));
-        else if (e.PropertyName == nameof(Viewport3DSettings.MapScale))
-            OnPropertyChanged(nameof(MapScale));
-        else if (e.PropertyName == nameof(Viewport3DSettings.MapYaw))
-            OnPropertyChanged(nameof(MapYaw));
-        else if (e.PropertyName == nameof(Viewport3DSettings.MapPitch))
-            OnPropertyChanged(nameof(MapPitch));
-        else if (e.PropertyName == nameof(Viewport3DSettings.MapRoll))
-            OnPropertyChanged(nameof(MapRoll));
-        else if (e.PropertyName == nameof(Viewport3DSettings.MapOffsetX))
-            OnPropertyChanged(nameof(MapOffsetX));
-        else if (e.PropertyName == nameof(Viewport3DSettings.MapOffsetY))
-            OnPropertyChanged(nameof(MapOffsetY));
-        else if (e.PropertyName == nameof(Viewport3DSettings.MapOffsetZ))
-            OnPropertyChanged(nameof(MapOffsetZ));
-    }
-
     public void Dispose()
     {
-        _settings.PropertyChanged -= OnSettingsChanged;
         if (_gsiServer != null)
             _gsiServer.GameStateUpdated -= OnGameStateUpdated;
     }

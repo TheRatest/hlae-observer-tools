@@ -520,9 +520,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         private set => SetProperty(ref _hasRadar, value);
     }
 
-    public double MarkerScale => _settings.MarkerScale;
-    public bool DisplayNumbersTopmost => _settings.DisplayNumbersTopmost;
-    public bool ShowPlayerNames => _settings.ShowPlayerNames;
+    public RadarSettings RadarSettings => _settings;
 
     public RadarDockViewModel(GsiServer gsiServer, RadarConfigProvider configProvider, RadarSettings settings, CampathsDockViewModel? campathsVm, HlaeWebSocketClient? webSocketClient)
     {
@@ -1118,7 +1116,6 @@ public sealed class RadarDockViewModel : Tool, IDisposable
     {
         if (e.PropertyName == nameof(RadarSettings.MarkerScale))
         {
-            OnPropertyChanged(nameof(MarkerScale));
             foreach (var player in Players)
             {
                 player.SetBaseScale(_settings.MarkerScale);
@@ -1134,14 +1131,6 @@ public sealed class RadarDockViewModel : Tool, IDisposable
             {
                 player.UseAltBindings = _settings.UseAltPlayerBinds;
             }
-        }
-        else if (e.PropertyName == nameof(RadarSettings.DisplayNumbersTopmost))
-        {
-            OnPropertyChanged(nameof(DisplayNumbersTopmost));
-        }
-        else if (e.PropertyName == nameof(RadarSettings.ShowPlayerNames))
-        {
-            OnPropertyChanged(nameof(ShowPlayerNames));
         }
         else if (e.PropertyName == nameof(RadarSettings.HeightScaleMultiplier))
         {

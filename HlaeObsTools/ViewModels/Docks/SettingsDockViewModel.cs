@@ -357,6 +357,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 WebSocketPort = WebSocketPort,
                 UdpPort = UdpPort,
                 RtpPort = RtpPort,
+                GsiPort = GsiPort,
                 MapObjPath = _viewport3DSettings.MapObjPath,
                 PinScale = _viewport3DSettings.PinScale,
                 PinOffsetZ = _viewport3DSettings.PinOffsetZ,

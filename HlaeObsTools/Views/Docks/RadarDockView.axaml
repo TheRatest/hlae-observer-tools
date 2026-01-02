@@ -175,7 +175,7 @@
                              Foreground="#ffffffff"
                              TextAlignment="Center"
                              VerticalAlignment="Center"
-                             IsVisible="{Binding DataContext.DisplayNumbersTopmost, ElementName=RadarRoot, Converter={StaticResource BooleanNegationConverter}}">
+                             IsVisible="{Binding DataContext.RadarSettings.DisplayNumbersTopmost, ElementName=RadarRoot, Converter={StaticResource BooleanNegationConverter}}">
                     <TextBlock.Effect>
                         <DropShadowEffect
                             Color="Black"
@@ -192,7 +192,7 @@
                           Canvas.Top="14"
                           Background="Transparent"
                           IsVisible="{Binding HasActiveGrenadeIcon}"
-                          Opacity="{Binding DataContext.DisplayNumbersTopmost, ElementName=RadarRoot, Converter={StaticResource HideWhenTrueOpacityConverter}}">
+                          Opacity="{Binding DataContext.RadarSettings.DisplayNumbersTopmost, ElementName=RadarRoot, Converter={StaticResource HideWhenTrueOpacityConverter}}">
                     <svg:Svg Path="{Binding DataContext.ActiveGrenadeIconPath, ElementName=GrenadeIconMask}"
                               Css="path { fill: rgba(255, 255, 0, 1); }"
                               Width="14"
@@ -205,7 +205,7 @@
                              FontSize="10"
                              Foreground="#E6E6E6"
                              TextAlignment="Center"
-                             IsVisible="{Binding DataContext.ShowPlayerNames, ElementName=RadarRoot}" />
+                             IsVisible="{Binding DataContext.RadarSettings.ShowPlayerNames, ElementName=RadarRoot}" />
                 </Canvas>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -351,7 +351,7 @@
                         Width="1024"
                         Height="1024"
                         IsHitTestVisible="False"
-                        IsVisible="{Binding DisplayNumbersTopmost}"
+                        IsVisible="{Binding RadarSettings.DisplayNumbersTopmost}"
                         x:CompileBindings="False">
             <ItemsControl.Styles>
               <Style Selector="ContentPresenter">
