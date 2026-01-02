@@ -39,6 +39,7 @@ public sealed class RadarPlayerViewModel : ViewModelBase
     private string? _activeGrenadeIconPath;
     private IBrush _fill;
     private IBrush _border;
+    private int _slot;
     private static readonly string[] AltBindLabels = { "Q", "E", "R", "T", "Z" };
 
     public RadarPlayerViewModel(string id, string name, string team, int slot, IBrush fill, IBrush border)
@@ -46,7 +47,7 @@ public sealed class RadarPlayerViewModel : ViewModelBase
         Id = id;
         Name = name;
         Team = team;
-        Slot = slot;
+        _slot = slot;
         _fill = fill;
         _border = border;
     }
@@ -54,7 +55,17 @@ public sealed class RadarPlayerViewModel : ViewModelBase
     public string Id { get; }
     public string Name { get; }
     public string Team { get; }
-    public int Slot { get; }
+    public int Slot
+    {
+        get => _slot;
+        set
+        {
+            if (SetProperty(ref _slot, value))
+            {
+                OnPropertyChanged(nameof(DisplayNumber));
+            }
+        }
+    }
     public IBrush Fill
     {
         get => _fill;
@@ -654,6 +665,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
 
                 vm.Fill = brush;
                 vm.Border = border;
+                vm.Slot = p.Slot;
                 vm.RelativeX = x;
                 vm.RelativeY = y;
                 vm.CanvasX = x * 1024.0 - 18.0; // center the 36px marker on the projected point
