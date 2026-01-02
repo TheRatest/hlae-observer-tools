@@ -69,6 +69,8 @@ namespace HlaeObsTools.ViewModels.Docks
             _mapOffsetY = (float)settings.MapOffsetY;
             _mapOffsetZ = (float)settings.MapOffsetZ;
             _radarSettings.UseAltPlayerBinds = _useAltPlayerBinds;
+            _radarSettings.DisplayNumbersTopmost = settings.DisplayNumbersTopmost;
+            _radarSettings.ShowPlayerNames = settings.ShowPlayerNames;
             _hudSettings.UseAltPlayerBinds = _useAltPlayerBinds;
             _viewport3DSettings.UseAltPlayerBinds = _useAltPlayerBinds;
             _viewport3DSettings.MapObjPath = _mapObjPath;
@@ -525,6 +527,34 @@ namespace HlaeObsTools.ViewModels.Docks
             }
         }
 
+        public bool DisplayNumbersTopmost
+        {
+            get => _radarSettings.DisplayNumbersTopmost;
+            set
+            {
+                if (_radarSettings.DisplayNumbersTopmost != value)
+                {
+                    _radarSettings.DisplayNumbersTopmost = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool ShowPlayerNames
+        {
+            get => _radarSettings.ShowPlayerNames;
+            set
+            {
+                if (_radarSettings.ShowPlayerNames != value)
+                {
+                    _radarSettings.ShowPlayerNames = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
         #endregion
 
         #region ==== HUD ====
@@ -609,6 +639,8 @@ namespace HlaeObsTools.ViewModels.Docks
                 MarkerScale = _radarSettings.MarkerScale,
                 HeightScaleMultiplier = _radarSettings.HeightScaleMultiplier,
                 UseAltPlayerBinds = _useAltPlayerBinds,
+                DisplayNumbersTopmost = _radarSettings.DisplayNumbersTopmost,
+                ShowPlayerNames = _radarSettings.ShowPlayerNames,
                 WebSocketHost = WebSocketHost,
                 WebSocketPort = WebSocketPort,
                 UdpPort = UdpPort,

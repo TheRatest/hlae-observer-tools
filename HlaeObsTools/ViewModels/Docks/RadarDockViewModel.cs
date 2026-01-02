@@ -521,6 +521,8 @@ public sealed class RadarDockViewModel : Tool, IDisposable
     }
 
     public double MarkerScale => _settings.MarkerScale;
+    public bool DisplayNumbersTopmost => _settings.DisplayNumbersTopmost;
+    public bool ShowPlayerNames => _settings.ShowPlayerNames;
 
     public RadarDockViewModel(GsiServer gsiServer, RadarConfigProvider configProvider, RadarSettings settings, CampathsDockViewModel? campathsVm, HlaeWebSocketClient? webSocketClient)
     {
@@ -1132,6 +1134,14 @@ public sealed class RadarDockViewModel : Tool, IDisposable
             {
                 player.UseAltBindings = _settings.UseAltPlayerBinds;
             }
+        }
+        else if (e.PropertyName == nameof(RadarSettings.DisplayNumbersTopmost))
+        {
+            OnPropertyChanged(nameof(DisplayNumbersTopmost));
+        }
+        else if (e.PropertyName == nameof(RadarSettings.ShowPlayerNames))
+        {
+            OnPropertyChanged(nameof(ShowPlayerNames));
         }
         else if (e.PropertyName == nameof(RadarSettings.HeightScaleMultiplier))
         {

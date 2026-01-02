@@ -4,10 +4,14 @@
              xmlns:conv="using:HlaeObsTools.Converters"
              xmlns:svg="using:Avalonia.Svg.Skia"
              x:Class="HlaeObsTools.Views.Docks.RadarDockView"
-             x:DataType="vm:RadarDockViewModel">
+             x:DataType="vm:RadarDockViewModel"
+             x:Name="RadarRoot">
   <UserControl.Resources>
     <conv:RelativeToCanvasConverter x:Key="RelativeToCanvasConverter" />
     <conv:ProgressToPieGeometryConverter x:Key="ProgressToPieGeometryConverter" />
+    <conv:BooleanToOpacityConverter x:Key="HideWhenTrueOpacityConverter"
+                                    TrueOpacity="0"
+                                    FalseOpacity="1" />
   </UserControl.Resources>
 
   <Border Background="#0D1015" Padding="10" Focusable="True">
@@ -162,13 +166,46 @@
                       <RotateTransform Angle="{Binding Rotation}" CenterX="4" CenterY="6" />
                     </Path.RenderTransform>
                   </Path>
+                  <TextBlock Text="{Binding DisplayNumber}"
+                             Canvas.Left="10"
+                             Canvas.Top="14"
+                             Width="16"
+                             Height="16"
+                             FontSize="16"
+                             Foreground="#ffffffff"
+                             TextAlignment="Center"
+                             VerticalAlignment="Center"
+                             IsVisible="{Binding DataContext.DisplayNumbersTopmost, ElementName=RadarRoot, Converter={StaticResource BooleanNegationConverter}}">
+                    <TextBlock.Effect>
+                        <DropShadowEffect
+                            Color="Black"
+                            BlurRadius="2"
+                            OffsetX="1"
+                            OffsetY="1"
+                            Opacity="0.9"/>
+                    </TextBlock.Effect>
+                  </TextBlock>
+                  <Border x:Name="GrenadeIconMask"
+                          Width="14"
+                          Height="14"
+                          Canvas.Left="20"
+                          Canvas.Top="14"
+                          Background="Transparent"
+                          IsVisible="{Binding HasActiveGrenadeIcon}"
+                          Opacity="{Binding DataContext.DisplayNumbersTopmost, ElementName=RadarRoot, Converter={StaticResource HideWhenTrueOpacityConverter}}">
+                    <svg:Svg Path="{Binding DataContext.ActiveGrenadeIconPath, ElementName=GrenadeIconMask}"
+                              Css="path { fill: rgba(255, 255, 0, 1); }"
+                              Width="14"
+                              Height="14" />
+                  </Border>
                   <TextBlock Text="{Binding Name}"
                              Canvas.Left="-12"
                              Canvas.Top="36"
                              Width="60"
                              FontSize="10"
                              Foreground="#E6E6E6"
-                             TextAlignment="Center" />
+                             TextAlignment="Center"
+                             IsVisible="{Binding DataContext.ShowPlayerNames, ElementName=RadarRoot}" />
                 </Canvas>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -314,6 +351,7 @@
                         Width="1024"
                         Height="1024"
                         IsHitTestVisible="False"
+                        IsVisible="{Binding DisplayNumbersTopmost}"
                         x:CompileBindings="False">
             <ItemsControl.Styles>
               <Style Selector="ContentPresenter">

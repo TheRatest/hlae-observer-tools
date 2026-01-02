@@ -63,6 +63,8 @@ public class AppSettingsData
     public double MarkerScale { get; set; } = 1.0;
     public double HeightScaleMultiplier { get; set; } = 1.0;
     public bool UseAltPlayerBinds { get; set; } = false;
+    public bool DisplayNumbersTopmost { get; set; } = true;
+    public bool ShowPlayerNames { get; set; } = true;
     public string WebSocketHost { get; set; } = "127.0.0.1";
     public int WebSocketPort { get; set; } = 31338;
     public int UdpPort { get; set; } = 31339;

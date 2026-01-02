@@ -118,7 +118,9 @@ public class MainDockFactory : Factory, IDisposable
         {
             MarkerScale = _storedSettings.MarkerScale,
             HeightScaleMultiplier = _storedSettings.HeightScaleMultiplier,
-            UseAltPlayerBinds = _storedSettings.UseAltPlayerBinds
+            UseAltPlayerBinds = _storedSettings.UseAltPlayerBinds,
+            DisplayNumbersTopmost = _storedSettings.DisplayNumbersTopmost,
+            ShowPlayerNames = _storedSettings.ShowPlayerNames
         };
         var hudSettings = new HudSettings
         {

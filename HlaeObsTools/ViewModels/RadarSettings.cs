@@ -11,6 +11,8 @@ public sealed class RadarSettings : ViewModelBase
     private double _markerScale = 1.0;
     private double _heightScaleMultiplier = 1.0;
     private bool _useAltPlayerBinds;
+    private bool _displayNumbersTopmost = true;
+    private bool _showPlayerNames = true;
 
     /// <summary>
     /// Scale factor for player markers on the radar.
@@ -37,5 +39,23 @@ public sealed class RadarSettings : ViewModelBase
     {
         get => _useAltPlayerBinds;
         set => SetProperty(ref _useAltPlayerBinds, value);
+    }
+
+    /// <summary>
+    /// Whether player display numbers render above all markers.
+    /// </summary>
+    public bool DisplayNumbersTopmost
+    {
+        get => _displayNumbersTopmost;
+        set => SetProperty(ref _displayNumbersTopmost, value);
+    }
+
+    /// <summary>
+    /// Whether player names render under the markers.
+    /// </summary>
+    public bool ShowPlayerNames
+    {
+        get => _showPlayerNames;
+        set => SetProperty(ref _showPlayerNames, value);
     }
 }

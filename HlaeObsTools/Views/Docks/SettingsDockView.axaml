@@ -147,6 +147,12 @@
                     <TextBlock Text="Controls how strongly height affects marker scale."
                                Foreground="#888888"
                                FontSize="12"/>
+                    <ToggleSwitch IsChecked="{Binding DisplayNumbersTopmost, Mode=TwoWay}"
+                                  Content="Observer-Slot on top"
+                                  Foreground="#E6E6E6"/>
+                    <ToggleSwitch IsChecked="{Binding ShowPlayerNames, Mode=TwoWay}"
+                                  Content="Show player names"
+                                  Foreground="#E6E6E6"/>
                 </StackPanel>
             </TabItem>
 
