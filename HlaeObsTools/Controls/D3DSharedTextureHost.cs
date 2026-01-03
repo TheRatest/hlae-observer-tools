@@ -26,8 +26,6 @@ namespace HlaeObsTools.Controls;
 /// </summary>
 public class D3DSharedTextureHost : NativeControlHost
 {
-    private const string SharedTextureName = "HLAE_ObsSharedTexture";
-
     public event EventHandler? RightButtonDown;
     public event EventHandler? RightButtonUp;
 
@@ -39,6 +37,9 @@ public class D3DSharedTextureHost : NativeControlHost
     private IDXGIAdapter1? _adapter;
     private IDXGISwapChain1? _swapChain;
     private ID3D11Texture2D? _sharedTexture;
+    private IDXGIKeyedMutex? _sharedKeyedMutex;
+    private IntPtr _sharedHandle;
+    private bool _sharedHandleInvalidNotified;
     private CancellationTokenSource? _cts;
     private Task? _renderLoop;
     private int _swapWidth;
@@ -50,6 +51,8 @@ public class D3DSharedTextureHost : NativeControlHost
     private bool _loggedFirstFrame;
     private bool _loggedSwapchainSize;
     private double _texAspect;
+
+    public event EventHandler? SharedHandleInvalidated;
 
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
@@ -107,6 +110,10 @@ public class D3DSharedTextureHost : NativeControlHost
         ReleaseSwapChain();
         _sharedTexture?.Release();
         _sharedTexture = null;
+        _sharedKeyedMutex?.Release();
+        _sharedKeyedMutex = null;
+        _sharedHandle = IntPtr.Zero;
+        _sharedHandleInvalidNotified = false;
         _loggedFallback = false;
         _loggedDevice1Missing = false;
         _loggedFirstFrame = false;
@@ -124,6 +131,26 @@ public class D3DSharedTextureHost : NativeControlHost
         _adapter = null;
         _factory?.Release();
         _factory = null;
+    }
+
+    public void SetSharedTextureHandle(IntPtr handle)
+    {
+        if (handle == _sharedHandle)
+            return;
+
+        if (_sharedHandle != IntPtr.Zero)
+        {
+            _sharedHandle = IntPtr.Zero;
+        }
+
+        _sharedHandle = handle;
+        _sharedHandleInvalidNotified = false;
+
+        _sharedKeyedMutex?.Release();
+        _sharedKeyedMutex = null;
+        _sharedTexture?.Release();
+        _sharedTexture = null;
+        _texAspect = 0;
     }
 
     private void RenderLoop(CancellationToken token)
@@ -165,7 +192,31 @@ public class D3DSharedTextureHost : NativeControlHost
                     if (_sharedTexture != null)
                     {
                         _loggedFallback = false;
-                        _context.CopyResource(backBuffer, _sharedTexture);
+                        bool acquired = true;
+                        if (_sharedKeyedMutex != null)
+                        {
+                            try
+                            {
+                                _sharedKeyedMutex.AcquireSync(1, 3000);
+                            }
+                            catch (SharpGen.Runtime.SharpGenException)
+                            {
+                                acquired = false;
+                            }
+                        }
+
+                        if (acquired)
+                        {
+                            _context.CopyResource(backBuffer, _sharedTexture);
+                            if (_sharedKeyedMutex != null)
+                            {
+                                _sharedKeyedMutex.ReleaseSync(0);
+                            }
+                        }
+                        else if (token.IsCancellationRequested)
+                        {
+                            break;
+                        }
                     }
                     else
                     {
@@ -242,71 +293,46 @@ public class D3DSharedTextureHost : NativeControlHost
         if (_device == null) return;
         if (_sharedTexture != null) return;
 
-        Log("EnsureSharedTexture: start (device1 present?)");
-        if (_device1 == null)
+        if (_sharedHandle == IntPtr.Zero)
         {
-            if (!_loggedDevice1Missing)
+            if (!_sharedHandleInvalidNotified)
             {
-                Log("EnsureSharedTexture: device1 missing; cannot open shared texture.");
-                _loggedDevice1Missing = true;
+                Log("EnsureSharedTexture: no shared handle available yet.");
+                _sharedHandleInvalidNotified = true;
             }
             return;
         }
 
-        var devicePtr = (_device1 as ComObject)?.NativePointer ?? IntPtr.Zero;
-        Log($"EnsureSharedTexture: device1 ptr=0x{devicePtr.ToInt64():X}");
-
-        const int rwAccessInt = unchecked((int)(Vortice.DXGI.SharedResourceFlags.Read | Vortice.DXGI.SharedResourceFlags.Write)); // includes 0x80000000 for NTHANDLE read
-        const int rAccessInt = unchecked((int)Vortice.DXGI.SharedResourceFlags.Read);
-
-        Log($"EnsureSharedTexture: after access calc rw=0x{rwAccessInt:X8} r=0x{rAccessInt:X8}");
-        Log($"OpenSharedResourceByName rw access=0x{rwAccessInt:X8}");
-        Result hr;
-        ID3D11Texture2D tex = null!;
+        ID3D11Texture2D? tex = null;
         try
         {
-            Log("EnsureSharedTexture: calling OpenSharedResourceByName (rw)");
-            hr = _device1.OpenSharedResourceByName(SharedTextureName, unchecked((Vortice.Direct3D11.SharedResourceFlags)rwAccessInt), out tex);
-            Log($"EnsureSharedTexture: OpenSharedResourceByName (rw) returned 0x{hr.Code:X8}");
+            tex = _device.OpenSharedResource<ID3D11Texture2D>(_sharedHandle);
         }
         catch (Exception ex)
         {
-            Log($"OpenSharedResourceByName threw {ex.GetType().Name}: {ex.Message}");
-            return;
+            Log($"OpenSharedResource threw {ex.GetType().Name}: {ex.Message}");
         }
-        if (hr.Success && tex != null)
+
+        if (tex != null)
         {
             _sharedTexture = tex;
             _loggedFallback = false;
-            LogTextureDesc("opened rw", _sharedTexture.Description);
+            _sharedKeyedMutex?.Release();
+            _sharedKeyedMutex = _sharedTexture.QueryInterfaceOrNull<IDXGIKeyedMutex>();
+            Log($"SharedTextureHost: keyed mutex {( _sharedKeyedMutex != null ? "available" : "unavailable")} (handle)");
+            LogTextureDesc("opened handle", _sharedTexture.Description);
             _texAspect = tex.Description.Width / (double)tex.Description.Height;
             UpdateChildWindowSize();
             return;
         }
 
-        Log($"OpenSharedResourceByName rw failed 0x{hr.Code:X8}, retry read-only");
-        Result hr2;
-        try
+        if (!_sharedHandleInvalidNotified)
         {
-            hr2 = _device1.OpenSharedResourceByName(SharedTextureName, unchecked((Vortice.Direct3D11.SharedResourceFlags)rAccessInt), out tex);
-            Log($"EnsureSharedTexture: OpenSharedResourceByName (r) returned 0x{hr2.Code:X8}");
+            Log("OpenSharedResource failed for shared handle; will retry after re-register.");
+            _sharedHandleInvalidNotified = true;
+            _sharedHandle = IntPtr.Zero;
+            SharedHandleInvalidated?.Invoke(this, EventArgs.Empty);
         }
-        catch (Exception ex)
-        {
-            Log($"OpenSharedResourceByName (r) threw {ex.GetType().Name}: {ex.Message}");
-            return;
-        }
-        if (hr2.Success && tex != null)
-        {
-            _sharedTexture = tex;
-            _loggedFallback = false;
-            LogTextureDesc("opened r", _sharedTexture.Description);
-            _texAspect = tex.Description.Width / (double)tex.Description.Height;
-            UpdateChildWindowSize();
-            return;
-        }
-
-        Log($"OpenSharedResourceByName failed rw=0x{hr.Code:X8} r=0x{hr2.Code:X8}");
         TryRecreateDeviceForSharedTexture();
         // If it fails we leave _sharedTexture null and will try again next loop.
     }
@@ -363,52 +389,28 @@ public class D3DSharedTextureHost : NativeControlHost
 
         _device1 = _device.QueryInterfaceOrNull<ID3D11Device1>();
 
-        if (_device1 != null)
+        if (_sharedHandle != IntPtr.Zero)
         {
-            const int rwAccessInt = unchecked((int)(Vortice.DXGI.SharedResourceFlags.Read | Vortice.DXGI.SharedResourceFlags.Write));
-            const int rAccessInt = unchecked((int)Vortice.DXGI.SharedResourceFlags.Read);
-            Log($"TryCreateDeviceOnAdapter: Open rw access=0x{rwAccessInt:X8} device1 ptr=0x{((_device1 as ComObject)?.NativePointer ?? IntPtr.Zero).ToInt64():X}");
-            Result hr;
-            ID3D11Texture2D tex = null!;
             try
             {
-                Log("TryCreateDeviceOnAdapter: calling OpenSharedResourceByName (rw)");
-                hr = _device1.OpenSharedResourceByName(SharedTextureName, unchecked((Vortice.Direct3D11.SharedResourceFlags)rwAccessInt), out tex);
-                Log($"TryCreateDeviceOnAdapter: OpenSharedResourceByName (rw) returned 0x{hr.Code:X8}");
+                var tex = _device.OpenSharedResource<ID3D11Texture2D>(_sharedHandle);
+                if (tex != null)
+                {
+                    _sharedTexture = tex;
+                    _sharedKeyedMutex?.Release();
+                    _sharedKeyedMutex = _sharedTexture.QueryInterfaceOrNull<IDXGIKeyedMutex>();
+                    Log($"SharedTextureHost: keyed mutex {(_sharedKeyedMutex != null ? "available" : "unavailable")} (adapter handle)");
+                    LogTextureDesc("opened handle on adapter", _sharedTexture.Description);
+                    _texAspect = tex.Description.Width / (double)tex.Description.Height;
+                    UpdateChildWindowSize();
+                    _adapter = adapter;
+                    return true;
+                }
             }
             catch (Exception ex)
             {
-                Log($"TryCreateDeviceOnAdapter: OpenSharedResourceByName threw {ex.GetType().Name}: {ex.Message}");
-                hr = new Result(unchecked((int)0x80004005)); // generic failure
-                tex = null!;
+                Log($"TryCreateDeviceOnAdapter: OpenSharedResource threw {ex.GetType().Name}: {ex.Message}");
             }
-            if (hr.Success)
-            {
-                _sharedTexture = tex;
-                LogTextureDesc("opened rw on adapter", _sharedTexture.Description);
-                _texAspect = tex.Description.Width / (double)tex.Description.Height;
-                UpdateChildWindowSize();
-                _adapter = adapter;
-                return true;
-            }
-
-            Log($"TryCreateDeviceOnAdapter: Open rw failed 0x{hr.Code:X8}, try read-only");
-            hr = _device1.OpenSharedResourceByName(SharedTextureName, unchecked((Vortice.Direct3D11.SharedResourceFlags)rAccessInt), out tex);
-            Log($"TryCreateDeviceOnAdapter: OpenSharedResourceByName (r) returned 0x{hr.Code:X8}");
-            if (hr.Success && tex != null)
-            {
-                _sharedTexture = tex;
-                LogTextureDesc("opened r on adapter", _sharedTexture.Description);
-                _texAspect = tex.Description.Width / (double)tex.Description.Height;
-                UpdateChildWindowSize();
-                _adapter = adapter;
-                return true;
-            }
-            Log($"TryCreateDeviceOnAdapter: Open failed rw=0x{hr.Code:X8}");
-        }
-        else
-        {
-            Log("TryCreateDeviceOnAdapter: ID3D11Device1 not available on adapter.");
         }
 
         // Failed, clean up:
@@ -441,6 +443,7 @@ public class D3DSharedTextureHost : NativeControlHost
     {
         Log($"SharedTextureHost: {tag} size={desc.Width}x{desc.Height} fmt={desc.Format} sampleCount={desc.SampleDescription.Count}");
     }
+
     private void ResizeSwapChain(int width, int height)
     {
         if (_factory == null || _device == null || _hwnd == IntPtr.Zero) return;
@@ -611,6 +614,7 @@ public class D3DSharedTextureHost : NativeControlHost
 
     [DllImport("user32.dll")]
     private static extern IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);

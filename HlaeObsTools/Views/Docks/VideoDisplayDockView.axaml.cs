@@ -79,6 +79,10 @@ public partial class VideoDisplayDockView : UserControl
         {
             SharedTextureAspect.SizeChanged += (_, _) => UpdateHudOverlayPosition();
         }
+        if (SharedTextureHost != null)
+        {
+            SharedTextureHost.SharedHandleInvalidated += OnSharedHandleInvalidated;
+        }
         if (RtpSwapchainAspect != null)
         {
             RtpSwapchainAspect.SizeChanged += (_, _) => UpdateRtpSwapchainBounds();
@@ -786,6 +790,7 @@ public partial class VideoDisplayDockView : UserControl
             if (vm.UseD3DHost)
             {
                 SharedTextureHost?.StartRenderer();
+                SharedTextureHost?.SetSharedTextureHandle(vm.SharedTextureHandle);
                 UpdateHudOverlayVisibility();
             }
             else if (vm.UseRtpSwapchain)
@@ -806,6 +811,7 @@ public partial class VideoDisplayDockView : UserControl
                 if (vm.UseD3DHost)
                 {
                     SharedTextureHost?.StartRenderer();
+                    SharedTextureHost?.SetSharedTextureHandle(vm.SharedTextureHandle);
                     if (vm.IsStreaming) vm.StopStream();
                     UpdateHudOverlayVisibility();
                 }
@@ -830,6 +836,13 @@ public partial class VideoDisplayDockView : UserControl
             if (DataContext is VideoDisplayDockViewModel vm)
             {
                 SubscribeToHudOverlay(vm.HudOverlay);
+            }
+        }
+        else if (e.PropertyName == nameof(VideoDisplayDockViewModel.SharedTextureHandle))
+        {
+            if (DataContext is VideoDisplayDockViewModel vm)
+            {
+                SharedTextureHost?.SetSharedTextureHandle(vm.SharedTextureHandle);
             }
         }
         else if (e.PropertyName == nameof(VideoDisplayDockViewModel.FreecamSpeed))
@@ -1111,5 +1124,13 @@ public partial class VideoDisplayDockView : UserControl
         Canvas.SetLeft(label, left);
         Canvas.SetTop(label, top);
         return label;
+    }
+
+    private void OnSharedHandleInvalidated(object? sender, EventArgs e)
+    {
+        if (DataContext is VideoDisplayDockViewModel vm)
+        {
+            vm.RequestSharedTextureHandle();
+        }
     }
 }

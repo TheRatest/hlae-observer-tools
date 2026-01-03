@@ -6,6 +6,7 @@ using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.Services.Input;
 using System;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -55,6 +56,7 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     private double _speedMultiplier = 1.0;
     private HudOverlayWindow? _hudOverlayWindow;
     private HudOverlayViewModel? _hudOverlay;
+    private IntPtr _sharedTextureHandle;
 
     public bool ShowNoSignal => !_isStreaming && !_useD3DHost;
     public bool CanStart => !_isStreaming && !_useD3DHost;
@@ -174,6 +176,13 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         _speedWebSocketClient = client;
         _speedWebSocketClient.MessageReceived -= OnWebSocketMessage;
         _speedWebSocketClient.MessageReceived += OnWebSocketMessage;
+        _speedWebSocketClient.Connected -= OnWebSocketConnected;
+        _speedWebSocketClient.Connected += OnWebSocketConnected;
+
+        if (_speedWebSocketClient.IsConnected)
+        {
+            _ = RequestSharedTextureHandleAsync();
+        }
     }
 
     /// <summary>
@@ -256,6 +265,10 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
             OnPropertyChanged(nameof(ShowNoSignal));
             OnPropertyChanged(nameof(CanStart));
             OnPropertyChanged(nameof(CanStop));
+            if (_useD3DHost)
+            {
+                _ = RequestSharedTextureHandleAsync();
+            }
         }
     }
 
@@ -633,11 +646,24 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         if (_speedWebSocketClient != null)
         {
             _speedWebSocketClient.MessageReceived -= OnWebSocketMessage;
+            _speedWebSocketClient.Connected -= OnWebSocketConnected;
         }
         _hudOverlay?.Dispose();
         _hudOverlayWindow?.Close();
         _hudOverlayWindow = null;
         StopStream();
+    }
+
+    public IntPtr SharedTextureHandle
+    {
+        get => _sharedTextureHandle;
+        private set
+        {
+            if (_sharedTextureHandle == value)
+                return;
+            _sharedTextureHandle = value;
+            OnPropertyChanged();
+        }
     }
 
     private void StartRtpInternal(RtpReceiverConfig? config = null)
@@ -719,11 +745,75 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
                     Dispatcher.UIThread.Post(() => FreecamSpeed = speed, DispatcherPriority.Background);
                 }
             }
+            else if (string.Equals(messageType, "sharedtex_handle", StringComparison.Ordinal))
+            {
+                if (root.TryGetProperty("handle", out var handleProp))
+                {
+                    if (TryParseHandle(handleProp, out var handleValue))
+                    {
+                        Dispatcher.UIThread.Post(() => SharedTextureHandle = new IntPtr(handleValue), DispatcherPriority.Background);
+                    }
+                }
+            }
         }
         catch
         {
             // Ignore malformed messages
         }
+    }
+
+    private void OnWebSocketConnected(object? sender, EventArgs e)
+    {
+        _ = RequestSharedTextureHandleAsync();
+    }
+
+    private Task RequestSharedTextureHandleAsync()
+    {
+        if (_webSocketClient == null || !_webSocketClient.IsConnected)
+            return Task.CompletedTask;
+
+        int pid = Process.GetCurrentProcess().Id;
+        return _webSocketClient.SendCommandAsync("sharedtex_register", new { pid });
+    }
+
+    public void RequestSharedTextureHandle()
+    {
+        _ = RequestSharedTextureHandleAsync();
+    }
+
+    private static bool TryParseHandle(JsonElement handleProp, out long handleValue)
+    {
+        handleValue = 0;
+        try
+        {
+            if (handleProp.ValueKind == JsonValueKind.String)
+            {
+                var text = handleProp.GetString();
+                if (string.IsNullOrWhiteSpace(text))
+                    return false;
+
+                if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                {
+                    handleValue = Convert.ToInt64(text.Substring(2), 16);
+                }
+                else
+                {
+                    handleValue = Convert.ToInt64(text, 10);
+                }
+                return true;
+            }
+
+            if (handleProp.ValueKind == JsonValueKind.Number && handleProp.TryGetInt64(out handleValue))
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        return false;
     }
 
     /// <summary>
