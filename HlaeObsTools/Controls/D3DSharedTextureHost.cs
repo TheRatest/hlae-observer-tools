@@ -193,29 +193,48 @@ public class D3DSharedTextureHost : NativeControlHost
                     {
                         _loggedFallback = false;
                         bool acquired = true;
-                        if (_sharedKeyedMutex != null)
+                        bool locked = false;
+                        try
                         {
-                            try
+                            if (_sharedKeyedMutex != null)
                             {
                                 _sharedKeyedMutex.AcquireSync(1, 3000);
+                                locked = true;
                             }
-                            catch (SharpGen.Runtime.SharpGenException)
+
+                            _context.CopyResource(backBuffer, _sharedTexture);
+                        }
+                        catch (SharpGen.Runtime.SharpGenException ex)
+                        {
+                            acquired = false;
+                            Log($"CopyResource/Acquire failed: {ex.ResultCode.Code}");
+                        }
+                        catch (Exception ex)
+                        {
+                            acquired = false;
+                            Log($"CopyResource threw {ex.GetType().Name}: {ex.Message}");
+                        }
+                        finally
+                        {
+                            if (locked && _sharedKeyedMutex != null)
                             {
-                                acquired = false;
+                                try { _sharedKeyedMutex.ReleaseSync(0); } catch { /* ignore */ }
                             }
                         }
 
-                        if (acquired)
-                        {
-                            _context.CopyResource(backBuffer, _sharedTexture);
-                            if (_sharedKeyedMutex != null)
-                            {
-                                _sharedKeyedMutex.ReleaseSync(0);
-                            }
-                        }
-                        else if (token.IsCancellationRequested)
+                        if (!acquired && token.IsCancellationRequested)
                         {
                             break;
+                        }
+                        else if (!acquired)
+                        {
+                            ReleaseSwapChain();
+                            _sharedTexture?.Release();
+                            _sharedTexture = null;
+                            _sharedKeyedMutex?.Release();
+                            _sharedKeyedMutex = null;
+                            _texAspect = 0;
+                            continue;
                         }
                     }
                     else
@@ -228,7 +247,22 @@ public class D3DSharedTextureHost : NativeControlHost
                             _loggedFallback = true;
                         }
                     }
-                    _swapChain.Present(0, PresentFlags.None);
+                    try
+                    {
+                        _swapChain.Present(0, PresentFlags.None);
+                    }
+                    catch (SharpGen.Runtime.SharpGenException ex)
+                    {
+                        Log($"Present failed: {ex.ResultCode.Code}");
+                        ReleaseSwapChain();
+                        continue;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Present threw {ex.GetType().Name}: {ex.Message}");
+                        ReleaseSwapChain();
+                        continue;
+                    }
                 }
                 else
                 {
@@ -455,12 +489,12 @@ public class D3DSharedTextureHost : NativeControlHost
             Width = (uint)width,
             Height = (uint)height,
             Format = Format.R8G8B8A8_UNorm,
-            BufferCount = 1,
+            BufferCount = 2,
             BufferUsage = Usage.RenderTargetOutput,
             SampleDescription = new SampleDescription(1, 0),
             Scaling = Scaling.Stretch,
-            SwapEffect = SwapEffect.Discard,
-            AlphaMode = AlphaMode.Unspecified
+            SwapEffect = SwapEffect.FlipDiscard,
+            AlphaMode = AlphaMode.Ignore
         };
 
         _swapChain = _factory.CreateSwapChainForHwnd(_device, _hwnd, desc, null, null);
