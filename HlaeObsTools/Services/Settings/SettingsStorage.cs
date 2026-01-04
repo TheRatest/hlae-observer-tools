@@ -89,6 +89,7 @@ public class AppSettingsData
     public double VmixReplayPreSeconds { get; set; } = 2.0;
     public double VmixReplayPostSeconds { get; set; } = 2.0;
     public double VmixReplayExtendWindowSeconds { get; set; } = 3.0;
+    public bool DisableFocusInputGate { get; set; }
 }
 
 public class AttachmentPresetData

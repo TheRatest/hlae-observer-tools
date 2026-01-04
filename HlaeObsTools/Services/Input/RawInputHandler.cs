@@ -41,7 +41,9 @@ public class RawInputHandler : IDisposable
     private bool _keysDirty;
 
     private bool _captureOnlyWhenFocused;
+    private bool _captureOnlyWhenAppFocused;
     private IntPtr _focusedWindowHandle;
+    private bool _wasAppFocused = true;
 
     private HlaeInputSender? _inputSender;
 
@@ -52,6 +54,12 @@ public class RawInputHandler : IDisposable
     {
         get => _captureOnlyWhenFocused;
         set => _captureOnlyWhenFocused = value;
+    }
+
+    public bool CaptureOnlyWhenAppFocused
+    {
+        get => _captureOnlyWhenAppFocused;
+        set => _captureOnlyWhenAppFocused = value;
     }
 
     public bool SuppressKeyboard
@@ -119,6 +127,11 @@ public class RawInputHandler : IDisposable
 
     private void ProcessRawInput(IntPtr lParam)
     {
+        if (_captureOnlyWhenAppFocused && !IsAppForeground())
+        {
+            return;
+        }
+
         // Optional focus gating
         if (_captureOnlyWhenFocused && _focusedWindowHandle != IntPtr.Zero)
         {
@@ -263,6 +276,23 @@ public class RawInputHandler : IDisposable
         if (_inputSender == null)
             return;
 
+        if (_captureOnlyWhenAppFocused)
+        {
+            var isFocused = IsAppForeground();
+            if (!isFocused)
+            {
+                if (_wasAppFocused)
+                {
+                    ClearInputStateForFocusLoss();
+                }
+                _wasAppFocused = false;
+            }
+            else
+            {
+                _wasAppFocused = true;
+            }
+        }
+
         int dx, dy, wheel;
         bool left, right, middle;
         bool button4, button5;
@@ -326,6 +356,39 @@ public class RawInputHandler : IDisposable
         _inputSender.UpdateMouse(dx, dy, wheel);
         _inputSender.UpdateMouseButtons(left, right, middle, button4, button5);
         _inputSender.UpdateKeys(keys);
+    }
+
+    private void ClearInputStateForFocusLoss()
+    {
+        lock (_lockObject)
+        {
+            _mouseDx = 0;
+            _mouseDy = 0;
+            _mouseWheel = 0;
+
+            _mouseLeftButton = false;
+            _mouseRightButton = false;
+            _mouseMiddleButton = false;
+            _mouseButton4 = false;
+            _mouseButton5 = false;
+
+            if (_currentlyPressedKeys.Count > 0)
+            {
+                _currentlyPressedKeys.Clear();
+            }
+
+            _keysDirty = true;
+        }
+    }
+
+    private static bool IsAppForeground()
+    {
+        var hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero)
+            return false;
+
+        GetWindowThreadProcessId(hwnd, out var pid);
+        return pid == (uint)Environment.ProcessId;
     }
 
     public void Dispose()
@@ -440,6 +503,9 @@ public class RawInputHandler : IDisposable
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     #endregion
 }

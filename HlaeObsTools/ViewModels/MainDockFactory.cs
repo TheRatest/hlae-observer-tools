@@ -71,6 +71,7 @@ public class MainDockFactory : Factory, IDisposable
 
         // Initialize global raw input handler and periodically flush into UDP sender
         _rawInputHandler = new RawInputHandler();
+        _rawInputHandler.CaptureOnlyWhenAppFocused = !_storedSettings.DisableFocusInputGate;
         _rawInputHandler.SetInputSender(_inputSender);
         _rawInputHandler.KeyPressed += OnRawInputKeyPressed;
         _rawInputHandler.KeyStateChanged += OnRawInputKeyStateChanged;
@@ -189,7 +190,8 @@ public class MainDockFactory : Factory, IDisposable
             },
             ApplyNetworkSettingsAsync,
             _storedSettings,
-            _vmixReplaySettings)
+            _vmixReplaySettings,
+            setFocusInputGateDisabled: disable => _rawInputHandler.CaptureOnlyWhenAppFocused = !disable)
         { Id = "BottomLeft", Title = "Settings" };
         var bottomCenter = new Viewport3DDockViewModel(viewport3DSettings, freecamSettings, _webSocketClient, _videoDisplayVm, _gsiServer) { Id = "BottomCenter", Title = "3D Viewport" };
         bottomCenter.SetInputSender(_inputSender);

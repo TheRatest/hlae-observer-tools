@@ -30,12 +30,13 @@ namespace HlaeObsTools.ViewModels.Docks
         private readonly Func<NetworkSettingsData, Task>? _applyNetworkSettingsAsync;
         private readonly Action<AttachPresetViewModel>? _openAttachPresetAnimation;
         private readonly VmixReplaySettings _vmixReplaySettings;
+        private readonly Action<bool>? _setFocusInputGateDisabled;
         private bool _suppressFreecamSave;
         private bool _suppressSettingsSave;
 
         public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, int GsiPort);
 
-        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Action<AttachPresetViewModel>? openAttachPresetAnimation = null, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null, VmixReplaySettings? vmixSettings = null)
+        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Action<AttachPresetViewModel>? openAttachPresetAnimation = null, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null, VmixReplaySettings? vmixSettings = null, Action<bool>? setFocusInputGateDisabled = null)
         {
             _radarSettings = radarSettings;
             _hudSettings = hudSettings;
@@ -46,6 +47,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _openAttachPresetAnimation = openAttachPresetAnimation;
             _applyNetworkSettingsAsync = applyNetworkSettingsAsync;
             _vmixReplaySettings = vmixSettings ?? new VmixReplaySettings();
+            _setFocusInputGateDisabled = setFocusInputGateDisabled;
 
             Title = "Settings";
             CanClose = false;
@@ -59,6 +61,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _udpPort = settings.UdpPort;
             _rtpPort = settings.RtpPort;
             _gsiPort = settings.GsiPort;
+            _disableFocusInputGate = settings.DisableFocusInputGate;
 
             if (_ws != null)
             {
@@ -242,6 +245,22 @@ namespace HlaeObsTools.ViewModels.Docks
             }
         }
 
+        private bool _disableFocusInputGate;
+        public bool DisableFocusInputGate
+        {
+            get => _disableFocusInputGate;
+            set
+            {
+                if (_disableFocusInputGate != value)
+                {
+                    _disableFocusInputGate = value;
+                    OnPropertyChanged();
+                    _setFocusInputGateDisabled?.Invoke(value);
+                    SaveSettings();
+                }
+            }
+        }
+
         private bool _IsDrawHudEnabled;
         public bool IsDrawHudEnabled
         {
@@ -400,7 +419,8 @@ namespace HlaeObsTools.ViewModels.Docks
                 VmixReplayPort = _vmixReplaySettings.Port,
                 VmixReplayPreSeconds = _vmixReplaySettings.PreSeconds,
                 VmixReplayPostSeconds = _vmixReplaySettings.PostSeconds,
-                VmixReplayExtendWindowSeconds = _vmixReplaySettings.ExtendWindowSeconds
+                VmixReplayExtendWindowSeconds = _vmixReplaySettings.ExtendWindowSeconds,
+                DisableFocusInputGate = _disableFocusInputGate
             };
             _settingsStorage.Save(data);
         }
