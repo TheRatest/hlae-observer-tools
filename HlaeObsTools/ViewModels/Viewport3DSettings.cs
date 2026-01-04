@@ -17,6 +17,7 @@ public sealed class Viewport3DSettings : ViewModelBase
     private float _mapOffsetX;
     private float _mapOffsetY;
     private float _mapOffsetZ;
+    private float _viewportFpsCap = 60.0f;
 
     /// <summary>
     /// Path to the .obj map file.
@@ -124,5 +125,14 @@ public sealed class Viewport3DSettings : ViewModelBase
     {
         get => _mapOffsetZ;
         set => SetProperty(ref _mapOffsetZ, value);
+    }
+
+    /// <summary>
+    /// FPS cap for the 3D viewport (0 = uncapped).
+    /// </summary>
+    public float ViewportFpsCap
+    {
+        get => _viewportFpsCap;
+        set => SetProperty(ref _viewportFpsCap, value);
     }
 }

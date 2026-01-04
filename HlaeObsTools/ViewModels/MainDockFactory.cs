@@ -146,7 +146,8 @@ public class MainDockFactory : Factory, IDisposable
             MapRoll = (float)_storedSettings.MapRoll,
             MapOffsetX = (float)_storedSettings.MapOffsetX,
             MapOffsetY = (float)_storedSettings.MapOffsetY,
-            MapOffsetZ = (float)_storedSettings.MapOffsetZ
+            MapOffsetZ = (float)_storedSettings.MapOffsetZ,
+            ViewportFpsCap = (float)_storedSettings.ViewportFpsCap
         };
 
         // Create the docks (top-right hosts the CS2 console)

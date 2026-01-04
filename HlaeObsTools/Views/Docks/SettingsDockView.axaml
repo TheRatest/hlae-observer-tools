@@ -216,6 +216,15 @@
                                 Watermark="1.0"
                                 HorizontalAlignment="Left" />
 
+                        <TextBlock Text="Viewport FPS cap (0 = uncapped)"
+                                Foreground="#CCCCCC"
+                                FontWeight="SemiBold"
+                                Margin="0,10,0,0"/>
+                        <TextBox Width="120"
+                                Text="{Binding Viewport3DSettings.ViewportFpsCap, Mode=TwoWay}"
+                                Watermark="60"
+                                HorizontalAlignment="Left" />
+
                         <TextBlock Text="Map scale"
                                 Foreground="#CCCCCC"
                                 FontWeight="SemiBold"

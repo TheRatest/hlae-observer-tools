@@ -17,6 +17,7 @@
                                      PinScale="{Binding Viewport3DSettings.PinScale}"
                                      PinOffsetZ="{Binding Viewport3DSettings.PinOffsetZ}"
                                      ViewportMouseScale="{Binding Viewport3DSettings.ViewportMouseScale}"
+                                     ViewportFpsCap="{Binding Viewport3DSettings.ViewportFpsCap}"
                                      MapScale="{Binding Viewport3DSettings.MapScale}"
                                      MapYaw="{Binding Viewport3DSettings.MapYaw}"
                                      MapPitch="{Binding Viewport3DSettings.MapPitch}"

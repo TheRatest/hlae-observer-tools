@@ -389,6 +389,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 MapOffsetX = _viewport3DSettings.MapOffsetX,
                 MapOffsetY = _viewport3DSettings.MapOffsetY,
                 MapOffsetZ = _viewport3DSettings.MapOffsetZ,
+                ViewportFpsCap = _viewport3DSettings.ViewportFpsCap,
                 FreecamSettings = _freecamSettings.ToData()
             };
             _settingsStorage.Save(data);

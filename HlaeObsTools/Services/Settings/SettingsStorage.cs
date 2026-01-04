@@ -81,6 +81,7 @@ public class AppSettingsData
     public double MapOffsetX { get; set; }
     public double MapOffsetY { get; set; }
     public double MapOffsetZ { get; set; }
+    public double ViewportFpsCap { get; set; } = 60.0;
     public FreecamSettingsData FreecamSettings { get; set; } = new();
 }
 

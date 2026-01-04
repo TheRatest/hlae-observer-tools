@@ -15,6 +15,7 @@ using HlaeObsTools.Services.Viewport3D;
 using HlaeObsTools.Services.Input;
 using System.Collections.ObjectModel;
 using HlaeObsTools.ViewModels;
+using System.Diagnostics;
 
 namespace HlaeObsTools.Controls;
 
@@ -44,6 +45,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
         AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapOffsetZ), 0.0f);
     public static readonly StyledProperty<float> ViewportMouseScaleProperty =
         AvaloniaProperty.Register<OpenTkViewport, float>(nameof(ViewportMouseScale), 1.0f);
+    public static readonly StyledProperty<float> ViewportFpsCapProperty =
+        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(ViewportFpsCap), 60.0f);
     public static readonly StyledProperty<FreecamSettings?> FreecamSettingsProperty =
         AvaloniaProperty.Register<OpenTkViewport, FreecamSettings?>(nameof(FreecamSettings));
     public static readonly StyledProperty<HlaeInputSender?> InputSenderProperty =
@@ -137,6 +140,10 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private readonly HashSet<Key> _keysDown = new();
     private bool _mouseButton4Down;
     private bool _mouseButton5Down;
+    private readonly Stopwatch _frameLimiter = Stopwatch.StartNew();
+    private long _lastFrameTicks;
+    private DispatcherTimer? _frameLimiterTimer;
+    private bool _frameLimiterPending;
 
     public OpenTkViewport()
     {
@@ -161,6 +168,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         MapOffsetZProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
         FreecamSettingsProperty.Changed.AddClassHandler<OpenTkViewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
         InputSenderProperty.Changed.AddClassHandler<OpenTkViewport>((sender, args) => sender.OnInputSenderChanged(args));
+        ViewportFpsCapProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnViewportFpsCapChanged());
     }
 
     public string? MapPath
@@ -235,6 +243,15 @@ public sealed class OpenTkViewport : OpenGlControlBase
         set => SetValue(ViewportMouseScaleProperty, value);
     }
 
+    /// <summary>
+    /// FPS cap for the 3D viewport (0 = uncapped).
+    /// </summary>
+    public float ViewportFpsCap
+    {
+        get => GetValue(ViewportFpsCapProperty);
+        set => SetValue(ViewportFpsCapProperty, value);
+    }
+
     public FreecamSettings? FreecamSettings
     {
         get => GetValue(FreecamSettingsProperty);
@@ -256,7 +273,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        RequestNextFrameRendering();
+        RequestNextFrame();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -266,6 +283,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
         _panning = false;
         DisableFreecam();
         _keysDown.Clear();
+        _frameLimiterTimer?.Stop();
+        _frameLimiterPending = false;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -533,7 +552,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         _freecamInputEnabled = keepInputEnabled;
         _freecamLastUpdate = DateTime.UtcNow;
         ResetFreecamState();
-        RequestNextFrameRendering();
+        RequestNextFrame();
     }
 
     private void HandlePointerReleased(PointerReleasedEventArgs e)
@@ -581,7 +600,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
                 _freecamIgnoreNextDelta = false;
                 CenterFreecamCursor();
                 UpdateInputStatus("Input: freecam");
-                RequestNextFrameRendering();
+                RequestNextFrame();
                 e.Handled = true;
                 return;
             }
@@ -593,7 +612,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
                 _freecamMouseDelta += new Vector2(dx, dy);
             CenterFreecamCursor();
             UpdateInputStatus("Input: freecam");
-            RequestNextFrameRendering();
+            RequestNextFrame();
             e.Handled = true;
             return;
         }
@@ -618,7 +637,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         }
 
         UpdateInputStatus("Input: drag");
-        RequestNextFrameRendering();
+        RequestNextFrame();
         e.Handled = true;
     }
 
@@ -631,7 +650,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         {
             _freecamWheelDelta += (float)e.Delta.Y;
             UpdateInputStatus($"Input: freecam wheel {e.Delta.Y:0.##}");
-            RequestNextFrameRendering();
+            RequestNextFrame();
             e.Handled = true;
             return;
         }
@@ -643,7 +662,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         if (_distance < 0.0001f)
             _distance = 0.0001f;
         UpdateInputStatus($"Input: wheel {e.Delta.Y:0.##}");
-        RequestNextFrameRendering();
+        RequestNextFrame();
         e.Handled = true;
     }
 
@@ -712,6 +731,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     {
         if (!_glReady)
             return;
+        UpdateFreecamForFrame();
 
         if (_meshDirty)
             UploadPendingMesh();
@@ -724,16 +744,6 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
         GL.ClearColor(0.02f, 0.02f, 0.03f, 1f);
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-        if (_freecamActive)
-        {
-            var now = DateTime.UtcNow;
-            if (_freecamLastUpdate == default)
-                _freecamLastUpdate = now;
-            var deltaTime = (float)(now - _freecamLastUpdate).TotalSeconds;
-            _freecamLastUpdate = now;
-            UpdateFreecam(deltaTime);
-        }
 
         var viewProjection = CreateViewProjection(width, height);
 
@@ -803,7 +813,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         }
 
         UpdateLabelOverlay(viewProjection, width, height);
-        RequestNextFrameRendering();
+        RequestNextFrame();
     }
 
     private void OnMapPathChanged(AvaloniaPropertyChangedEventArgs e)
@@ -814,7 +824,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             _pendingMesh = null;
             _loadedMeshOriginal = null;
             _meshDirty = true;
-            RequestNextFrameRendering();
+            RequestNextFrame();
             return;
         }
 
@@ -823,14 +833,23 @@ public sealed class OpenTkViewport : OpenGlControlBase
             _loadedMeshOriginal = mesh;
             _pendingMesh = ApplyMapTransform(mesh);
             _meshDirty = true;
-            RequestNextFrameRendering();
+            RequestNextFrame();
             return;
         }
 
         _pendingMesh = null;
         _loadedMeshOriginal = null;
         _meshDirty = true;
-        RequestNextFrameRendering();
+        RequestNextFrame();
+    }
+
+    private void OnViewportFpsCapChanged()
+    {
+        _lastFrameTicks = _frameLimiter.ElapsedTicks;
+        if (_frameLimiterTimer != null)
+            _frameLimiterTimer.Stop();
+        _frameLimiterPending = false;
+        RequestNextFrame();
     }
 
     private void OnMapTransformChanged()
@@ -840,7 +859,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
         _pendingMesh = ApplyMapTransform(_loadedMeshOriginal);
         _meshDirty = true;
-        RequestNextFrameRendering();
+        RequestNextFrame();
     }
 
     private void UploadPendingMesh()
@@ -890,13 +909,13 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private void OnPinScaleChanged()
     {
         _pinsDirty = true;
-        RequestNextFrameRendering();
+        RequestNextFrame();
     }
 
     private void OnPinOffsetChanged()
     {
         _pinsDirty = true;
-        RequestNextFrameRendering();
+        RequestNextFrame();
     }
 
     private void OnFreecamSettingsChanged(AvaloniaPropertyChangedEventArgs e)
@@ -981,7 +1000,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
         _pins = list;
         _pinsDirty = true;
-        RequestNextFrameRendering();
+        RequestNextFrame();
     }
 
     private static Vector3 GetTeamColor(string team)
@@ -1092,7 +1111,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             GL.BindVertexArray(0);
 
         _gridVertexCount = vertices.Length / 6;
-        RequestNextFrameRendering();
+        RequestNextFrame();
         UpdateStatusText();
     }
 
@@ -2121,7 +2140,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             GL.BindVertexArray(0);
 
         _groundVertexCount = vertices.Length / 6;
-        RequestNextFrameRendering();
+        RequestNextFrame();
         UpdateStatusText();
     }
 
@@ -2159,7 +2178,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             GL.BindVertexArray(0);
 
         _debugVertexCount = vertices.Length / 6;
-        RequestNextFrameRendering();
+        RequestNextFrame();
     }
 
     private void RebuildPins()
@@ -2551,6 +2570,66 @@ public sealed class OpenTkViewport : OpenGlControlBase
         }
 
         return Color.FromRgb(ToByte(color.X), ToByte(color.Y), ToByte(color.Z));
+    }
+
+    private void UpdateFreecamForFrame()
+    {
+        if (!_freecamActive)
+            return;
+
+        var now = DateTime.UtcNow;
+        if (_freecamLastUpdate == default)
+            _freecamLastUpdate = now;
+        var deltaTime = (float)(now - _freecamLastUpdate).TotalSeconds;
+        _freecamLastUpdate = now;
+        UpdateFreecam(deltaTime);
+    }
+
+    private void RequestNextFrame()
+    {
+        float cap = ViewportFpsCap;
+        if (cap <= 0)
+        {
+            _lastFrameTicks = _frameLimiter.ElapsedTicks;
+            RequestNextFrameRendering();
+            return;
+        }
+
+        double targetMs = 1000.0 / cap;
+        long nowTicks = _frameLimiter.ElapsedTicks;
+        double elapsedMs = (nowTicks - _lastFrameTicks) * 1000.0 / Stopwatch.Frequency;
+        if (elapsedMs >= targetMs)
+        {
+            _lastFrameTicks = nowTicks;
+            RequestNextFrameRendering();
+            return;
+        }
+
+        ScheduleDelayedFrame(targetMs - elapsedMs);
+    }
+
+    private void ScheduleDelayedFrame(double delayMs)
+    {
+        if (_frameLimiterPending)
+            return;
+
+        double clampedDelay = Math.Max(1.0, delayMs);
+        _frameLimiterTimer ??= new DispatcherTimer();
+        _frameLimiterTimer.Stop();
+        _frameLimiterTimer.Interval = TimeSpan.FromMilliseconds(clampedDelay);
+        _frameLimiterTimer.Tick -= OnFrameLimiterTick;
+        _frameLimiterTimer.Tick += OnFrameLimiterTick;
+        _frameLimiterPending = true;
+        _frameLimiterTimer.Start();
+    }
+
+    private void OnFrameLimiterTick(object? sender, EventArgs e)
+    {
+        if (_frameLimiterTimer != null)
+            _frameLimiterTimer.Stop();
+        _frameLimiterPending = false;
+        _lastFrameTicks = _frameLimiter.ElapsedTicks;
+        RequestNextFrameRendering();
     }
 
     private void UpdateLabelOverlay(Matrix4 viewProjection, int width, int height)
