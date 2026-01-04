@@ -16,6 +16,8 @@ using HlaeObsTools.Services.Gsi;
 using HlaeObsTools.ViewModels;
 using HlaeObsTools.Services.Settings;
 using HlaeObsTools.ViewModels.Hud;
+using HlaeObsTools.Services.Vmix;
+using HlaeObsTools.ViewModels;
 
 namespace HlaeObsTools.ViewModels;
 
@@ -32,6 +34,8 @@ public class MainDockFactory : Factory, IDisposable
     private readonly RadarConfigProvider _radarConfigProvider;
     private readonly SettingsStorage _settingsStorage;
     private readonly AppSettingsData _storedSettings;
+    private readonly VmixReplayService _vmixReplayService;
+    private readonly VmixReplaySettings _vmixReplaySettings;
     private VideoDisplayDockViewModel? _videoDisplayVm;
     private bool _disposed;
 
@@ -54,6 +58,16 @@ public class MainDockFactory : Factory, IDisposable
 
         _gsiServer = new GsiServer();
         _radarConfigProvider = new RadarConfigProvider();
+        _vmixReplaySettings = new VmixReplaySettings
+        {
+            Enabled = _storedSettings.VmixReplayEnabled,
+            Host = _storedSettings.VmixReplayHost,
+            Port = _storedSettings.VmixReplayPort,
+            PreSeconds = _storedSettings.VmixReplayPreSeconds,
+            PostSeconds = _storedSettings.VmixReplayPostSeconds,
+            ExtendWindowSeconds = _storedSettings.VmixReplayExtendWindowSeconds
+        };
+        _vmixReplayService = new VmixReplayService(_webSocketClient, _gsiServer, _vmixReplaySettings);
 
         // Initialize global raw input handler and periodically flush into UDP sender
         _rawInputHandler = new RawInputHandler();
@@ -174,7 +188,8 @@ public class MainDockFactory : Factory, IDisposable
                 }
             },
             ApplyNetworkSettingsAsync,
-            _storedSettings)
+            _storedSettings,
+            _vmixReplaySettings)
         { Id = "BottomLeft", Title = "Settings" };
         var bottomCenter = new Viewport3DDockViewModel(viewport3DSettings, freecamSettings, _webSocketClient, _videoDisplayVm, _gsiServer) { Id = "BottomCenter", Title = "3D Viewport" };
         bottomCenter.SetInputSender(_inputSender);
@@ -436,6 +451,7 @@ public class MainDockFactory : Factory, IDisposable
         _webSocketClient.Dispose();
 
         _videoDisplayVm?.Dispose();
+        _vmixReplayService.Dispose();
 
         _disposed = true;
     }

@@ -29,12 +29,13 @@ namespace HlaeObsTools.ViewModels.Docks
         private readonly HlaeWebSocketClient? _ws;
         private readonly Func<NetworkSettingsData, Task>? _applyNetworkSettingsAsync;
         private readonly Action<AttachPresetViewModel>? _openAttachPresetAnimation;
+        private readonly VmixReplaySettings _vmixReplaySettings;
         private bool _suppressFreecamSave;
         private bool _suppressSettingsSave;
 
         public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, int GsiPort);
 
-        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Action<AttachPresetViewModel>? openAttachPresetAnimation = null, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null)
+        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Action<AttachPresetViewModel>? openAttachPresetAnimation = null, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null, VmixReplaySettings? vmixSettings = null)
         {
             _radarSettings = radarSettings;
             _hudSettings = hudSettings;
@@ -44,6 +45,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _ws = wsClient;
             _openAttachPresetAnimation = openAttachPresetAnimation;
             _applyNetworkSettingsAsync = applyNetworkSettingsAsync;
+            _vmixReplaySettings = vmixSettings ?? new VmixReplaySettings();
 
             Title = "Settings";
             CanClose = false;
@@ -79,12 +81,14 @@ namespace HlaeObsTools.ViewModels.Docks
             _hudSettings.PropertyChanged += OnHudSettingsChanged;
             _viewport3DSettings.PropertyChanged += OnViewport3DSettingsChanged;
             _freecamSettings.PropertyChanged += OnFreecamSettingsChanged;
+            _vmixReplaySettings.PropertyChanged += OnVmixSettingsChanged;
         }
 
         public RadarSettings RadarSettings => _radarSettings;
         public HudSettings HudSettings => _hudSettings;
         public FreecamSettings FreecamSettings => _freecamSettings;
         public Viewport3DSettings Viewport3DSettings => _viewport3DSettings;
+        public VmixReplaySettings VmixReplaySettings => _vmixReplaySettings;
 
         #region === Network Settings ===
         private string _webSocketHost = "127.0.0.1";
@@ -390,7 +394,13 @@ namespace HlaeObsTools.ViewModels.Docks
                 MapOffsetY = _viewport3DSettings.MapOffsetY,
                 MapOffsetZ = _viewport3DSettings.MapOffsetZ,
                 ViewportFpsCap = _viewport3DSettings.ViewportFpsCap,
-                FreecamSettings = _freecamSettings.ToData()
+                FreecamSettings = _freecamSettings.ToData(),
+                VmixReplayEnabled = _vmixReplaySettings.Enabled,
+                VmixReplayHost = _vmixReplaySettings.Host,
+                VmixReplayPort = _vmixReplaySettings.Port,
+                VmixReplayPreSeconds = _vmixReplaySettings.PreSeconds,
+                VmixReplayPostSeconds = _vmixReplaySettings.PostSeconds,
+                VmixReplayExtendWindowSeconds = _vmixReplaySettings.ExtendWindowSeconds
             };
             _settingsStorage.Save(data);
         }
@@ -549,6 +559,14 @@ namespace HlaeObsTools.ViewModels.Docks
         }
 
         private void OnViewport3DSettingsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_suppressSettingsSave)
+                return;
+
+            SaveSettings();
+        }
+
+        private void OnVmixSettingsChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (_suppressSettingsSave)
                 return;

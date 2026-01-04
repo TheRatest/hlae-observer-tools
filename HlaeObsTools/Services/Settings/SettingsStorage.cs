@@ -83,6 +83,12 @@ public class AppSettingsData
     public double MapOffsetZ { get; set; }
     public double ViewportFpsCap { get; set; } = 60.0;
     public FreecamSettingsData FreecamSettings { get; set; } = new();
+    public bool VmixReplayEnabled { get; set; }
+    public string VmixReplayHost { get; set; } = "127.0.0.1";
+    public int VmixReplayPort { get; set; } = 8088;
+    public double VmixReplayPreSeconds { get; set; } = 2.0;
+    public double VmixReplayPostSeconds { get; set; } = 2.0;
+    public double VmixReplayExtendWindowSeconds { get; set; } = 3.0;
 }
 
 public class AttachmentPresetData
