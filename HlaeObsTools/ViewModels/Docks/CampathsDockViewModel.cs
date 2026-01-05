@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -55,6 +56,8 @@ public class CampathsDockViewModel : Tool
     private readonly Dictionary<Guid, int> _groupPlaybackIndex = new();
     private readonly Random _random = new();
     private CampathItemViewModel? _currentlyPlayingCampath;
+    private double _campathPlaybackProgress;
+    private bool _isCampathPlaying;
 
     private ObservableCollection<CampathProfileViewModel> _profiles = new();
     private CampathProfileViewModel? _selectedProfile;
@@ -135,6 +138,18 @@ public class CampathsDockViewModel : Tool
     public ICommand DeleteGroupCommand => _deleteGroupCommand;
     public ICommand ToggleGroupModeCommand => _toggleGroupModeCommand;
     public ICommand ViewGroupCommand => _viewGroupCommand;
+
+    public double CampathPlaybackProgress
+    {
+        get => _campathPlaybackProgress;
+        private set => SetProperty(ref _campathPlaybackProgress, value);
+    }
+
+    public bool IsCampathPlaying
+    {
+        get => _isCampathPlaying;
+        private set => SetProperty(ref _isCampathPlaying, value);
+    }
 
     public async Task AddProfileAsync()
     {
@@ -810,6 +825,7 @@ public class CampathsDockViewModel : Tool
 
         // Stop the currently playing campath if any
         _currentlyPlayingCampath?.StopPlayback();
+        SetCurrentPlayingCampath(null);
 
         // Parse campath file to get duration
         var campathFile = CampathFileParser.Parse(campath.FilePath);
@@ -823,7 +839,7 @@ public class CampathsDockViewModel : Tool
             if (effectiveDuration > 0)
             {
                 campath.StartPlayback(effectiveDuration);
-                _currentlyPlayingCampath = campath;
+                SetCurrentPlayingCampath(campath);
             }
         }
 
@@ -872,6 +888,7 @@ public class CampathsDockViewModel : Tool
 
         // Stop the currently playing campath if any
         _currentlyPlayingCampath?.StopPlayback();
+        SetCurrentPlayingCampath(null);
 
         // Parse campath file to get duration
         var campathFile = CampathFileParser.Parse(selected.FilePath!);
@@ -885,7 +902,7 @@ public class CampathsDockViewModel : Tool
             if (effectiveDuration > 0)
             {
                 selected.StartPlayback(effectiveDuration);
-                _currentlyPlayingCampath = selected;
+                SetCurrentPlayingCampath(selected);
             }
         }
 
@@ -925,6 +942,45 @@ public class CampathsDockViewModel : Tool
 
         groups.Insert(insertIndex, source);
         Save();
+    }
+
+    private void SetCurrentPlayingCampath(CampathItemViewModel? campath)
+    {
+        if (_currentlyPlayingCampath != null)
+        {
+            _currentlyPlayingCampath.PropertyChanged -= OnCampathPlaybackChanged;
+        }
+
+        _currentlyPlayingCampath = campath;
+
+        if (_currentlyPlayingCampath != null)
+        {
+            _currentlyPlayingCampath.PropertyChanged += OnCampathPlaybackChanged;
+        }
+
+        UpdateCampathPlaybackState();
+    }
+
+    private void OnCampathPlaybackChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(CampathItemViewModel.PlaybackProgress) ||
+            e.PropertyName == nameof(CampathItemViewModel.IsPlaying))
+        {
+            UpdateCampathPlaybackState();
+        }
+    }
+
+    private void UpdateCampathPlaybackState()
+    {
+        if (_currentlyPlayingCampath == null)
+        {
+            IsCampathPlaying = false;
+            CampathPlaybackProgress = 0;
+            return;
+        }
+
+        IsCampathPlaying = _currentlyPlayingCampath.IsPlaying;
+        CampathPlaybackProgress = _currentlyPlayingCampath.PlaybackProgress;
     }
 }
 

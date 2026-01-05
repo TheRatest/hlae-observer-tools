@@ -200,7 +200,7 @@ public class MainDockFactory : Factory, IDisposable
         _videoDisplayVm.SetWebSocketClient(_webSocketClient);
         _videoDisplayVm.SetInputSender(_inputSender);
         _videoDisplayVm.SetFreecamSettings(freecamSettings);
-        var hudOverlayVm = new HudOverlayViewModel(_gsiServer, hudSettings, _webSocketClient);
+        var hudOverlayVm = new HudOverlayViewModel(_gsiServer, hudSettings, _webSocketClient, bottomRight);
         _videoDisplayVm.SetHudOverlay(hudOverlayVm);
         ConfigureAnalogInput(freecamSettings);
         _videoDisplayVm.SetRtpConfig(new Services.Video.RTP.RtpReceiverConfig

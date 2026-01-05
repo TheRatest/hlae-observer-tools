@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using HlaeObsTools.Services.Gsi;
 using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.ViewModels;
+using HlaeObsTools.ViewModels.Docks;
 
 namespace HlaeObsTools.ViewModels.Hud;
 
@@ -22,6 +23,7 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<string, HudPlayerCardViewModel> _hudPlayerCache = new(StringComparer.Ordinal);
     private readonly ObservableCollection<HudKillfeedEntryViewModel> _killfeedEntries = new();
     private readonly DispatcherTimer _killfeedTimer;
+    private readonly CampathsDockViewModel? _campathsVm;
     private readonly HudTeamViewModel _teamCt = new("CT");
     private readonly HudTeamViewModel _teamT = new("T");
     private HudPlayerCardViewModel? _focusedHudPlayer;
@@ -32,6 +34,8 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
     private bool _hasHudDataCached;
     private bool _isFreecamActive;
     private bool _isAwaitingAttachTarget;
+    private bool _isCampathPlaying;
+    private double _campathPlaybackProgress;
     private int _pendingAttachSourceObserverSlot;
     private int _pendingAttachPresetIndex = -1;
     private string _hudPromptText = string.Empty;
@@ -66,11 +70,16 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
     private static readonly SolidColorBrush CtCardBackgroundBrush = new(Color.Parse("#192434"));
     private static readonly SolidColorBrush TCardBackgroundBrush = new(Color.Parse("#2E1E15"));
 
-    public HudOverlayViewModel(GsiServer gsiServer, HudSettings hudSettings, HlaeWebSocketClient webSocketClient)
+    public HudOverlayViewModel(
+        GsiServer gsiServer,
+        HudSettings hudSettings,
+        HlaeWebSocketClient webSocketClient,
+        CampathsDockViewModel? campathsVm = null)
     {
         _gsiServer = gsiServer;
         _hudSettings = hudSettings;
         _webSocketClient = webSocketClient;
+        _campathsVm = campathsVm;
 
         CancelHudPromptCommand = new Relay(_ => CancelPendingAttachTargetSelection());
 
@@ -84,6 +93,12 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         _gsiServer.GameStateUpdated += OnHudGameStateUpdated;
         _hudSettings.PropertyChanged += OnHudSettingsChanged;
         _webSocketClient.MessageReceived += OnWebSocketMessage;
+
+        if (_campathsVm != null)
+        {
+            _campathsVm.PropertyChanged += OnCampathsPropertyChanged;
+            UpdateCampathPlaybackState(_campathsVm);
+        }
     }
 
     public bool IsHudEnabled => _hudSettings.IsHudEnabled;
@@ -155,6 +170,18 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
 
     public ICommand CancelHudPromptCommand { get; }
 
+    public bool IsCampathPlaying
+    {
+        get => _isCampathPlaying;
+        private set => SetProperty(ref _isCampathPlaying, value);
+    }
+
+    public double CampathPlaybackProgress
+    {
+        get => _campathPlaybackProgress;
+        private set => SetProperty(ref _campathPlaybackProgress, value);
+    }
+
     public string HudPromptText
     {
         get => _hudPromptText;
@@ -176,6 +203,11 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         _webSocketClient.MessageReceived -= OnWebSocketMessage;
         _killfeedTimer.Tick -= OnKillfeedTimerTick;
         _killfeedTimer.Stop();
+
+        if (_campathsVm != null)
+        {
+            _campathsVm.PropertyChanged -= OnCampathsPropertyChanged;
+        }
     }
 
     private void OnHudSettingsChanged(object? sender, PropertyChangedEventArgs e)
@@ -209,6 +241,24 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
                 entry.ShowAttackerSlot = show;
             }
         }
+    }
+
+    private void OnCampathsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_campathsVm == null)
+            return;
+
+        if (e.PropertyName == nameof(CampathsDockViewModel.IsCampathPlaying) ||
+            e.PropertyName == nameof(CampathsDockViewModel.CampathPlaybackProgress))
+        {
+            UpdateCampathPlaybackState(_campathsVm);
+        }
+    }
+
+    private void UpdateCampathPlaybackState(CampathsDockViewModel campathsVm)
+    {
+        IsCampathPlaying = campathsVm.IsCampathPlaying;
+        CampathPlaybackProgress = campathsVm.CampathPlaybackProgress;
     }
 
     private void OnHudGameStateUpdated(object? sender, GsiGameState state)

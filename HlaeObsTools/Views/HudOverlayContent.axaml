@@ -19,6 +19,7 @@
                                         TrueOpacity="0.9"
                                         FalseOpacity="0" />
         <conv:NullToBoolConverter x:Key="NullToBoolConverter" />
+        <conv:ProgressBarWidthConverter x:Key="ProgressBarWidthConverter" />
         <conv:HudScaleConverter x:Key="HudScaleConverter"
                                 BaseWidth="1600"
                                 BaseHeight="900"
@@ -523,6 +524,25 @@
                                 IsVisible="{Binding HasFocusedHudPlayer}"
                                 Content="{Binding FocusedHudPlayer}"
                                 ContentTemplate="{StaticResource FocusedPlayerCardTemplate}" />
+
+                <!-- Campath playback progress -->
+                <Grid Grid.Row="1"
+                      Grid.ColumnSpan="3"
+                      VerticalAlignment="Bottom"
+                      Height="4"
+                      IsVisible="{Binding IsCampathPlaying}"
+                      IsHitTestVisible="False">
+                    <Rectangle Fill="#FF0000"
+                               HorizontalAlignment="Left">
+                        <Rectangle.Width>
+                            <MultiBinding Converter="{StaticResource ProgressBarWidthConverter}">
+                                <Binding Path="CampathPlaybackProgress" />
+                                <Binding Path="Bounds.Width"
+                                         RelativeSource="{RelativeSource AncestorType=Grid}" />
+                            </MultiBinding>
+                        </Rectangle.Width>
+                    </Rectangle>
+                </Grid>
 
                 <!-- Killfeed overlay -->
                 <Canvas Grid.RowSpan="2"
