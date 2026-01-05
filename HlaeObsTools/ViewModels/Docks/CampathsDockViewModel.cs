@@ -15,8 +15,14 @@ using Avalonia.Threading;
 using Dock.Model.Mvvm.Controls;
 using HlaeObsTools.Services.Campaths;
 using HlaeObsTools.Services.Video;
-using HlaeObsTools.Services.Video.Shared;
 using HlaeObsTools.Services.WebSocket;
+using System.Diagnostics;
+using System.Text.Json;
+using Vortice.Direct3D;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
+using static Vortice.Direct3D11.D3D11;
+using SharpGen.Runtime;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -44,6 +50,8 @@ public class CampathsDockViewModel : Tool
     private readonly DelegateCommand _toggleGroupModeCommand;
     private readonly DelegateCommand _viewGroupCommand;
     private HlaeWebSocketClient? _webSocketClient;
+    private TaskCompletionSource<IntPtr>? _sharedHandleTcs;
+    private IntPtr _sharedTextureHandle;
     private readonly Dictionary<Guid, int> _groupPlaybackIndex = new();
     private readonly Random _random = new();
     private CampathItemViewModel? _currentlyPlayingCampath;
@@ -277,7 +285,15 @@ public class CampathsDockViewModel : Tool
 
     public void SetWebSocketClient(HlaeWebSocketClient client)
     {
+        if (_webSocketClient != null)
+        {
+            _webSocketClient.MessageReceived -= OnWebSocketMessage;
+            _webSocketClient.Connected -= OnWebSocketConnected;
+        }
+
         _webSocketClient = client;
+        _webSocketClient.MessageReceived += OnWebSocketMessage;
+        _webSocketClient.Connected += OnWebSocketConnected;
     }
 
     public void RemoveCampath(CampathItemViewModel? item)
@@ -381,6 +397,44 @@ public class CampathsDockViewModel : Tool
         UpdateCampathImage(item, targetPath);
     }
 
+    private void OnWebSocketMessage(object? sender, string message)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(message);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("type", out var typeProp))
+                return;
+
+            if (!string.Equals(typeProp.GetString(), "sharedtex_handle", StringComparison.Ordinal))
+                return;
+
+            if (root.TryGetProperty("handle", out var handleProp) && TryParseHandle(handleProp, out var handleValue))
+            {
+                _sharedTextureHandle = new IntPtr(handleValue);
+                _sharedHandleTcs?.TrySetResult(_sharedTextureHandle);
+            }
+        }
+        catch
+        {
+            // ignore malformed
+        }
+    }
+
+    private void OnWebSocketConnected(object? sender, EventArgs e)
+    {
+        _ = RequestSharedTextureHandleAsync();
+    }
+
+    private Task RequestSharedTextureHandleAsync()
+    {
+        if (_webSocketClient == null || !_webSocketClient.IsConnected)
+            return Task.CompletedTask;
+
+        int pid = Process.GetCurrentProcess().Id;
+        return _webSocketClient.SendCommandAsync("sharedtex_register", new { pid });
+    }
+
     private void UpdateCampathImage(CampathItemViewModel item, string imagePath)
     {
         if (Dispatcher.UIThread.CheckAccess())
@@ -458,59 +512,215 @@ public class CampathsDockViewModel : Tool
         return bitmap;
     }
 
-    private static async Task<VideoFrame?> CaptureSharedTextureFrameAsync()
+    private async Task<IntPtr> GetSharedTextureHandleAsync()
     {
-        using var source = new SharedTextureVideoSource();
-        var tcs = new TaskCompletionSource<VideoFrame>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (_sharedTextureHandle != IntPtr.Zero)
+            return _sharedTextureHandle;
 
-        void Handler(object? sender, VideoFrame frame)
+        if (_webSocketClient == null || !_webSocketClient.IsConnected)
+            return IntPtr.Zero;
+
+        var tcs = new TaskCompletionSource<IntPtr>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _sharedHandleTcs = tcs;
+        int pid = Process.GetCurrentProcess().Id;
+        await _webSocketClient.SendCommandAsync("sharedtex_register", new { pid });
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        using (cts.Token.Register(() => tcs.TrySetResult(IntPtr.Zero)))
         {
-            var dataCopy = new byte[frame.Stride * frame.Height];
-            Buffer.BlockCopy(frame.Data, 0, dataCopy, 0, dataCopy.Length);
-
-            tcs.TrySetResult(new VideoFrame
-            {
-                Data = dataCopy,
-                Width = frame.Width,
-                Height = frame.Height,
-                Stride = frame.Stride,
-                Timestamp = frame.Timestamp,
-                SourceTimestampUs = frame.SourceTimestampUs,
-                ReceivedTimestampUs = frame.ReceivedTimestampUs
-            });
-        }
-
-        source.FrameReceived += Handler;
-
-        try
-        {
-            source.Start();
-        }
-        catch (Exception ex)
-        {
-            source.FrameReceived -= Handler;
-            Console.WriteLine($"SharedTextureVideoSource start failed: {ex.Message}");
-            return null;
-        }
-
-        try
-        {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            using (cts.Token.Register(() => tcs.TrySetCanceled()))
+            try
             {
                 return await tcs.Task;
             }
+            finally
+            {
+                _sharedHandleTcs = null;
+            }
         }
-        catch (TaskCanceledException)
+    }
+
+    private async Task<VideoFrame?> CaptureSharedTextureFrameAsync()
+    {
+        var handle = await GetSharedTextureHandleAsync();
+        if (handle == IntPtr.Zero)
         {
-            Console.WriteLine("Shared texture capture timed out.");
+            Console.WriteLine("Shared texture handle unavailable.");
             return null;
+        }
+
+        ID3D11Device? device = null;
+        ID3D11DeviceContext? context = null;
+        ID3D11Texture2D? sharedTex = null;
+        ID3D11Texture2D? staging = null;
+        IDXGIKeyedMutex? keyedMutex = null;
+
+        try
+        {
+            Result res = D3D11CreateDevice(
+                null,
+                DriverType.Hardware,
+                DeviceCreationFlags.BgraSupport,
+                null,
+                out device);
+
+            if (res.Failure || device == null)
+            {
+                res = D3D11CreateDevice(
+                    null,
+                    DriverType.Warp,
+                    DeviceCreationFlags.BgraSupport,
+                    null,
+                    out device);
+            }
+
+            if (res.Failure || device == null)
+            {
+                Console.WriteLine($"Shared texture capture: failed to create D3D11 device (0x{res.Code:X8}).");
+                return null;
+            }
+
+            context = device.ImmediateContext;
+            sharedTex = device.OpenSharedResource<ID3D11Texture2D>(handle);
+            if (sharedTex == null)
+            {
+                Console.WriteLine("Shared texture capture: failed to open shared texture by handle.");
+                return null;
+            }
+
+            keyedMutex = sharedTex.QueryInterfaceOrNull<IDXGIKeyedMutex>();
+
+            var desc = sharedTex.Description;
+            int width = (int)desc.Width;
+            int height = (int)desc.Height;
+            if (desc.Format != Format.R8G8B8A8_UNorm)
+            {
+                Console.WriteLine($"Shared texture capture: unexpected format {desc.Format}.");
+                return null;
+            }
+            var stagingDesc = new Texture2DDescription
+            {
+                Width = (uint)width,
+                Height = (uint)height,
+                MipLevels = 1,
+                ArraySize = 1,
+                Format = desc.Format,
+                SampleDescription = desc.SampleDescription,
+                Usage = ResourceUsage.Staging,
+                BindFlags = BindFlags.None,
+                CPUAccessFlags = CpuAccessFlags.Read,
+                MiscFlags = ResourceOptionFlags.None
+            };
+
+            staging = device.CreateTexture2D(stagingDesc);
+
+            bool acquired = true;
+            bool locked = false;
+            try
+            {
+                if (keyedMutex != null)
+                {
+                    keyedMutex.AcquireSync(1, 1000);
+                    locked = true;
+                }
+
+                context.CopyResource(staging, sharedTex);
+            }
+            catch (Exception ex)
+            {
+                acquired = false;
+                Console.WriteLine($"Shared texture capture: copy failed ({ex.Message}).");
+            }
+            finally
+            {
+                if (locked && keyedMutex != null)
+                {
+                    try { keyedMutex.ReleaseSync(0); } catch { /* ignore */ }
+                }
+            }
+
+            if (!acquired)
+                return null;
+
+            var map = context.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
+            try
+            {
+                int rowPitch = (int)map.RowPitch;
+                int rowSize = width * 4;
+                var data = new byte[height * rowSize];
+
+                for (int y = 0; y < height; y++)
+                {
+                    Marshal.Copy(IntPtr.Add(map.DataPointer, y * rowPitch), data, y * rowSize, rowSize);
+                    SwapRedBlue(data, y * rowSize, rowSize);
+                }
+
+                return new VideoFrame
+                {
+                    Data = data,
+                    Width = width,
+                    Height = height,
+                    Stride = rowSize,
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+            }
+            finally
+            {
+                context.Unmap(staging, 0);
+            }
         }
         finally
         {
-            source.FrameReceived -= Handler;
-            source.Stop();
+            staging?.Dispose();
+            sharedTex?.Dispose();
+            keyedMutex?.Dispose();
+            context?.Dispose();
+            device?.Dispose();
         }
+    }
+
+    private static void SwapRedBlue(byte[] buffer, int offset, int length)
+    {
+        for (int i = offset; i < offset + length; i += 4)
+        {
+            byte r = buffer[i];
+            buffer[i] = buffer[i + 2];
+            buffer[i + 2] = r;
+        }
+    }
+
+    private static bool TryParseHandle(JsonElement handleProp, out long handleValue)
+    {
+        handleValue = 0;
+        try
+        {
+            if (handleProp.ValueKind == JsonValueKind.String)
+            {
+                var text = handleProp.GetString();
+                if (string.IsNullOrWhiteSpace(text))
+                    return false;
+
+                if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                {
+                    handleValue = Convert.ToInt64(text.Substring(2), 16);
+                }
+                else
+                {
+                    handleValue = Convert.ToInt64(text, 10);
+                }
+                return true;
+            }
+
+            if (handleProp.ValueKind == JsonValueKind.Number && handleProp.TryGetInt64(out handleValue))
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        return false;
     }
 
     public async Task DeleteGroupAsync(CampathGroupViewModel? group)
