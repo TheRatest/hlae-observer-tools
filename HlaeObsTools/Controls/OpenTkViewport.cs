@@ -26,9 +26,9 @@ public sealed class OpenTkViewport : OpenGlControlBase
     public static readonly StyledProperty<string?> StatusTextProperty =
         AvaloniaProperty.Register<OpenTkViewport, string?>(nameof(StatusText), string.Empty);
     public static readonly StyledProperty<float> PinScaleProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinScale), 1.0f);
+        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinScale), 200.0f);
     public static readonly StyledProperty<float> PinOffsetZProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinOffsetZ), 0.0f);
+        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinOffsetZ), 55.0f);
     public static readonly StyledProperty<float> MapScaleProperty =
         AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapScale), 1.0f);
     public static readonly StyledProperty<float> MapYawProperty =
@@ -44,7 +44,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     public static readonly StyledProperty<float> MapOffsetZProperty =
         AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapOffsetZ), 0.0f);
     public static readonly StyledProperty<float> ViewportMouseScaleProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(ViewportMouseScale), 1.0f);
+        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(ViewportMouseScale), 0.75f);
     public static readonly StyledProperty<float> ViewportFpsCapProperty =
         AvaloniaProperty.Register<OpenTkViewport, float>(nameof(ViewportFpsCap), 60.0f);
     public static readonly StyledProperty<FreecamSettings?> FreecamSettingsProperty =
@@ -2438,8 +2438,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
             RollSpeed = 45.0f,
             RollSmoothing = 0.8f,
             LeanStrength = 1.0f,
-            LeanAccelScale = 0.0015f,
-            LeanVelocityScale = 0.01f,
+            LeanAccelScale = 0.025f,
+            LeanVelocityScale = 0.005f,
             LeanMaxAngle = 20.0f,
             LeanHalfTime = 0.18f,
             ClampPitch = false,

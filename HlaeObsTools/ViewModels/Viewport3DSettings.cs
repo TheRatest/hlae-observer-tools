@@ -7,9 +7,9 @@ public sealed class Viewport3DSettings : ViewModelBase
 {
     private string _mapObjPath = string.Empty;
     private bool _useAltPlayerBinds;
-    private float _pinScale = 1.0f;
-    private float _pinOffsetZ;
-    private float _viewportMouseScale = 1.0f;
+    private float _pinScale = 200.0f;
+    private float _pinOffsetZ = 55.0f;
+    private float _viewportMouseScale = 0.75f;
     private float _mapScale = 1.0f;
     private float _mapYaw;
     private float _mapPitch;

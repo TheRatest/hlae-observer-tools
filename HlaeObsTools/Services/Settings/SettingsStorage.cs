@@ -71,9 +71,9 @@ public class AppSettingsData
     public int RtpPort { get; set; } = 5000;
     public int GsiPort { get; set; } = 31337;
     public string MapObjPath { get; set; } = string.Empty;
-    public double PinScale { get; set; } = 1.0;
-    public double PinOffsetZ { get; set; }
-    public double ViewportMouseScale { get; set; } = 1.0;
+    public double PinScale { get; set; } = 200.0;
+    public double PinOffsetZ { get; set; } = 55.0;
+    public double ViewportMouseScale { get; set; } = 0.75;
     public double MapScale { get; set; } = 1.0;
     public double MapYaw { get; set; }
     public double MapPitch { get; set; }
@@ -140,8 +140,8 @@ public class FreecamSettingsData
     public double RollSpeed { get; set; } = 45.0;
     public double RollSmoothing { get; set; } = 0.8;
     public double LeanStrength { get; set; } = 1.0;
-    public double LeanAccelScale { get; set; } = 0.250;
-    public double LeanVelocityScale { get; set; } = 0.01;
+    public double LeanAccelScale { get; set; } = 0.0250;
+    public double LeanVelocityScale { get; set; } = 0.005;
     public double LeanMaxAngle { get; set; } = 20.0;
     public double LeanHalfTime { get; set; } = 0.30;
     public double FovMin { get; set; } = 10.0;
