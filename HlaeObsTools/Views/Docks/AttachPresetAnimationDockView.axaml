@@ -66,10 +66,24 @@
                                 HorizontalAlignment="Left" />
                     </StackPanel>
 
-                    <TextBlock IsVisible="{Binding IsTransition}"
-                               Text="Transition marker: at this time, switch to the selected target player."
-                               Foreground="#888888"
-                               FontSize="12"/>
+                    <StackPanel IsVisible="{Binding IsTransition}" Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Duration (s)" Foreground="#AAAAAA" VerticalAlignment="Center"/>
+                            <TextBox Width="90"
+                                     Text="{Binding TransitionDuration, Mode=TwoWay, Converter={StaticResource NullableDouble}}"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Easing" Foreground="#AAAAAA" VerticalAlignment="Center"/>
+                            <ComboBox Width="160"
+                                      ItemsSource="{x:Static local:AttachPresetAnimationEventViewModel.TransitionEasingOptions}"
+                                      SelectedItem="{Binding TransitionEasing, Mode=TwoWay}"/>
+                        </StackPanel>
+
+                        <TextBlock Text="Transition marker: animates toward the selected target player."
+                                   Foreground="#888888"
+                                   FontSize="12"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </DataTemplate>

@@ -126,6 +126,9 @@ public class AttachmentPresetAnimationEventData
     public double? DeltaRoll { get; set; }
 
     public double? Fov { get; set; }
+
+    public double? TransitionDuration { get; set; }
+    public string? TransitionEasing { get; set; } // "linear" | "smoothstep" | "easeinoutcubic"
 }
 
 public class FreecamSettingsData

@@ -35,6 +35,13 @@ public sealed class HudSettings : ViewModelBase
         Transition
     }
 
+    public enum AttachmentPresetAnimationTransitionEasing
+    {
+        Linear,
+        Smoothstep,
+        EaseInOutCubic
+    }
+
     public record AttachmentPresetAnimationEvent
     {
         public AttachmentPresetAnimationEventType Type { get; init; } = AttachmentPresetAnimationEventType.Keyframe;
@@ -50,6 +57,9 @@ public sealed class HudSettings : ViewModelBase
         public double? DeltaRoll { get; init; }
 
         public double? Fov { get; init; }
+
+        public double? TransitionDuration { get; init; }
+        public AttachmentPresetAnimationTransitionEasing? TransitionEasing { get; init; }
     }
 
     private bool _isHudEnabled = true;
@@ -162,7 +172,9 @@ public sealed class HudSettings : ViewModelBase
                 DeltaPitch = e.DeltaPitch,
                 DeltaYaw = e.DeltaYaw,
                 DeltaRoll = e.DeltaRoll,
-                Fov = e.Fov
+                Fov = e.Fov,
+                TransitionDuration = e.TransitionDuration,
+                TransitionEasing = ParseTransitionEasing(e.TransitionEasing)
             })
             .ToList();
 
@@ -195,9 +207,37 @@ public sealed class HudSettings : ViewModelBase
                     DeltaPitch = e.DeltaPitch,
                     DeltaYaw = e.DeltaYaw,
                     DeltaRoll = e.DeltaRoll,
-                    Fov = e.Fov
+                    Fov = e.Fov,
+                    TransitionDuration = e.TransitionDuration,
+                    TransitionEasing = ToTransitionEasing(e.TransitionEasing)
                 })
                 .ToList()
+        };
+    }
+
+    private static AttachmentPresetAnimationTransitionEasing? ParseTransitionEasing(string? easing)
+    {
+        if (string.IsNullOrWhiteSpace(easing)) return null;
+
+        return easing.Trim().ToLowerInvariant() switch
+        {
+            "linear" => AttachmentPresetAnimationTransitionEasing.Linear,
+            "smoothstep" => AttachmentPresetAnimationTransitionEasing.Smoothstep,
+            "easeinoutcubic" => AttachmentPresetAnimationTransitionEasing.EaseInOutCubic,
+            _ => AttachmentPresetAnimationTransitionEasing.Smoothstep
+        };
+    }
+
+    private static string? ToTransitionEasing(AttachmentPresetAnimationTransitionEasing? easing)
+    {
+        if (easing == null) return null;
+
+        return easing.Value switch
+        {
+            AttachmentPresetAnimationTransitionEasing.Linear => "linear",
+            AttachmentPresetAnimationTransitionEasing.Smoothstep => "smoothstep",
+            AttachmentPresetAnimationTransitionEasing.EaseInOutCubic => "easeinoutcubic",
+            _ => "smoothstep"
         };
     }
 }

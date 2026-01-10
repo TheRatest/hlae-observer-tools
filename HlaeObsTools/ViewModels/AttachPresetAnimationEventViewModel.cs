@@ -25,6 +25,10 @@ public sealed class AttachPresetAnimationEventViewModel : ViewModelBase
 
     private double? _fov;
 
+    private double? _transitionDuration = 0.0;
+    private HudSettings.AttachmentPresetAnimationTransitionEasing _transitionEasing
+        = HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep;
+
     public AttachPresetAnimationEventViewModel()
         : this(isBaseKeyframe: false)
     {
@@ -42,6 +46,13 @@ public sealed class AttachPresetAnimationEventViewModel : ViewModelBase
     }
 
     public bool IsBaseKeyframe { get; }
+
+    public static HudSettings.AttachmentPresetAnimationTransitionEasing[] TransitionEasingOptions { get; } =
+    {
+        HudSettings.AttachmentPresetAnimationTransitionEasing.Linear,
+        HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep,
+        HudSettings.AttachmentPresetAnimationTransitionEasing.EaseInOutCubic
+    };
 
     public AttachPresetAnimationEventType Type
     {
@@ -94,4 +105,16 @@ public sealed class AttachPresetAnimationEventViewModel : ViewModelBase
     public double? DeltaRoll { get => _deltaRoll; set => SetProperty(ref _deltaRoll, value); }
 
     public double? Fov { get => _fov; set => SetProperty(ref _fov, value); }
+
+    public double? TransitionDuration
+    {
+        get => _transitionDuration;
+        set => SetProperty(ref _transitionDuration, value);
+    }
+
+    public HudSettings.AttachmentPresetAnimationTransitionEasing TransitionEasing
+    {
+        get => _transitionEasing;
+        set => SetProperty(ref _transitionEasing, value);
+    }
 }

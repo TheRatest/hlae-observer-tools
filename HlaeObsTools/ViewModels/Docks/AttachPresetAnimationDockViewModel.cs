@@ -90,7 +90,9 @@ public sealed class AttachPresetAnimationDockViewModel : Tool
         {
             Type = AttachPresetAnimationEventType.Transition,
             Time = time,
-            Order = order
+            Order = order,
+            TransitionDuration = 0.0,
+            TransitionEasing = HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep
         };
         Preset.AnimationEvents.Add(vm);
         RefreshTransitionState();
@@ -226,4 +228,3 @@ public sealed class AttachPresetAnimationDockViewModel : Tool
         public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     }
 }
-

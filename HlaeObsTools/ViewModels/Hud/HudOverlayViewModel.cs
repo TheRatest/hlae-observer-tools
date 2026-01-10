@@ -629,7 +629,9 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
                         {
                             type = "transition",
                             time = ev.Time,
-                            order = ev.Order
+                            order = ev.Order,
+                            duration = ev.TransitionDuration ?? 0.0,
+                            easing = ToTransitionEasing(ev.TransitionEasing)
                         };
                     }
 
@@ -661,6 +663,17 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
             offset_angles = new { pitch = preset.OffsetPitch, yaw = preset.OffsetYaw, roll = preset.OffsetRoll },
             fov = preset.Fov,
             animation
+        };
+    }
+
+    private static string ToTransitionEasing(HudSettings.AttachmentPresetAnimationTransitionEasing? easing)
+    {
+        return (easing ?? HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep) switch
+        {
+            HudSettings.AttachmentPresetAnimationTransitionEasing.Linear => "linear",
+            HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep => "smoothstep",
+            HudSettings.AttachmentPresetAnimationTransitionEasing.EaseInOutCubic => "easeinoutcubic",
+            _ => "smoothstep"
         };
     }
 

@@ -180,7 +180,9 @@ public sealed class AttachPresetViewModel : ViewModelBase
                 DeltaPitch = e.DeltaPitch,
                 DeltaYaw = e.DeltaYaw,
                 DeltaRoll = e.DeltaRoll,
-                Fov = e.Fov
+                Fov = e.Fov,
+                TransitionDuration = e.TransitionDuration,
+                TransitionEasing = e.TransitionEasing ?? HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep
             });
         }
 
@@ -206,7 +208,9 @@ public sealed class AttachPresetViewModel : ViewModelBase
                 DeltaPitch = e.IsKeyframe ? e.DeltaPitch : null,
                 DeltaYaw = e.IsKeyframe ? e.DeltaYaw : null,
                 DeltaRoll = e.IsKeyframe ? e.DeltaRoll : null,
-                Fov = e.IsKeyframe ? e.Fov : null
+                Fov = e.IsKeyframe ? e.Fov : null,
+                TransitionDuration = e.IsTransition ? e.TransitionDuration : null,
+                TransitionEasing = e.IsTransition ? e.TransitionEasing : null
             })
             .ToList();
 
