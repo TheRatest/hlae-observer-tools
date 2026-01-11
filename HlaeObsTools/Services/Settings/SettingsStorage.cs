@@ -110,6 +110,13 @@ public class AttachmentPresetData
     public double OffsetYaw { get; set; }
     public double OffsetRoll { get; set; }
     public double Fov { get; set; } = 90.0;
+    public string? RotationReference { get; set; } // "attachment" | "offset_local"
+    public string? RotationBasisPitch { get; set; } // "attachment" | "world"
+    public string? RotationBasisYaw { get; set; } // "attachment" | "world"
+    public string? RotationBasisRoll { get; set; } // "attachment" | "world"
+    public bool RotationLockPitch { get; set; }
+    public bool RotationLockYaw { get; set; }
+    public bool RotationLockRoll { get; set; }
     public AttachmentPresetAnimationData? Animation { get; set; }
 }
 

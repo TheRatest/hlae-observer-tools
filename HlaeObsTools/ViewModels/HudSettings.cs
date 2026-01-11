@@ -22,6 +22,17 @@ public sealed class HudSettings : ViewModelBase
         public double OffsetYaw { get; init; }
         public double OffsetRoll { get; init; }
         public double Fov { get; init; } = 90.0;
+        public AttachmentPresetRotationReference RotationReference { get; init; }
+            = AttachmentPresetRotationReference.Attachment;
+        public AttachmentPresetRotationBasis RotationBasisPitch { get; init; }
+            = AttachmentPresetRotationBasis.Attachment;
+        public AttachmentPresetRotationBasis RotationBasisYaw { get; init; }
+            = AttachmentPresetRotationBasis.Attachment;
+        public AttachmentPresetRotationBasis RotationBasisRoll { get; init; }
+            = AttachmentPresetRotationBasis.Attachment;
+        public bool RotationLockPitch { get; init; }
+        public bool RotationLockYaw { get; init; }
+        public bool RotationLockRoll { get; init; }
         public AttachmentPresetAnimation Animation { get; init; } = new();
     }
 
@@ -47,6 +58,18 @@ public sealed class HudSettings : ViewModelBase
         Linear,
         Smoothstep,
         EaseInOutCubic
+    }
+
+    public enum AttachmentPresetRotationReference
+    {
+        Attachment,
+        OffsetLocal
+    }
+
+    public enum AttachmentPresetRotationBasis
+    {
+        Attachment,
+        World
     }
 
     public enum AttachmentPresetAnimationKeyframeCurve
@@ -205,6 +228,13 @@ public sealed class HudSettings : ViewModelBase
             OffsetYaw = preset.OffsetYaw,
             OffsetRoll = preset.OffsetRoll,
             Fov = preset.Fov,
+            RotationReference = ParseRotationReference(preset.RotationReference),
+            RotationBasisPitch = ParseRotationBasis(preset.RotationBasisPitch),
+            RotationBasisYaw = ParseRotationBasis(preset.RotationBasisYaw),
+            RotationBasisRoll = ParseRotationBasis(preset.RotationBasisRoll),
+            RotationLockPitch = preset.RotationLockPitch,
+            RotationLockYaw = preset.RotationLockYaw,
+            RotationLockRoll = preset.RotationLockRoll,
             Animation = FromData(preset.Animation)
         };
     }
@@ -222,6 +252,13 @@ public sealed class HudSettings : ViewModelBase
             OffsetYaw = preset.OffsetYaw,
             OffsetRoll = preset.OffsetRoll,
             Fov = preset.Fov,
+            RotationReference = ToRotationReference(preset.RotationReference),
+            RotationBasisPitch = ToRotationBasis(preset.RotationBasisPitch),
+            RotationBasisYaw = ToRotationBasis(preset.RotationBasisYaw),
+            RotationBasisRoll = ToRotationBasis(preset.RotationBasisRoll),
+            RotationLockPitch = preset.RotationLockPitch,
+            RotationLockYaw = preset.RotationLockYaw,
+            RotationLockRoll = preset.RotationLockRoll,
             Animation = ToData(preset.Animation)
         };
     }
@@ -370,5 +407,39 @@ public sealed class HudSettings : ViewModelBase
             AttachmentPresetAnimationKeyframeEase.EaseInOut => "ease_in_out",
             _ => "ease_in_out"
         };
+    }
+
+    private static AttachmentPresetRotationReference ParseRotationReference(string? reference)
+    {
+        if (string.Equals(reference, "offset_local", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return AttachmentPresetRotationReference.OffsetLocal;
+        }
+
+        return AttachmentPresetRotationReference.Attachment;
+    }
+
+    private static string ToRotationReference(AttachmentPresetRotationReference reference)
+    {
+        return reference == AttachmentPresetRotationReference.OffsetLocal
+            ? "offset_local"
+            : "attachment";
+    }
+
+    private static AttachmentPresetRotationBasis ParseRotationBasis(string? basis)
+    {
+        if (string.Equals(basis, "world", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return AttachmentPresetRotationBasis.World;
+        }
+
+        return AttachmentPresetRotationBasis.Attachment;
+    }
+
+    private static string ToRotationBasis(AttachmentPresetRotationBasis basis)
+    {
+        return basis == AttachmentPresetRotationBasis.World
+            ? "world"
+            : "attachment";
     }
 }

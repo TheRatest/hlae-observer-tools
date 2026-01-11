@@ -26,9 +26,32 @@ public sealed class AttachPresetViewModel : ViewModelBase
     private double? _offsetYaw;
     private double? _offsetRoll;
     private double? _fov;
+    private HudSettings.AttachmentPresetRotationReference _rotationReference
+        = HudSettings.AttachmentPresetRotationReference.Attachment;
+    private HudSettings.AttachmentPresetRotationBasis _rotationBasisPitch
+        = HudSettings.AttachmentPresetRotationBasis.Attachment;
+    private HudSettings.AttachmentPresetRotationBasis _rotationBasisYaw
+        = HudSettings.AttachmentPresetRotationBasis.Attachment;
+    private HudSettings.AttachmentPresetRotationBasis _rotationBasisRoll
+        = HudSettings.AttachmentPresetRotationBasis.Attachment;
+    private bool _rotationLockPitch;
+    private bool _rotationLockYaw;
+    private bool _rotationLockRoll;
     private bool _animationEnabled;
     private readonly ObservableCollection<AttachPresetAnimationEventViewModel> _animationEvents = new();
     public IReadOnlyList<string> AttachmentOptions { get; } = DefaultAttachmentOptions;
+    public IReadOnlyList<HudSettings.AttachmentPresetRotationReference> RotationReferenceOptions { get; } =
+        new[]
+        {
+            HudSettings.AttachmentPresetRotationReference.Attachment,
+            HudSettings.AttachmentPresetRotationReference.OffsetLocal
+        };
+    public IReadOnlyList<HudSettings.AttachmentPresetRotationBasis> RotationBasisOptions { get; } =
+        new[]
+        {
+            HudSettings.AttachmentPresetRotationBasis.Attachment,
+            HudSettings.AttachmentPresetRotationBasis.World
+        };
 
     public AttachPresetViewModel(string title)
     {
@@ -101,6 +124,48 @@ public sealed class AttachPresetViewModel : ViewModelBase
         set => SetProperty(ref _fov, value);
     }
 
+    public HudSettings.AttachmentPresetRotationReference RotationReference
+    {
+        get => _rotationReference;
+        set => SetProperty(ref _rotationReference, value);
+    }
+
+    public HudSettings.AttachmentPresetRotationBasis RotationBasisPitch
+    {
+        get => _rotationBasisPitch;
+        set => SetProperty(ref _rotationBasisPitch, value);
+    }
+
+    public HudSettings.AttachmentPresetRotationBasis RotationBasisYaw
+    {
+        get => _rotationBasisYaw;
+        set => SetProperty(ref _rotationBasisYaw, value);
+    }
+
+    public HudSettings.AttachmentPresetRotationBasis RotationBasisRoll
+    {
+        get => _rotationBasisRoll;
+        set => SetProperty(ref _rotationBasisRoll, value);
+    }
+
+    public bool RotationLockPitch
+    {
+        get => _rotationLockPitch;
+        set => SetProperty(ref _rotationLockPitch, value);
+    }
+
+    public bool RotationLockYaw
+    {
+        get => _rotationLockYaw;
+        set => SetProperty(ref _rotationLockYaw, value);
+    }
+
+    public bool RotationLockRoll
+    {
+        get => _rotationLockRoll;
+        set => SetProperty(ref _rotationLockRoll, value);
+    }
+
     public bool AnimationEnabled
     {
         get => _animationEnabled;
@@ -133,6 +198,13 @@ public sealed class AttachPresetViewModel : ViewModelBase
         OffsetYaw = preset.OffsetYaw == 0.0 ? null : preset.OffsetYaw;
         OffsetRoll = preset.OffsetRoll == 0.0 ? null : preset.OffsetRoll;
         Fov = preset.Fov == 90.0 ? null : preset.Fov;
+        RotationReference = preset.RotationReference;
+        RotationBasisPitch = preset.RotationBasisPitch;
+        RotationBasisYaw = preset.RotationBasisYaw;
+        RotationBasisRoll = preset.RotationBasisRoll;
+        RotationLockPitch = preset.RotationLockPitch;
+        RotationLockYaw = preset.RotationLockYaw;
+        RotationLockRoll = preset.RotationLockRoll;
 
         LoadAnimationFrom(preset.Animation);
     }
@@ -150,6 +222,13 @@ public sealed class AttachPresetViewModel : ViewModelBase
             OffsetYaw = OffsetYaw ?? 0.0,
             OffsetRoll = OffsetRoll ?? 0.0,
             Fov = Fov ?? 90.0,
+            RotationReference = RotationReference,
+            RotationBasisPitch = RotationBasisPitch,
+            RotationBasisYaw = RotationBasisYaw,
+            RotationBasisRoll = RotationBasisRoll,
+            RotationLockPitch = RotationLockPitch,
+            RotationLockYaw = RotationLockYaw,
+            RotationLockRoll = RotationLockRoll,
             Animation = ToAnimationModel()
         };
     }

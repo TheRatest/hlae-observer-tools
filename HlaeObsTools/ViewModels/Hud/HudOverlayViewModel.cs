@@ -664,6 +664,19 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
             offset_pos = new { x = preset.OffsetPosX, y = preset.OffsetPosY, z = preset.OffsetPosZ },
             offset_angles = new { pitch = preset.OffsetPitch, yaw = preset.OffsetYaw, roll = preset.OffsetRoll },
             fov = preset.Fov,
+            rotation_reference = ToRotationReference(preset.RotationReference),
+            rotation_basis = new
+            {
+                pitch = ToRotationBasis(preset.RotationBasisPitch),
+                yaw = ToRotationBasis(preset.RotationBasisYaw),
+                roll = ToRotationBasis(preset.RotationBasisRoll)
+            },
+            rotation_axis_lock = new
+            {
+                pitch = preset.RotationLockPitch,
+                yaw = preset.RotationLockYaw,
+                roll = preset.RotationLockRoll
+            },
             animation
         };
     }
@@ -699,6 +712,20 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
             HudSettings.AttachmentPresetAnimationKeyframeEase.EaseInOut => "easeinout",
             _ => "easeinout"
         };
+    }
+
+    private static string ToRotationReference(HudSettings.AttachmentPresetRotationReference reference)
+    {
+        return reference == HudSettings.AttachmentPresetRotationReference.OffsetLocal
+            ? "offset_local"
+            : "attachment";
+    }
+
+    private static string ToRotationBasis(HudSettings.AttachmentPresetRotationBasis basis)
+    {
+        return basis == HudSettings.AttachmentPresetRotationBasis.World
+            ? "world"
+            : "attachment";
     }
 
     private void OnWebSocketMessage(object? sender, string message)

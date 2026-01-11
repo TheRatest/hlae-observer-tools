@@ -363,6 +363,37 @@
                                                         <TextBox Width="80" Watermark="Roll" Text="{Binding OffsetRoll, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
                                                     </StackPanel>
 
+                                                    <TextBlock Text="Rotation Basis" Foreground="#AAAAAA" FontSize="12"/>
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <ComboBox Width="80"
+                                                            ItemsSource="{Binding RotationBasisOptions}"
+                                                            SelectedItem="{Binding RotationBasisPitch, Mode=TwoWay}"/>
+                                                        <ComboBox Width="80"
+                                                            ItemsSource="{Binding RotationBasisOptions}"
+                                                            SelectedItem="{Binding RotationBasisYaw, Mode=TwoWay}"/>
+                                                        <ComboBox Width="80"
+                                                            ItemsSource="{Binding RotationBasisOptions}"
+                                                            SelectedItem="{Binding RotationBasisRoll, Mode=TwoWay}"/>
+                                                    </StackPanel>
+
+                                                    <TextBlock Text="Rotation Reference" Foreground="#AAAAAA" FontSize="12"/>
+                                                    <ComboBox Width="200"
+                                                              ItemsSource="{Binding RotationReferenceOptions}"
+                                                              SelectedItem="{Binding RotationReference, Mode=TwoWay}"/>
+
+                                                    <TextBlock Text="Rotation Axis Lock (world)" Foreground="#AAAAAA" FontSize="12"/>
+                                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                                        <ToggleSwitch Content="Pitch"
+                                                                      IsChecked="{Binding RotationLockPitch, Mode=TwoWay}"
+                                                                      Foreground="#E6E6E6"/>
+                                                        <ToggleSwitch Content="Yaw"
+                                                                      IsChecked="{Binding RotationLockYaw, Mode=TwoWay}"
+                                                                      Foreground="#E6E6E6"/>
+                                                        <ToggleSwitch Content="Roll"
+                                                                      IsChecked="{Binding RotationLockRoll, Mode=TwoWay}"
+                                                                      Foreground="#E6E6E6"/>
+                                                    </StackPanel>
+
                                                     <TextBlock Text="FOV" Foreground="#AAAAAA" FontSize="12"/>
                                                     <TextBox Width="100" Watermark="90" HorizontalAlignment="Left" Text="{Binding Fov, Mode=TwoWay, Converter={StaticResource NullableDouble}}" />
                                                 </StackPanel>
