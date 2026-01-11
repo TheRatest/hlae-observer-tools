@@ -319,6 +319,12 @@
                                 <TextBlock Text="Attach Presets"
                                            Foreground="#CCCCCC"
                                            FontWeight="SemiBold"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Page" Foreground="#AAAAAA" VerticalAlignment="Center"/>
+                                    <ComboBox Width="160"
+                                              ItemsSource="{Binding AttachPresetPageOptions}"
+                                              SelectedIndex="{Binding ActiveAttachPresetPage, Mode=TwoWay}"/>
+                                </StackPanel>
                                 <ItemsControl ItemsSource="{Binding AttachPresets}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -334,6 +340,10 @@
                                                                 Click="OpenAnimationEditor_Click"
                                                                 HorizontalAlignment="Right"/>
                                                     </Grid>
+                                                    <TextBlock Text="Name" Foreground="#AAAAAA" FontSize="12"/>
+                                                    <TextBox Width="300"
+                                                             Watermark="Preset name"
+                                                             Text="{Binding Name, Mode=TwoWay}" />
                                                     <ComboBox ItemsSource="{Binding AttachmentOptions}"
                                                               SelectedItem="{Binding AttachmentName, Mode=TwoWay}"
                                                               Width="300"

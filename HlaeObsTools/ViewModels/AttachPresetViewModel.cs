@@ -17,6 +17,7 @@ public sealed class AttachPresetViewModel : ViewModelBase
         "look_straight_ahead_crouch","axis_of_intent"
     };
     private string _title;
+    private string _name = string.Empty;
     private string _attachmentName = string.Empty;
     private double? _offsetPosX;
     private double? _offsetPosY;
@@ -44,6 +45,12 @@ public sealed class AttachPresetViewModel : ViewModelBase
     {
         get => _title;
         set => SetProperty(ref _title, value);
+    }
+
+    public string Name
+    {
+        get => _name;
+        set => SetProperty(ref _name, value ?? string.Empty);
     }
 
     public string AttachmentName
@@ -117,6 +124,7 @@ public sealed class AttachPresetViewModel : ViewModelBase
 
     public void LoadFrom(HudSettings.AttachmentPreset preset)
     {
+        Name = preset.Name;
         AttachmentName = preset.AttachmentName;
         OffsetPosX = preset.OffsetPosX == 0.0 ? null : preset.OffsetPosX;
         OffsetPosY = preset.OffsetPosY == 0.0 ? null : preset.OffsetPosY;
@@ -133,6 +141,7 @@ public sealed class AttachPresetViewModel : ViewModelBase
     {
         return new HudSettings.AttachmentPreset
         {
+            Name = Name ?? string.Empty,
             AttachmentName = AttachmentName ?? string.Empty,
             OffsetPosX = OffsetPosX ?? 0.0,
             OffsetPosY = OffsetPosY ?? 0.0,
@@ -182,7 +191,9 @@ public sealed class AttachPresetViewModel : ViewModelBase
                 DeltaRoll = e.DeltaRoll,
                 Fov = e.Fov,
                 TransitionDuration = e.TransitionDuration,
-                TransitionEasing = e.TransitionEasing ?? HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep
+                TransitionEasing = e.TransitionEasing ?? HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep,
+                KeyframeEasingCurve = e.KeyframeEasingCurve ?? HudSettings.AttachmentPresetAnimationKeyframeCurve.Linear,
+                KeyframeEasingMode = e.KeyframeEasingMode ?? HudSettings.AttachmentPresetAnimationKeyframeEase.EaseInOut
             });
         }
 
@@ -210,7 +221,9 @@ public sealed class AttachPresetViewModel : ViewModelBase
                 DeltaRoll = e.IsKeyframe ? e.DeltaRoll : null,
                 Fov = e.IsKeyframe ? e.Fov : null,
                 TransitionDuration = e.IsTransition ? e.TransitionDuration : null,
-                TransitionEasing = e.IsTransition ? e.TransitionEasing : null
+                TransitionEasing = e.IsTransition ? e.TransitionEasing : null,
+                KeyframeEasingCurve = e.IsKeyframe ? e.KeyframeEasingCurve : null,
+                KeyframeEasingMode = e.IsKeyframe ? e.KeyframeEasingMode : null
             })
             .ToList();
 

@@ -28,6 +28,10 @@ public sealed class AttachPresetAnimationEventViewModel : ViewModelBase
     private double? _transitionDuration = 0.0;
     private HudSettings.AttachmentPresetAnimationTransitionEasing _transitionEasing
         = HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep;
+    private HudSettings.AttachmentPresetAnimationKeyframeCurve _keyframeEasingCurve
+        = HudSettings.AttachmentPresetAnimationKeyframeCurve.Linear;
+    private HudSettings.AttachmentPresetAnimationKeyframeEase _keyframeEasingMode
+        = HudSettings.AttachmentPresetAnimationKeyframeEase.EaseInOut;
 
     public AttachPresetAnimationEventViewModel()
         : this(isBaseKeyframe: false)
@@ -54,6 +58,20 @@ public sealed class AttachPresetAnimationEventViewModel : ViewModelBase
         HudSettings.AttachmentPresetAnimationTransitionEasing.EaseInOutCubic
     };
 
+    public static HudSettings.AttachmentPresetAnimationKeyframeCurve[] KeyframeEasingCurveOptions { get; } =
+    {
+        HudSettings.AttachmentPresetAnimationKeyframeCurve.Linear,
+        HudSettings.AttachmentPresetAnimationKeyframeCurve.Smoothstep,
+        HudSettings.AttachmentPresetAnimationKeyframeCurve.Cubic
+    };
+
+    public static HudSettings.AttachmentPresetAnimationKeyframeEase[] KeyframeEasingModeOptions { get; } =
+    {
+        HudSettings.AttachmentPresetAnimationKeyframeEase.EaseIn,
+        HudSettings.AttachmentPresetAnimationKeyframeEase.EaseOut,
+        HudSettings.AttachmentPresetAnimationKeyframeEase.EaseInOut
+    };
+
     public AttachPresetAnimationEventType Type
     {
         get => _type;
@@ -68,6 +86,7 @@ public sealed class AttachPresetAnimationEventViewModel : ViewModelBase
             {
                 OnPropertyChanged(nameof(IsKeyframe));
                 OnPropertyChanged(nameof(IsTransition));
+                OnPropertyChanged(nameof(UsesKeyframeEasingMode));
             }
         }
     }
@@ -117,4 +136,25 @@ public sealed class AttachPresetAnimationEventViewModel : ViewModelBase
         get => _transitionEasing;
         set => SetProperty(ref _transitionEasing, value);
     }
+
+    public HudSettings.AttachmentPresetAnimationKeyframeCurve KeyframeEasingCurve
+    {
+        get => _keyframeEasingCurve;
+        set
+        {
+            if (SetProperty(ref _keyframeEasingCurve, value))
+            {
+                OnPropertyChanged(nameof(UsesKeyframeEasingMode));
+            }
+        }
+    }
+
+    public HudSettings.AttachmentPresetAnimationKeyframeEase KeyframeEasingMode
+    {
+        get => _keyframeEasingMode;
+        set => SetProperty(ref _keyframeEasingMode, value);
+    }
+
+    public bool UsesKeyframeEasingMode =>
+        IsKeyframe && KeyframeEasingCurve != HudSettings.AttachmentPresetAnimationKeyframeCurve.Linear;
 }

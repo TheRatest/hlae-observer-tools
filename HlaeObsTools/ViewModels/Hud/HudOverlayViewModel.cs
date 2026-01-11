@@ -540,14 +540,14 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         // Attach action opens submenu; presets execute immediately.
         if (option.Id == AttachActionId)
         {
-            player.OpenAttachSubMenu(_hudSettings.AttachPresets);
+            player.OpenAttachSubMenu(_hudSettings.GetActiveAttachPresets());
             return;
         }
 
         if (player.IsInAttachSubMenu)
         {
             var presetIndex = option.Index;
-            var preset = _hudSettings.AttachPresets.ElementAtOrDefault(presetIndex);
+            var preset = _hudSettings.GetActiveAttachPresets().ElementAtOrDefault(presetIndex);
             if (preset == null) return;
 
             if (PresetRequiresTarget(preset))
@@ -568,7 +568,7 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
         if (!_isAwaitingAttachTarget) return;
         if (sender is not HudPlayerCardViewModel targetPlayer) return;
 
-        var preset = _hudSettings.AttachPresets.ElementAtOrDefault(_pendingAttachPresetIndex);
+        var preset = _hudSettings.GetActiveAttachPresets().ElementAtOrDefault(_pendingAttachPresetIndex);
         if (preset == null)
         {
             CancelPendingAttachTargetSelection();
@@ -642,7 +642,9 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
                         order = ev.Order,
                         delta_pos = new { x = ev.DeltaPosX, y = ev.DeltaPosY, z = ev.DeltaPosZ },
                         delta_angles = new { pitch = ev.DeltaPitch, yaw = ev.DeltaYaw, roll = ev.DeltaRoll },
-                        fov = ev.Fov
+                        fov = ev.Fov,
+                        easing_curve = ToKeyframeEasingCurve(ev.KeyframeEasingCurve),
+                        easing_mode = ToKeyframeEasingMode(ev.KeyframeEasingMode)
                     };
                 })
                 .ToList();
@@ -674,6 +676,28 @@ public sealed class HudOverlayViewModel : ViewModelBase, IDisposable
             HudSettings.AttachmentPresetAnimationTransitionEasing.Smoothstep => "smoothstep",
             HudSettings.AttachmentPresetAnimationTransitionEasing.EaseInOutCubic => "easeinoutcubic",
             _ => "smoothstep"
+        };
+    }
+
+    private static string ToKeyframeEasingCurve(HudSettings.AttachmentPresetAnimationKeyframeCurve? curve)
+    {
+        return (curve ?? HudSettings.AttachmentPresetAnimationKeyframeCurve.Linear) switch
+        {
+            HudSettings.AttachmentPresetAnimationKeyframeCurve.Linear => "linear",
+            HudSettings.AttachmentPresetAnimationKeyframeCurve.Smoothstep => "smoothstep",
+            HudSettings.AttachmentPresetAnimationKeyframeCurve.Cubic => "cubic",
+            _ => "linear"
+        };
+    }
+
+    private static string ToKeyframeEasingMode(HudSettings.AttachmentPresetAnimationKeyframeEase? mode)
+    {
+        return (mode ?? HudSettings.AttachmentPresetAnimationKeyframeEase.EaseInOut) switch
+        {
+            HudSettings.AttachmentPresetAnimationKeyframeEase.EaseIn => "easein",
+            HudSettings.AttachmentPresetAnimationKeyframeEase.EaseOut => "easeout",
+            HudSettings.AttachmentPresetAnimationKeyframeEase.EaseInOut => "easeinout",
+            _ => "easeinout"
         };
     }
 

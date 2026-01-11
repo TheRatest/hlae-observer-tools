@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using HlaeObsTools.ViewModels;
@@ -12,6 +13,7 @@ public sealed class HudSettings : ViewModelBase
 {
     public record AttachmentPreset
     {
+        public string Name { get; init; } = string.Empty;
         public string AttachmentName { get; init; } = string.Empty;
         public double OffsetPosX { get; init; }
         public double OffsetPosY { get; init; }
@@ -21,6 +23,11 @@ public sealed class HudSettings : ViewModelBase
         public double OffsetRoll { get; init; }
         public double Fov { get; init; } = 90.0;
         public AttachmentPresetAnimation Animation { get; init; } = new();
+    }
+
+    public record AttachmentPresetPage
+    {
+        public List<AttachmentPreset> Presets { get; init; } = new();
     }
 
     public record AttachmentPresetAnimation
@@ -42,6 +49,20 @@ public sealed class HudSettings : ViewModelBase
         EaseInOutCubic
     }
 
+    public enum AttachmentPresetAnimationKeyframeCurve
+    {
+        Linear,
+        Smoothstep,
+        Cubic
+    }
+
+    public enum AttachmentPresetAnimationKeyframeEase
+    {
+        EaseIn,
+        EaseOut,
+        EaseInOut
+    }
+
     public record AttachmentPresetAnimationEvent
     {
         public AttachmentPresetAnimationEventType Type { get; init; } = AttachmentPresetAnimationEventType.Keyframe;
@@ -60,6 +81,8 @@ public sealed class HudSettings : ViewModelBase
 
         public double? TransitionDuration { get; init; }
         public AttachmentPresetAnimationTransitionEasing? TransitionEasing { get; init; }
+        public AttachmentPresetAnimationKeyframeCurve? KeyframeEasingCurve { get; init; }
+        public AttachmentPresetAnimationKeyframeEase? KeyframeEasingMode { get; init; }
     }
 
     private bool _isHudEnabled = true;
@@ -104,51 +127,103 @@ public sealed class HudSettings : ViewModelBase
     }
 
     /// <summary>
-    /// Attach action presets for the radial menu (5 slots).
+    /// Attach action preset pages (5 pages x 5 slots).
     /// </summary>
-    public List<AttachmentPreset> AttachPresets { get; } = Enumerable.Range(0, 5).Select(_ => new AttachmentPreset()).ToList();
+    public List<AttachmentPresetPage> AttachPresetPages { get; } = Enumerable.Range(0, 5)
+        .Select(_ => new AttachmentPresetPage { Presets = Enumerable.Range(0, 5).Select(_ => new AttachmentPreset()).ToList() })
+        .ToList();
 
-    public void ApplyAttachPresets(IEnumerable<AttachmentPresetData> presets)
+    private int _activeAttachPresetPage;
+    public int ActiveAttachPresetPage
     {
-        var items = presets?.ToList() ?? new List<AttachmentPresetData>();
-        AttachPresets.Clear();
+        get => _activeAttachPresetPage;
+        set => SetProperty(ref _activeAttachPresetPage, Math.Clamp(value, 0, 4));
+    }
 
-        foreach (var preset in items)
+    public IReadOnlyList<AttachmentPreset> GetActiveAttachPresets()
+    {
+        var pageIndex = Math.Clamp(ActiveAttachPresetPage, 0, AttachPresetPages.Count - 1);
+        var page = AttachPresetPages.ElementAtOrDefault(pageIndex);
+        return page?.Presets ?? new List<AttachmentPreset>();
+    }
+
+    public void ApplyAttachPresetPages(IEnumerable<AttachmentPresetPageData> pages, IEnumerable<AttachmentPresetData>? legacyPresets = null)
+    {
+        var pageItems = pages?.ToList() ?? new List<AttachmentPresetPageData>();
+        if (pageItems.Count == 0 && legacyPresets != null)
         {
-            AttachPresets.Add(new AttachmentPreset
-            {
-                AttachmentName = preset.AttachmentName,
-                OffsetPosX = preset.OffsetPosX,
-                OffsetPosY = preset.OffsetPosY,
-                OffsetPosZ = preset.OffsetPosZ,
-                OffsetPitch = preset.OffsetPitch,
-                OffsetYaw = preset.OffsetYaw,
-                OffsetRoll = preset.OffsetRoll,
-                Fov = preset.Fov,
-                Animation = FromData(preset.Animation)
-            });
+            pageItems.Add(new AttachmentPresetPageData { Presets = legacyPresets.ToList() });
         }
 
-        while (AttachPresets.Count < 5)
+        AttachPresetPages.Clear();
+
+        foreach (var page in pageItems)
         {
-            AttachPresets.Add(new AttachmentPreset());
+            var presets = page.Presets ?? new List<AttachmentPresetData>();
+            var mapped = presets.Select(FromData).ToList();
+            while (mapped.Count < 5)
+            {
+                mapped.Add(new AttachmentPreset());
+            }
+            AttachPresetPages.Add(new AttachmentPresetPage { Presets = mapped });
+        }
+
+        while (AttachPresetPages.Count < 5)
+        {
+            AttachPresetPages.Add(new AttachmentPresetPage
+            {
+                Presets = Enumerable.Range(0, 5).Select(_ => new AttachmentPreset()).ToList()
+            });
         }
     }
 
-    public IEnumerable<AttachmentPresetData> ToAttachPresetData()
+    public IEnumerable<AttachmentPresetPageData> ToAttachPresetPageData()
     {
-        return AttachPresets.Select(p => new AttachmentPresetData
+        return AttachPresetPages.Select(page => new AttachmentPresetPageData
         {
-            AttachmentName = p.AttachmentName,
-            OffsetPosX = p.OffsetPosX,
-            OffsetPosY = p.OffsetPosY,
-            OffsetPosZ = p.OffsetPosZ,
-            OffsetPitch = p.OffsetPitch,
-            OffsetYaw = p.OffsetYaw,
-            OffsetRoll = p.OffsetRoll,
-            Fov = p.Fov,
-            Animation = ToData(p.Animation)
+            Presets = (page.Presets ?? new List<AttachmentPreset>())
+                .Select(ToData)
+                .ToList()
         });
+    }
+
+    public IEnumerable<AttachmentPresetData> ToLegacyAttachPresetData()
+    {
+        return GetActiveAttachPresets().Select(ToData);
+    }
+
+    private static AttachmentPreset FromData(AttachmentPresetData preset)
+    {
+        return new AttachmentPreset
+        {
+            Name = preset.Name,
+            AttachmentName = preset.AttachmentName,
+            OffsetPosX = preset.OffsetPosX,
+            OffsetPosY = preset.OffsetPosY,
+            OffsetPosZ = preset.OffsetPosZ,
+            OffsetPitch = preset.OffsetPitch,
+            OffsetYaw = preset.OffsetYaw,
+            OffsetRoll = preset.OffsetRoll,
+            Fov = preset.Fov,
+            Animation = FromData(preset.Animation)
+        };
+    }
+
+    private static AttachmentPresetData ToData(AttachmentPreset preset)
+    {
+        return new AttachmentPresetData
+        {
+            Name = preset.Name,
+            AttachmentName = preset.AttachmentName,
+            OffsetPosX = preset.OffsetPosX,
+            OffsetPosY = preset.OffsetPosY,
+            OffsetPosZ = preset.OffsetPosZ,
+            OffsetPitch = preset.OffsetPitch,
+            OffsetYaw = preset.OffsetYaw,
+            OffsetRoll = preset.OffsetRoll,
+            Fov = preset.Fov,
+            Animation = ToData(preset.Animation)
+        };
     }
 
     private static AttachmentPresetAnimation FromData(AttachmentPresetAnimationData? data)
@@ -174,7 +249,9 @@ public sealed class HudSettings : ViewModelBase
                 DeltaRoll = e.DeltaRoll,
                 Fov = e.Fov,
                 TransitionDuration = e.TransitionDuration,
-                TransitionEasing = ParseTransitionEasing(e.TransitionEasing)
+                TransitionEasing = ParseTransitionEasing(e.TransitionEasing),
+                KeyframeEasingCurve = ParseKeyframeEasingCurve(e.KeyframeEasingCurve),
+                KeyframeEasingMode = ParseKeyframeEasingMode(e.KeyframeEasingMode)
             })
             .ToList();
 
@@ -209,7 +286,9 @@ public sealed class HudSettings : ViewModelBase
                     DeltaRoll = e.DeltaRoll,
                     Fov = e.Fov,
                     TransitionDuration = e.TransitionDuration,
-                    TransitionEasing = ToTransitionEasing(e.TransitionEasing)
+                    TransitionEasing = ToTransitionEasing(e.TransitionEasing),
+                    KeyframeEasingCurve = ToKeyframeEasingCurve(e.KeyframeEasingCurve),
+                    KeyframeEasingMode = ToKeyframeEasingMode(e.KeyframeEasingMode)
                 })
                 .ToList()
         };
@@ -238,6 +317,58 @@ public sealed class HudSettings : ViewModelBase
             AttachmentPresetAnimationTransitionEasing.Smoothstep => "smoothstep",
             AttachmentPresetAnimationTransitionEasing.EaseInOutCubic => "easeinoutcubic",
             _ => "smoothstep"
+        };
+    }
+
+    private static AttachmentPresetAnimationKeyframeCurve? ParseKeyframeEasingCurve(string? curve)
+    {
+        if (string.IsNullOrWhiteSpace(curve)) return null;
+
+        return curve.Trim().ToLowerInvariant() switch
+        {
+            "linear" => AttachmentPresetAnimationKeyframeCurve.Linear,
+            "smoothstep" => AttachmentPresetAnimationKeyframeCurve.Smoothstep,
+            "cubic" => AttachmentPresetAnimationKeyframeCurve.Cubic,
+            _ => AttachmentPresetAnimationKeyframeCurve.Linear
+        };
+    }
+
+    private static string? ToKeyframeEasingCurve(AttachmentPresetAnimationKeyframeCurve? curve)
+    {
+        if (curve == null) return null;
+
+        return curve.Value switch
+        {
+            AttachmentPresetAnimationKeyframeCurve.Linear => "linear",
+            AttachmentPresetAnimationKeyframeCurve.Smoothstep => "smoothstep",
+            AttachmentPresetAnimationKeyframeCurve.Cubic => "cubic",
+            _ => "linear"
+        };
+    }
+
+    private static AttachmentPresetAnimationKeyframeEase? ParseKeyframeEasingMode(string? mode)
+    {
+        if (string.IsNullOrWhiteSpace(mode)) return null;
+
+        return mode.Trim().ToLowerInvariant() switch
+        {
+            "ease_in" => AttachmentPresetAnimationKeyframeEase.EaseIn,
+            "ease_out" => AttachmentPresetAnimationKeyframeEase.EaseOut,
+            "ease_in_out" => AttachmentPresetAnimationKeyframeEase.EaseInOut,
+            _ => AttachmentPresetAnimationKeyframeEase.EaseInOut
+        };
+    }
+
+    private static string? ToKeyframeEasingMode(AttachmentPresetAnimationKeyframeEase? mode)
+    {
+        if (mode == null) return null;
+
+        return mode.Value switch
+        {
+            AttachmentPresetAnimationKeyframeEase.EaseIn => "ease_in",
+            AttachmentPresetAnimationKeyframeEase.EaseOut => "ease_out",
+            AttachmentPresetAnimationKeyframeEase.EaseInOut => "ease_in_out",
+            _ => "ease_in_out"
         };
     }
 }

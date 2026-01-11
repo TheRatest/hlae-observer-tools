@@ -60,6 +60,8 @@ public class SettingsStorage
 public class AppSettingsData
 {
     public List<AttachmentPresetData> AttachPresets { get; set; } = new();
+    public List<AttachmentPresetPageData> AttachPresetPages { get; set; } = new();
+    public int ActiveAttachPresetPage { get; set; }
     public double MarkerScale { get; set; } = 1.0;
     public double HeightScaleMultiplier { get; set; } = 1.0;
     public bool UseAltPlayerBinds { get; set; } = false;
@@ -92,8 +94,14 @@ public class AppSettingsData
     public bool DisableFocusInputGate { get; set; }
 }
 
+public class AttachmentPresetPageData
+{
+    public List<AttachmentPresetData> Presets { get; set; } = new();
+}
+
 public class AttachmentPresetData
 {
+    public string Name { get; set; } = string.Empty;
     public string AttachmentName { get; set; } = string.Empty;
     public double OffsetPosX { get; set; }
     public double OffsetPosY { get; set; }
@@ -129,6 +137,8 @@ public class AttachmentPresetAnimationEventData
 
     public double? TransitionDuration { get; set; }
     public string? TransitionEasing { get; set; } // "linear" | "smoothstep" | "easeinoutcubic"
+    public string? KeyframeEasingCurve { get; set; } // "linear" | "smoothstep" | "cubic"
+    public string? KeyframeEasingMode { get; set; } // "ease_in" | "ease_out" | "ease_in_out"
 }
 
 public class FreecamSettingsData

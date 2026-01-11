@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
@@ -75,6 +76,8 @@ namespace HlaeObsTools.ViewModels.Docks
                     _openAttachPresetAnimation?.Invoke(preset);
                 },
                 preset => preset != null && _openAttachPresetAnimation != null);
+
+            _activeAttachPresetPage = _hudSettings.ActiveAttachPresetPage;
 
             LoadAttachPresets();
             SendAltPlayerBindsMode();
@@ -358,6 +361,24 @@ namespace HlaeObsTools.ViewModels.Docks
 
         #region ==== Actions / Attach Presets ====
 
+        public IReadOnlyList<string> AttachPresetPageOptions { get; } =
+            Enumerable.Range(1, 5).Select(i => $"Page {i}").ToList();
+
+        private int _activeAttachPresetPage;
+        public int ActiveAttachPresetPage
+        {
+            get => _activeAttachPresetPage;
+            set
+            {
+                if (_activeAttachPresetPage == value) return;
+                _activeAttachPresetPage = Math.Clamp(value, 0, 4);
+                _hudSettings.ActiveAttachPresetPage = _activeAttachPresetPage;
+                OnPropertyChanged();
+                LoadAttachPresets();
+                SaveSettings();
+            }
+        }
+
         public ObservableCollection<AttachPresetViewModel> AttachPresets { get; }
             = new ObservableCollection<AttachPresetViewModel>(
                 Enumerable.Range(0, 5).Select(i => new AttachPresetViewModel($"Preset {i + 1}")));
@@ -366,7 +387,7 @@ namespace HlaeObsTools.ViewModels.Docks
 
         private void LoadAttachPresets()
         {
-            var presets = _hudSettings.AttachPresets;
+            var presets = _hudSettings.GetActiveAttachPresets();
             for (int i = 0; i < AttachPresets.Count && i < presets.Count; i++)
             {
                 AttachPresets[i].LoadFrom(presets[i]);
@@ -381,8 +402,12 @@ namespace HlaeObsTools.ViewModels.Docks
             var vm = sender as AttachPresetViewModel;
             if (vm == null) return;
             var index = AttachPresets.IndexOf(vm);
-            if (index < 0 || index >= _hudSettings.AttachPresets.Count) return;
-            _hudSettings.AttachPresets[index] = vm.ToModel();
+            if (index < 0) return;
+            var pageIndex = _hudSettings.ActiveAttachPresetPage;
+            if (pageIndex < 0 || pageIndex >= _hudSettings.AttachPresetPages.Count) return;
+            var page = _hudSettings.AttachPresetPages[pageIndex];
+            if (index >= page.Presets.Count) return;
+            page.Presets[index] = vm.ToModel();
             SaveSettings();
         }
 
@@ -390,7 +415,9 @@ namespace HlaeObsTools.ViewModels.Docks
         {
             var data = new AppSettingsData
             {
-                AttachPresets = _hudSettings.ToAttachPresetData().ToList(),
+                AttachPresets = _hudSettings.ToLegacyAttachPresetData().ToList(),
+                AttachPresetPages = _hudSettings.ToAttachPresetPageData().ToList(),
+                ActiveAttachPresetPage = _hudSettings.ActiveAttachPresetPage,
                 MarkerScale = _radarSettings.MarkerScale,
                 HeightScaleMultiplier = _radarSettings.HeightScaleMultiplier,
                 UseAltPlayerBinds = _radarSettings.UseAltPlayerBinds,

@@ -498,7 +498,11 @@ public sealed class HudPlayerCardViewModel : ViewModelBase
     public void OpenAttachSubMenu(IEnumerable<HlaeObsTools.ViewModels.HudSettings.AttachmentPreset> presets)
     {
         var options = presets
-            .Select((preset, i) => new HudPlayerActionOption($"attach_preset_{i + 1}", $"Preset {i + 1}", i))
+            .Select((preset, i) =>
+            {
+                var title = string.IsNullOrWhiteSpace(preset.Name) ? $"Preset {i + 1}" : preset.Name;
+                return new HudPlayerActionOption($"attach_preset_{i + 1}", title, i);
+            })
             .ToList();
         SyncCollection(_attachSubMenuOptions, options);
         IsInAttachSubMenu = true;

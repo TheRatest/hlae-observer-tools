@@ -141,7 +141,8 @@ public class MainDockFactory : Factory, IDisposable
         {
             UseAltPlayerBinds = _storedSettings.UseAltPlayerBinds
         };
-        hudSettings.ApplyAttachPresets(_storedSettings.AttachPresets);
+        hudSettings.ActiveAttachPresetPage = _storedSettings.ActiveAttachPresetPage;
+        hudSettings.ApplyAttachPresetPages(_storedSettings.AttachPresetPages, _storedSettings.AttachPresets);
         var freecamSettings = new FreecamSettings();
         if (_storedSettings.FreecamSettings != null)
         {
