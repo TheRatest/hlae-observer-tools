@@ -29,15 +29,15 @@ namespace HlaeObsTools.ViewModels.Docks
         private readonly SettingsStorage _settingsStorage;
         private readonly HlaeWebSocketClient? _ws;
         private readonly Func<NetworkSettingsData, Task>? _applyNetworkSettingsAsync;
-        private readonly Action<AttachPresetViewModel>? _openAttachPresetAnimation;
         private readonly VmixReplaySettings _vmixReplaySettings;
         private readonly Action<bool>? _setFocusInputGateDisabled;
         private bool _suppressFreecamSave;
         private bool _suppressSettingsSave;
+        private bool _isLoadingPresets;
 
         public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, int GsiPort);
 
-        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Action<AttachPresetViewModel>? openAttachPresetAnimation = null, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null, VmixReplaySettings? vmixSettings = null, Action<bool>? setFocusInputGateDisabled = null)
+        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null, VmixReplaySettings? vmixSettings = null, Action<bool>? setFocusInputGateDisabled = null)
         {
             _radarSettings = radarSettings;
             _hudSettings = hudSettings;
@@ -45,7 +45,6 @@ namespace HlaeObsTools.ViewModels.Docks
             _viewport3DSettings = viewport3DSettings;
             _settingsStorage = settingsStorage;
             _ws = wsClient;
-            _openAttachPresetAnimation = openAttachPresetAnimation;
             _applyNetworkSettingsAsync = applyNetworkSettingsAsync;
             _vmixReplaySettings = vmixSettings ?? new VmixReplaySettings();
             _setFocusInputGateDisabled = setFocusInputGateDisabled;
@@ -69,13 +68,21 @@ namespace HlaeObsTools.ViewModels.Docks
                 _ws.Connected += OnWebSocketConnected;
             }
 
+            AttachPresetAnimationEditor = new AttachPresetAnimationDockViewModel();
+
             OpenAttachPresetAnimationCommand = new RelayParam<AttachPresetViewModel>(
                 preset =>
                 {
                     if (preset == null) return;
-                    _openAttachPresetAnimation?.Invoke(preset);
+                    AttachPresetAnimationEditor.OpenPreset(preset);
+                    IsEditingAttachPresetAnimation = true;
                 },
-                preset => preset != null && _openAttachPresetAnimation != null);
+                preset => preset != null);
+
+            CloseAttachPresetAnimationCommand = new Relay(() =>
+            {
+                IsEditingAttachPresetAnimation = false;
+            });
 
             _activeAttachPresetPage = _hudSettings.ActiveAttachPresetPage;
 
@@ -95,6 +102,14 @@ namespace HlaeObsTools.ViewModels.Docks
         public FreecamSettings FreecamSettings => _freecamSettings;
         public Viewport3DSettings Viewport3DSettings => _viewport3DSettings;
         public VmixReplaySettings VmixReplaySettings => _vmixReplaySettings;
+        public AttachPresetAnimationDockViewModel AttachPresetAnimationEditor { get; }
+
+        private bool _isEditingAttachPresetAnimation;
+        public bool IsEditingAttachPresetAnimation
+        {
+            get => _isEditingAttachPresetAnimation;
+            private set => SetProperty(ref _isEditingAttachPresetAnimation, value);
+        }
 
         #region === Network Settings ===
         private string _webSocketHost = "127.0.0.1";
@@ -384,21 +399,38 @@ namespace HlaeObsTools.ViewModels.Docks
                 Enumerable.Range(0, 5).Select(i => new AttachPresetViewModel($"Preset {i + 1}")));
 
         public ICommand OpenAttachPresetAnimationCommand { get; }
+        public ICommand CloseAttachPresetAnimationCommand { get; }
 
         private void LoadAttachPresets()
         {
-            var presets = _hudSettings.GetActiveAttachPresets();
-            for (int i = 0; i < AttachPresets.Count && i < presets.Count; i++)
+            _isLoadingPresets = true;
+            try
             {
-                AttachPresets[i].LoadFrom(presets[i]);
-                AttachPresets[i].PropertyChanged -= OnPresetChanged;
-                AttachPresets[i].PropertyChanged += OnPresetChanged;
+                foreach (var preset in AttachPresets)
+                {
+                    preset.PropertyChanged -= OnPresetChanged;
+                }
+
+                var presets = _hudSettings.GetActiveAttachPresets();
+                for (int i = 0; i < AttachPresets.Count && i < presets.Count; i++)
+                {
+                    AttachPresets[i].LoadFrom(presets[i]);
+                }
+
+                foreach (var preset in AttachPresets)
+                {
+                    preset.PropertyChanged += OnPresetChanged;
+                }
             }
-            SaveSettings();
+            finally
+            {
+                _isLoadingPresets = false;
+            }
         }
 
         private void OnPresetChanged(object? sender, PropertyChangedEventArgs e)
         {
+            if (_isLoadingPresets) return;
             var vm = sender as AttachPresetViewModel;
             if (vm == null) return;
             var index = AttachPresets.IndexOf(vm);

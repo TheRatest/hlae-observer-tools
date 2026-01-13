@@ -2,13 +2,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HlaeObsTools.ViewModels.Docks"
              xmlns:conv="using:HlaeObsTools.Converters"
+             xmlns:docks="using:HlaeObsTools.Views.Docks"
              x:Class="HlaeObsTools.Views.Docks.SettingsDockView"
              x:DataType="vm:SettingsDockViewModel">
     <UserControl.Resources>
         <conv:NullableDoubleTextConverter x:Key="NullableDouble" />
     </UserControl.Resources>
-    <Border Background="#1E1E1E" Padding="10" Focusable="True">
-        <TabControl>
+    <Grid>
+        <Border Background="#1E1E1E" Padding="10" Focusable="True"
+                IsVisible="{Binding !IsEditingAttachPresetAnimation}">
+            <TabControl>
 
             <TabItem Header="General">
                 <ScrollViewer>
@@ -340,10 +343,12 @@
                                                                 Click="OpenAnimationEditor_Click"
                                                                 HorizontalAlignment="Right"/>
                                                     </Grid>
-                                                    <TextBlock Text="Name" Foreground="#AAAAAA" FontSize="12"/>
+                                                    <TextBlock Text="Preset Name" Foreground="#AAAAAA" FontSize="12"/>
                                                     <TextBox Width="300"
                                                              Watermark="Preset name"
-                                                             Text="{Binding Name, Mode=TwoWay}" />
+                                                             Text="{Binding Name, Mode=TwoWay}"
+                                                             HorizontalAlignment="Left" />
+                                                    <TextBlock Text="Attachment" Foreground="#AAAAAA" FontSize="12"/>
                                                     <ComboBox ItemsSource="{Binding AttachmentOptions}"
                                                               SelectedItem="{Binding AttachmentName, Mode=TwoWay}"
                                                               Width="300"
@@ -908,7 +913,24 @@
                 </TabControl>
             </TabItem>
 
-        </TabControl>
-    </Border>
+            </TabControl>
+        </Border>
+
+        <Border Background="#1E1E1E" Padding="10" Focusable="True"
+                IsVisible="{Binding IsEditingAttachPresetAnimation}">
+            <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Back"
+                            Command="{Binding CloseAttachPresetAnimationCommand}"/>
+                    <TextBlock Text="{Binding AttachPresetAnimationEditor.Title}"
+                               Foreground="#E6E6E6"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                <docks:AttachPresetAnimationDockView Grid.Row="1"
+                                                     DataContext="{Binding AttachPresetAnimationEditor}"/>
+            </Grid>
+        </Border>
+    </Grid>
 </UserControl>
 
