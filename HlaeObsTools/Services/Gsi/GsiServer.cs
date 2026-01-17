@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -18,6 +19,7 @@ public sealed class GsiServer : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
     private long _heartbeat;
+    private static readonly Dictionary<string, int> LastKnownObserverSlots = new(StringComparer.Ordinal);
 
     public event EventHandler<GsiGameState>? GameStateUpdated;
 
@@ -229,6 +231,10 @@ public sealed class GsiServer : IDisposable
                     var playerElem = playerProp.Value;
                     string team = playerElem.TryGetProperty("team", out var teamElem) ? teamElem.GetString() ?? string.Empty : string.Empty;
                     string pname = playerElem.TryGetProperty("name", out var pnameElem) ? pnameElem.GetString() ?? string.Empty : string.Empty;
+                    if (IsCoachName(pname))
+                    {
+                        continue;
+                    }
                     string steamId = playerProp.Name;
                     var pos = playerElem.TryGetProperty("position", out var posElem) ? Vec3.Parse(posElem.GetString()) : default;
                     var forward = playerElem.TryGetProperty("forward", out var fwdElem) ? Vec3.Parse(fwdElem.GetString()) : default;
@@ -302,6 +308,18 @@ public sealed class GsiServer : IDisposable
                     }
 
                     int playerSlot = playerElem.TryGetProperty("observer_slot", out var slotElem) ? slotElem.GetInt32() : -1;
+                    if (playerSlot < 0 || playerSlot > 9)
+                    {
+                        playerSlot = -1;
+                    }
+                    if (playerSlot < 0 && LastKnownObserverSlots.TryGetValue(steamId, out var lastSlot))
+                    {
+                        playerSlot = lastSlot;
+                    }
+                    if (playerSlot >= 0 && playerSlot <= 9)
+                    {
+                        LastKnownObserverSlots[steamId] = playerSlot;
+                    }
 
                     players.Add(new GsiPlayer
                     {
@@ -392,6 +410,8 @@ public sealed class GsiServer : IDisposable
                 }
             }
 
+            NormalizeObserverSlots(players);
+
             return new GsiGameState
             {
                 MapName = mapName,
@@ -413,6 +433,82 @@ public sealed class GsiServer : IDisposable
             return null;
         }
     }
+
+    private static void NormalizeObserverSlots(List<GsiPlayer> players)
+    {
+        if (players.Count == 0)
+            return;
+
+        bool needsNormalize = players.Any(p =>
+            p.Slot < 0 || p.Slot > 9 ||
+            (string.Equals(p.Team, "CT", StringComparison.OrdinalIgnoreCase) && p.Slot >= 5) ||
+            (string.Equals(p.Team, "T", StringComparison.OrdinalIgnoreCase) && p.Slot >= 0 && p.Slot < 5));
+
+        if (!needsNormalize)
+            return;
+
+        NormalizeTeamSlots(players, "CT", 0);
+        NormalizeTeamSlots(players, "T", 5);
+    }
+
+    private static void NormalizeTeamSlots(List<GsiPlayer> players, string team, int slotOffset)
+    {
+        var teamPlayers = players
+            .Where(p => string.Equals(p.Team, team, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(p => p.Slot < 0 ? int.MaxValue : p.Slot)
+            .ThenBy(p => p.Name, StringComparer.Ordinal)
+            .ToList();
+
+        if (teamPlayers.Count == 0)
+            return;
+
+        var available = new List<int>
+        {
+            slotOffset,
+            slotOffset + 1,
+            slotOffset + 2,
+            slotOffset + 3,
+            slotOffset + 4
+        };
+
+        foreach (var player in teamPlayers)
+        {
+            if (player.Slot >= slotOffset && player.Slot < slotOffset + 5 && available.Contains(player.Slot))
+            {
+                available.Remove(player.Slot);
+                continue;
+            }
+
+            if (available.Count == 0)
+                break;
+
+            player.Slot = available[0];
+            available.RemoveAt(0);
+        }
+    }
+
+    private static bool IsCoachName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        ReadOnlySpan<char> s = name.AsSpan().TrimStart();
+        if (s.Length < 7) return false; // "coach" + sep + at least 1 char
+
+        if (!s.StartsWith("coach", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return IsPipeLike(s[5]);
+    }
+
+    private static bool IsPipeLike(char c)
+    {
+        return c == '|'      // U+007C
+            || c == '｜'     // U+FF5C
+            || c == '¦'      // U+00A6
+            || c == '∣';     // U+2223
+    }
+
 
     private static GsiTeam ParseTeam(System.Text.Json.JsonElement teamElem, string side)
     {

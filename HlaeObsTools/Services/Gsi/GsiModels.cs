@@ -37,7 +37,7 @@ public sealed class GsiPlayer
     public Vec3 Forward { get; init; }
     public bool IsAlive { get; init; }
     public bool HasBomb { get; init; }
-    public int Slot { get; init; }
+    public int Slot { get; set; }
     public int Health { get; init; }
     public int Armor { get; init; }
     public bool HasHelmet { get; init; }
