@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using OpenTK.Mathematics;
+using System.Numerics;
 
 namespace HlaeObsTools.Services.Viewport3D;
 
@@ -94,7 +94,7 @@ public static class ObjMeshLoader
                         var b = positions[indices[i]];
                         var c = positions[indices[i + 1]];
                         var normal = Vector3.Cross(b - a, c - a);
-                        if (normal.LengthSquared > 0.000001f)
+                        if (normal.LengthSquared() > 0.000001f)
                             normal = Vector3.Normalize(normal);
                         else
                             normal = Vector3.UnitZ;
@@ -181,7 +181,7 @@ public static class ObjMeshLoader
         vertices.Add(normal.Y);
         vertices.Add(normal.Z);
 
-        min = Vector3.ComponentMin(min, position);
-        max = Vector3.ComponentMax(max, position);
+        min = Vector3.Min(min, position);
+        max = Vector3.Max(max, position);
     }
 }

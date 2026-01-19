@@ -1,84 +1,135 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Platform;
 using Avalonia.Input;
-using Avalonia.OpenGL;
-using Avalonia.OpenGL.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Avalonia.Media;
-using OpenTK.Graphics.OpenGL4;
-using OpenTK.Mathematics;
+using Avalonia.Platform;
+using System.Numerics;
+using Rect = Avalonia.Rect;
 using HlaeObsTools.Services.Viewport3D;
 using HlaeObsTools.Services.Input;
 using System.Collections.ObjectModel;
 using HlaeObsTools.ViewModels;
 using System.Diagnostics;
+using System.Text;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using System.IO;
+using Vortice.Direct3D;
+using Vortice.Direct3D11;
+using Vortice.Direct2D1;
+using Vortice.DirectWrite;
+using Vortice.DXGI;
+using Vortice.D3DCompiler;
+using Vortice.Mathematics;
+using static Vortice.Direct3D11.D3D11;
+using D2DFactoryType = Vortice.Direct2D1.FactoryType;
+using DWriteFactoryType = Vortice.DirectWrite.FactoryType;
+using SharpGen.Runtime;
 
 namespace HlaeObsTools.Controls;
 
-public sealed class OpenTkViewport : OpenGlControlBase
+public sealed class D3D11Viewport : NativeControlHost
 {
+    private static readonly string LogPath = GetLogPath();
+    private static bool _logPathAnnounced;
+    private static bool _logWriteFailedLogged;
+    private static readonly string WndClassName = $"HLAE_D3DViewportHost_{Guid.NewGuid():N}";
+    private static bool _classRegistered;
+    private static readonly Dictionary<IntPtr, WeakReference<D3D11Viewport>> _hostMap = new();
     public static readonly StyledProperty<string?> MapPathProperty =
-        AvaloniaProperty.Register<OpenTkViewport, string?>(nameof(MapPath));
+        AvaloniaProperty.Register<D3D11Viewport, string?>(nameof(MapPath));
     public static readonly StyledProperty<string?> StatusTextProperty =
-        AvaloniaProperty.Register<OpenTkViewport, string?>(nameof(StatusText), string.Empty);
+        AvaloniaProperty.Register<D3D11Viewport, string?>(nameof(StatusText), string.Empty);
     public static readonly StyledProperty<float> PinScaleProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinScale), 200.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(PinScale), 200.0f);
     public static readonly StyledProperty<float> PinOffsetZProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(PinOffsetZ), 55.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(PinOffsetZ), 55.0f);
     public static readonly StyledProperty<float> MapScaleProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapScale), 1.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(MapScale), 1.0f);
     public static readonly StyledProperty<float> MapYawProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapYaw), 0.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(MapYaw), 0.0f);
     public static readonly StyledProperty<float> MapPitchProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapPitch), 0.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(MapPitch), 0.0f);
     public static readonly StyledProperty<float> MapRollProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapRoll), 0.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(MapRoll), 0.0f);
     public static readonly StyledProperty<float> MapOffsetXProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapOffsetX), 0.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(MapOffsetX), 0.0f);
     public static readonly StyledProperty<float> MapOffsetYProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapOffsetY), 0.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(MapOffsetY), 0.0f);
     public static readonly StyledProperty<float> MapOffsetZProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(MapOffsetZ), 0.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(MapOffsetZ), 0.0f);
     public static readonly StyledProperty<float> ViewportMouseScaleProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(ViewportMouseScale), 0.75f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(ViewportMouseScale), 0.75f);
     public static readonly StyledProperty<float> ViewportFpsCapProperty =
-        AvaloniaProperty.Register<OpenTkViewport, float>(nameof(ViewportFpsCap), 60.0f);
+        AvaloniaProperty.Register<D3D11Viewport, float>(nameof(ViewportFpsCap), 60.0f);
     public static readonly StyledProperty<FreecamSettings?> FreecamSettingsProperty =
-        AvaloniaProperty.Register<OpenTkViewport, FreecamSettings?>(nameof(FreecamSettings));
+        AvaloniaProperty.Register<D3D11Viewport, FreecamSettings?>(nameof(FreecamSettings));
     public static readonly StyledProperty<HlaeInputSender?> InputSenderProperty =
-        AvaloniaProperty.Register<OpenTkViewport, HlaeInputSender?>(nameof(InputSender));
+        AvaloniaProperty.Register<D3D11Viewport, HlaeInputSender?>(nameof(InputSender));
 
-    private int _vao;
-    private int _vbo;
-    private int _shaderProgram;
-    private int _vertexCount;
-    private int _mvpLocation;
-    private int _colorLocation;
-    private int _lightDirLocation;
-    private int _ambientLocation;
-    private bool _glReady;
-    private bool _supportsVao;
+    private ID3D11Device? _device;
+    private ID3D11Device1? _device1;
+    private ID3D11DeviceContext? _context;
+    private IDXGIFactory2? _factory;
+    private IDXGISwapChain1? _swapChain;
+    private int _swapWidth;
+    private int _swapHeight;
+    private IntPtr _hwnd;
+    private ID3D11Texture2D? _depthTexture;
+    private ID3D11DepthStencilView? _depthStencilView;
+    private ID3D11VertexShader? _vertexShader;
+    private ID3D11PixelShader? _pixelShader;
+    private ID3D11InputLayout? _inputLayout;
+    private ID3D11Buffer? _constantBuffer;
+    private ID3D11RasterizerState? _rasterizer;
+    private ID3D11DepthStencilState? _depthEnabledState;
+    private ID3D11DepthStencilState? _depthDisabledState;
+    private ID2D1Factory1? _d2dFactory;
+    private ID2D1Device? _d2dDevice;
+    private ID2D1DeviceContext? _d2dContext;
+    private ID2D1Bitmap1? _d2dTarget;
+    private ID2D1SolidColorBrush? _d2dTextBrush;
+    private IDWriteFactory? _dwriteFactory;
+    private IDWriteTextFormat? _labelFormat;
+    private int _d2dTargetWidth;
+    private int _d2dTargetHeight;
+    private ID3D11Buffer? _meshBuffer;
+    private int _meshVertexCount;
     private ObjMesh? _pendingMesh;
     private bool _meshDirty;
     private ObjMesh? _loadedMeshOriginal;
-    private int _gridVao;
-    private int _gridVbo;
+    private ID3D11Buffer? _gridBuffer;
     private int _gridVertexCount;
-    private int _groundVao;
-    private int _groundVbo;
+    private ID3D11Buffer? _groundBuffer;
     private int _groundVertexCount;
-    private int _debugVao;
-    private int _debugVbo;
+    private ID3D11Buffer? _debugBuffer;
     private int _debugVertexCount;
-    private int _pinVao;
-    private int _pinVbo;
+    private ID3D11Buffer? _pinBuffer;
     private int _pinVertexCount;
+    private int _renderWidth;
+    private int _renderHeight;
+    private int _targetWidth;
+    private int _targetHeight;
+    private bool _d3dReady;
+    private bool _renderLogged;
+    private bool _renderStatsLogged;
+    private bool _swapchainLogged;
+    private bool _renderSizeLogged;
+    private bool _deviceLogged;
+    private bool _swapchainFailureLogged;
+    private bool _nativeInitDone;
+    private float _viewportFpsCapCached;
     private string _statusPrefix = string.Empty;
-    private bool _showDebugTriangle = true;
+    private bool _showDebugTriangle;
     private bool _showGroundPlane = true;
     private string _inputStatus = "Input: idle";
     private readonly Vector3 _lightDir = Vector3.Normalize(new Vector3(0.4f, 0.9f, 0.2f));
@@ -86,16 +137,19 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private List<PinRenderData> _pins = new();
     private readonly List<PinDrawCall> _pinDraws = new();
     private List<PinLabel> _pinLabels = new();
+    private readonly object _labelLock = new();
+    private List<PinLabel> _labelHitCache = new();
     private bool _pinsDirty;
     private readonly Vector3[] _pinConeUnit = CreateUnitCone();
     private readonly Vector3[] _pinConeNormals = CreateUnitConeNormals();
     private readonly Vector3[] _pinSphereUnit;
     private readonly Vector3[] _pinSphereNormals;
+    private const int VertexStride = 6 * sizeof(float);
 
     private Vector3 _target = Vector3.Zero;
     private float _distance = 10f;
-    private float _yaw = MathHelper.DegreesToRadians(45f);
-    private float _pitch = MathHelper.DegreesToRadians(30f);
+    private float _yaw = DegToRad(45f);
+    private float _pitch = DegToRad(30f);
     private float _minDistance = 0.5f;
     private float _maxDistance = 1000f;
     private Vector3 _orbitTargetBeforeFreecam;
@@ -144,31 +198,34 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private long _lastFrameTicks;
     private DispatcherTimer? _frameLimiterTimer;
     private bool _frameLimiterPending;
+    private CancellationTokenSource? _renderCts;
+    private Task? _renderLoop;
+    private readonly ManualResetEventSlim _renderSignal = new(false);
 
-    public OpenTkViewport()
+    public D3D11Viewport()
     {
         Focusable = true;
         IsHitTestVisible = true;
-        StatusText = "GL init pending...";
+        StatusText = "D3D11 init pending...";
         Labels = new ReadOnlyObservableCollection<PinLabel>(_labels);
         (_pinSphereUnit, _pinSphereNormals) = CreateUnitSphere(16, 32);
     }
 
-    static OpenTkViewport()
+    static D3D11Viewport()
     {
-        MapPathProperty.Changed.AddClassHandler<OpenTkViewport>((sender, args) => sender.OnMapPathChanged(args));
-        PinScaleProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnPinScaleChanged());
-        PinOffsetZProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnPinOffsetChanged());
-        MapScaleProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
-        MapYawProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
-        MapPitchProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
-        MapRollProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
-        MapOffsetXProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
-        MapOffsetYProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
-        MapOffsetZProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnMapTransformChanged());
-        FreecamSettingsProperty.Changed.AddClassHandler<OpenTkViewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
-        InputSenderProperty.Changed.AddClassHandler<OpenTkViewport>((sender, args) => sender.OnInputSenderChanged(args));
-        ViewportFpsCapProperty.Changed.AddClassHandler<OpenTkViewport>((sender, _) => sender.OnViewportFpsCapChanged());
+        MapPathProperty.Changed.AddClassHandler<D3D11Viewport>((sender, args) => sender.OnMapPathChanged(args));
+        PinScaleProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnPinScaleChanged());
+        PinOffsetZProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnPinOffsetChanged());
+        MapScaleProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnMapTransformChanged());
+        MapYawProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnMapTransformChanged());
+        MapPitchProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnMapTransformChanged());
+        MapRollProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnMapTransformChanged());
+        MapOffsetXProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnMapTransformChanged());
+        MapOffsetYProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnMapTransformChanged());
+        MapOffsetZProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnMapTransformChanged());
+        FreecamSettingsProperty.Changed.AddClassHandler<D3D11Viewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
+        InputSenderProperty.Changed.AddClassHandler<D3D11Viewport>((sender, args) => sender.OnInputSenderChanged(args));
+        ViewportFpsCapProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnViewportFpsCapChanged());
     }
 
     public string? MapPath
@@ -270,10 +327,58 @@ public sealed class OpenTkViewport : OpenGlControlBase
     public bool IsFreecamActive => _freecamActive;
     public bool IsFreecamInputEnabled => _freecamInputEnabled;
 
+    protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
+    {
+        if (!OperatingSystem.IsWindows())
+            return base.CreateNativeControlCore(parent);
+
+        _hwnd = CreateChildWindow(parent.Handle);
+        if (_hwnd == IntPtr.Zero)
+        {
+            int error = Marshal.GetLastWin32Error();
+            LogMessage($"CreateNativeControlCore failed: parent=0x{parent.Handle.ToInt64():X} error={error}");
+            return base.CreateNativeControlCore(parent);
+        }
+
+        RegisterHostWindow(_hwnd, this);
+        UpdateChildWindowSize();
+        LogMessage($"CreateNativeControlCore hwnd=0x{_hwnd.ToInt64():X} parent=0x{parent.Handle.ToInt64():X}");
+        InitializeAfterNativeCreated();
+        return new PlatformHandle(_hwnd, "HWND");
+    }
+
+    protected override void DestroyNativeControlCore(IPlatformHandle control)
+    {
+        StopRenderLoop();
+        ReleaseSwapChain();
+        if (_hwnd != IntPtr.Zero)
+        {
+            UnregisterHostWindow(_hwnd);
+            DestroyWindow(_hwnd);
+            _hwnd = IntPtr.Zero;
+        }
+        base.DestroyNativeControlCore(control);
+    }
+
+    protected override void OnMeasureInvalidated()
+    {
+        base.OnMeasureInvalidated();
+        UpdateChildWindowSize();
+    }
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        RequestNextFrame();
+        ResetLogFile();
+        _viewportFpsCapCached = ViewportFpsCap;
+        if (_hwnd != IntPtr.Zero)
+        {
+            InitializeAfterNativeCreated();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(InitializeAfterNativeCreated, DispatcherPriority.Loaded);
+        }
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -281,10 +386,23 @@ public sealed class OpenTkViewport : OpenGlControlBase
         base.OnDetachedFromVisualTree(e);
         _dragging = false;
         _panning = false;
+        _nativeInitDone = false;
         DisableFreecam();
         _keysDown.Clear();
         _frameLimiterTimer?.Stop();
         _frameLimiterPending = false;
+        StopRenderLoop();
+        DisposeD3D();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (change.Property == BoundsProperty)
+        {
+            UpdateChildWindowSize();
+        }
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -443,14 +561,19 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private bool TryFindPinFromLabelHit(Point position, out PinRenderData pin)
     {
         pin = default!;
-        if (_labels.Count == 0)
-            return false;
+        List<PinLabel> labels;
+        lock (_labelLock)
+        {
+            if (_labelHitCache.Count == 0)
+                return false;
+            labels = new List<PinLabel>(_labelHitCache);
+        }
 
         const double fontSize = 16.0;
         const double fontWidthFactor = 0.6;
         const double padding = 6.0;
 
-        foreach (var label in _labels)
+        foreach (var label in labels)
         {
             if (string.IsNullOrEmpty(label.Text))
                 continue;
@@ -522,7 +645,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         }
 
         var forward = pin.Forward;
-        if (forward.LengthSquared < 0.0001f)
+        if (forward.LengthSquared() < 0.0001f)
             forward = Vector3.UnitX;
         forward = Vector3.Normalize(forward);
 
@@ -531,7 +654,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
         var forwardFromAngles = GetForwardVector(pitch, yaw);
         var right = Vector3.Cross(forwardFromAngles, Vector3.UnitZ);
-        if (right.LengthSquared < 1e-6f)
+        if (right.LengthSquared() < 1e-6f)
             right = Vector3.Cross(forwardFromAngles, Vector3.UnitX);
         right = Vector3.Normalize(right);
         var up = Vector3.Normalize(Vector3.Cross(right, forwardFromAngles));
@@ -666,71 +789,37 @@ public sealed class OpenTkViewport : OpenGlControlBase
         e.Handled = true;
     }
 
-    protected override void OnOpenGlInit(GlInterface gl)
+    private void RenderFrame()
     {
-        base.OnOpenGlInit(gl);
-
-        GL.LoadBindings(new AvaloniaBindingsContext(gl));
-        _shaderProgram = CreateShaderProgram();
-        _mvpLocation = _shaderProgram == 0 ? -1 : GL.GetUniformLocation(_shaderProgram, "uMvp");
-        _colorLocation = _shaderProgram == 0 ? -1 : GL.GetUniformLocation(_shaderProgram, "uColor");
-        _lightDirLocation = _shaderProgram == 0 ? -1 : GL.GetUniformLocation(_shaderProgram, "uLightDir");
-        _ambientLocation = _shaderProgram == 0 ? -1 : GL.GetUniformLocation(_shaderProgram, "uAmbient");
-        _glReady = true;
-        _supportsVao = CheckVaoSupport();
-
-        GL.Enable(EnableCap.DepthTest);
-        GL.LineWidth(1.5f);
-        UpdateGrid(10f, 20);
-        CreateGroundPlane(10f);
-        UpdateStatusText();
-    }
-
-    protected override void OnOpenGlDeinit(GlInterface gl)
-    {
-        base.OnOpenGlDeinit(gl);
-        _glReady = false;
-
-        if (_vao != 0)
-            GL.DeleteVertexArray(_vao);
-        if (_vbo != 0)
-            GL.DeleteBuffer(_vbo);
-        if (_gridVao != 0)
-            GL.DeleteVertexArray(_gridVao);
-        if (_gridVbo != 0)
-            GL.DeleteBuffer(_gridVbo);
-        if (_groundVao != 0)
-            GL.DeleteVertexArray(_groundVao);
-        if (_groundVbo != 0)
-            GL.DeleteBuffer(_groundVbo);
-        if (_debugVao != 0)
-            GL.DeleteVertexArray(_debugVao);
-        if (_debugVbo != 0)
-            GL.DeleteBuffer(_debugVbo);
-        if (_pinVao != 0)
-            GL.DeleteVertexArray(_pinVao);
-        if (_pinVbo != 0)
-            GL.DeleteBuffer(_pinVbo);
-        if (_shaderProgram != 0)
-            GL.DeleteProgram(_shaderProgram);
-
-        _vao = 0;
-        _vbo = 0;
-        _gridVao = 0;
-        _gridVbo = 0;
-        _groundVao = 0;
-        _groundVbo = 0;
-        _debugVao = 0;
-        _debugVbo = 0;
-        _pinVao = 0;
-        _pinVbo = 0;
-        _shaderProgram = 0;
-    }
-
-    protected override void OnOpenGlRender(GlInterface gl, int fb)
-    {
-        if (!_glReady)
+        if (!EnsureDevice())
+        {
+            LogMessage("D3D11 init failed");
             return;
+        }
+        if (!_renderLogged)
+        {
+            _renderLogged = true;
+            LogMessage("RenderFrame entered");
+        }
+
+        var width = Math.Max(1, _targetWidth);
+        var height = Math.Max(1, _targetHeight);
+        if (!EnsureSwapChain(width, height))
+            return;
+        if (!EnsureDepthStencil(width, height))
+            return;
+
+        if (!_renderStatsLogged)
+        {
+            _renderStatsLogged = true;
+            LogMessage($"Render targets ready: target={width}x{height} swap={_swapWidth}x{_swapHeight} debugVerts={_debugVertexCount}");
+        }
+        if (!_renderSizeLogged)
+        {
+            _renderSizeLogged = true;
+            LogMessage($"RenderFrame size: {width}x{height} hwnd=0x{_hwnd.ToInt64():X}");
+        }
+
         UpdateFreecamForFrame();
 
         if (_meshDirty)
@@ -738,82 +827,62 @@ public sealed class OpenTkViewport : OpenGlControlBase
         if (_pinsDirty)
             RebuildPins();
 
-        var width = Math.Max(1, (int)Bounds.Width);
-        var height = Math.Max(1, (int)Bounds.Height);
-        GL.Viewport(0, 0, width, height);
+        if (_context == null || _swapChain == null || _depthStencilView == null)
+            return;
+        using var backBuffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
+        using var renderTargetView = _device!.CreateRenderTargetView(backBuffer);
+        _context.OMSetRenderTargets(renderTargetView, _depthStencilView);
+        _context.RSSetViewport(new Viewport(0, 0, width, height, 0.0f, 1.0f));
+        _context.ClearRenderTargetView(renderTargetView, new Color4(0.02f, 0.02f, 0.03f, 1f));
+        _context.ClearDepthStencilView(_depthStencilView, DepthStencilClearFlags.Depth, 1.0f, 0);
 
-        GL.ClearColor(0.02f, 0.02f, 0.03f, 1f);
-        GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        _context.RSSetState(_rasterizer);
+        _context.VSSetShader(_vertexShader);
+        _context.PSSetShader(_pixelShader);
+        _context.IASetInputLayout(_inputLayout);
+        _context.VSSetConstantBuffer(0, _constantBuffer);
+        _context.PSSetConstantBuffer(0, _constantBuffer);
 
         var viewProjection = CreateViewProjection(width, height);
 
-        if (_showDebugTriangle && _debugVertexCount > 0 && _debugVbo != 0 && _shaderProgram != 0)
+        if (_showGroundPlane && _groundVertexCount > 0 && _groundBuffer != null)
         {
-            var mvp = Matrix4.Identity;
-            ApplyCommonUniforms(ref mvp, new Vector3(1.0f, 0.2f, 0.8f));
-
-            GL.Disable(EnableCap.DepthTest);
-            BindGeometry(_debugVao, _debugVbo);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, _debugVertexCount);
-            UnbindGeometry();
-            GL.Enable(EnableCap.DepthTest);
+            ApplyConstants(viewProjection, new Vector3(0.12f, 0.14f, 0.16f));
+            DrawGeometry(_groundBuffer, _groundVertexCount, PrimitiveTopology.TriangleList, depthEnabled: true);
         }
 
-        if (_showGroundPlane && _groundVertexCount > 0 && _groundVbo != 0 && _shaderProgram != 0)
+        if (_gridVertexCount > 0 && _gridBuffer != null)
         {
-            var mvp = viewProjection;
-            ApplyCommonUniforms(ref mvp, new Vector3(0.12f, 0.14f, 0.16f));
-
-            BindGeometry(_groundVao, _groundVbo);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, _groundVertexCount);
-            UnbindGeometry();
+            ApplyConstants(viewProjection, new Vector3(0.35f, 0.5f, 0.35f));
+            DrawGeometry(_gridBuffer, _gridVertexCount, PrimitiveTopology.LineList, depthEnabled: false);
         }
 
-        if (_gridVertexCount > 0 && _gridVbo != 0 && _shaderProgram != 0)
+        if (_meshVertexCount > 0 && _meshBuffer != null)
         {
-            var mvp = viewProjection;
-            ApplyCommonUniforms(ref mvp, new Vector3(0.35f, 0.5f, 0.35f));
-
-            GL.Disable(EnableCap.DepthTest);
-            BindGeometry(_gridVao, _gridVbo);
-            GL.DrawArrays(PrimitiveType.Lines, 0, _gridVertexCount);
-            UnbindGeometry();
-            GL.Enable(EnableCap.DepthTest);
+            ApplyConstants(viewProjection, new Vector3(0.82f, 0.86f, 0.9f));
+            DrawGeometry(_meshBuffer, _meshVertexCount, PrimitiveTopology.TriangleList, depthEnabled: true);
         }
 
-        if (_vertexCount > 0 && _vbo != 0 && _shaderProgram != 0)
+        if (_pinVertexCount > 0 && _pinBuffer != null)
         {
-            var mvp = viewProjection;
-            ApplyCommonUniforms(ref mvp, new Vector3(0.82f, 0.86f, 0.9f));
-
-            BindGeometry(_vao, _vbo);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, _vertexCount);
-            UnbindGeometry();
-        }
-
-        if (_pinVertexCount > 0 && _pinVbo != 0 && _shaderProgram != 0)
-        {
-            var mvp = viewProjection;
-            GL.UseProgram(_shaderProgram);
-            if (_mvpLocation >= 0)
-                GL.UniformMatrix4(_mvpLocation, false, ref mvp);
-            if (_lightDirLocation >= 0)
-                GL.Uniform3(_lightDirLocation, _lightDir);
-            if (_ambientLocation >= 0)
-                GL.Uniform1(_ambientLocation, AmbientLight);
-
-            BindGeometry(_pinVao, _pinVbo);
             foreach (var draw in _pinDraws)
             {
-                if (_colorLocation >= 0)
-                    GL.Uniform3(_colorLocation, draw.Color);
-                GL.DrawArrays(PrimitiveType.Triangles, draw.Start, draw.Count);
+                ApplyConstants(viewProjection, draw.Color);
+                DrawGeometry(_pinBuffer, draw.Count, PrimitiveTopology.TriangleList, depthEnabled: true, startVertex: draw.Start);
             }
-            UnbindGeometry();
         }
 
-        UpdateLabelOverlay(viewProjection, width, height);
-        RequestNextFrame();
+        DrawLabelOverlay(viewProjection, width, height, backBuffer);
+        _context.Flush();
+        try
+        {
+            _swapChain.Present(0, PresentFlags.None);
+        }
+        catch (SharpGenException ex)
+        {
+            LogMessage($"Present failed: 0x{ex.ResultCode.Code:X8}");
+            ReleaseSwapChain();
+        }
     }
 
     private void OnMapPathChanged(AvaloniaPropertyChangedEventArgs e)
@@ -845,6 +914,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private void OnViewportFpsCapChanged()
     {
+        _viewportFpsCapCached = ViewportFpsCap;
         _lastFrameTicks = _frameLimiter.ElapsedTicks;
         if (_frameLimiterTimer != null)
             _frameLimiterTimer.Stop();
@@ -868,39 +938,15 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
         if (_pendingMesh == null)
         {
-            if (_vao != 0)
-                GL.DeleteVertexArray(_vao);
-            if (_vbo != 0)
-                GL.DeleteBuffer(_vbo);
-
-            _vao = 0;
-            _vbo = 0;
-            _vertexCount = 0;
+            _meshBuffer?.Dispose();
+            _meshBuffer = null;
+            _meshVertexCount = 0;
             return;
         }
 
-        if (_vao != 0)
-            GL.DeleteVertexArray(_vao);
-        if (_vbo != 0)
-            GL.DeleteBuffer(_vbo);
-
-        _vao = _supportsVao ? GL.GenVertexArray() : 0;
-        _vbo = GL.GenBuffer();
-
-        if (_supportsVao)
-            GL.BindVertexArray(_vao);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-        GL.BufferData(BufferTarget.ArrayBuffer, _pendingMesh.Vertices.Length * sizeof(float), _pendingMesh.Vertices, BufferUsageHint.StaticDraw);
-
-        GL.EnableVertexAttribArray(0);
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
-        GL.EnableVertexAttribArray(1);
-        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
-
-        if (_supportsVao)
-            GL.BindVertexArray(0);
-
-        _vertexCount = _pendingMesh.VertexCount;
+        _meshBuffer?.Dispose();
+        _meshBuffer = CreateVertexBuffer(_pendingMesh.Vertices, dynamic: false);
+        _meshVertexCount = _pendingMesh.VertexCount;
         ResetCameraToBounds(_pendingMesh.Min, _pendingMesh.Max);
         UpdateGridFromBounds(_pendingMesh.Min, _pendingMesh.Max);
         _pendingMesh = null;
@@ -980,6 +1026,13 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     public void SetPins(IReadOnlyList<ViewportPin> pins)
     {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            var snapshot = pins.ToArray();
+            Dispatcher.UIThread.Post(() => SetPins(snapshot));
+            return;
+        }
+
         var pinOffset = new Vector3(0f, 0f, PinOffsetZ);
 
         var list = new List<PinRenderData>();
@@ -1029,7 +1082,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var gridInfo = _gridVertexCount > 0 ? $"Grid verts: {_gridVertexCount}" : "Grid: none";
         var groundInfo = _groundVertexCount > 0 ? $"Ground verts: {_groundVertexCount}" : "Ground: none";
         var debugInfo = _showDebugTriangle ? "Debug: on" : "Debug: off";
-        var prefix = string.IsNullOrWhiteSpace(_statusPrefix) ? "GL ready" : _statusPrefix;
+        var prefix = string.IsNullOrWhiteSpace(_statusPrefix) ? "D3D11 ready" : _statusPrefix;
         SetStatusText($"{prefix} | {gridInfo} | {groundInfo} | {debugInfo} | {_inputStatus}");
     }
 
@@ -1042,7 +1095,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
     private void ResetCameraToBounds(Vector3 min, Vector3 max)
     {
         _target = Vector3.Zero;
-        var radius = (max - min).Length * 0.5f;
+        var radius = (max - min).Length() * 0.5f;
         if (radius < 0.1f)
             radius = 0.1f;
 
@@ -1055,8 +1108,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
         if (_distance > _maxDistance)
             _distance = _maxDistance;
 
-        _yaw = MathHelper.DegreesToRadians(45f);
-        _pitch = MathHelper.DegreesToRadians(30f);
+        _yaw = DegToRad(45f);
+        _pitch = DegToRad(30f);
     }
 
     private void UpdateGridFromBounds(Vector3 min, Vector3 max)
@@ -1069,7 +1122,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private void UpdateGrid(float size, int divisions)
     {
-        if (!_glReady)
+        if (!EnsureDevice())
             return;
 
         var half = size * 0.5f;
@@ -1089,27 +1142,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
             AddVertex(vertices, ref index, offset, half, 0f, 0f, 0f, 1f);
         }
 
-        if (_gridVao != 0)
-            GL.DeleteVertexArray(_gridVao);
-        if (_gridVbo != 0)
-            GL.DeleteBuffer(_gridVbo);
-
-        _gridVao = _supportsVao ? GL.GenVertexArray() : 0;
-        _gridVbo = GL.GenBuffer();
-
-        if (_supportsVao)
-            GL.BindVertexArray(_gridVao);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, _gridVbo);
-        GL.BufferData(BufferTarget.ArrayBuffer, vertices.Length * sizeof(float), vertices, BufferUsageHint.StaticDraw);
-
-        GL.EnableVertexAttribArray(0);
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
-        GL.EnableVertexAttribArray(1);
-        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
-
-        if (_supportsVao)
-            GL.BindVertexArray(0);
-
+        _gridBuffer?.Dispose();
+        _gridBuffer = CreateVertexBuffer(vertices, dynamic: false);
         _gridVertexCount = vertices.Length / 6;
         RequestNextFrame();
         UpdateStatusText();
@@ -1126,42 +1160,44 @@ public sealed class OpenTkViewport : OpenGlControlBase
         return _target + direction * _distance;
     }
 
-    private Matrix4 CreateViewProjection(int width, int height)
+    private Matrix4x4 CreateViewProjection(int width, int height)
     {
         var aspect = width / (float)height;
         if (_freecamActive)
         {
             var fov = GetSourceVerticalFovRadians(_freecamSmoothed.Fov);
-            var projection = Matrix4.CreatePerspectiveFieldOfView(fov, aspect, 0.05f, 100000f);
+            var projection = Matrix4x4.CreatePerspectiveFieldOfView(fov, aspect, 0.05f, 100000f);
             var view = CreateFreecamView(_freecamSmoothed);
             return view * projection;
         }
 
         var nearPlane = Math.Max(0.05f, _distance * 0.01f);
         var farPlane = Math.Max(100f, _distance * 10f);
-        var projectionOrbit = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60f), aspect, nearPlane, farPlane);
-        var viewOrbit = Matrix4.LookAt(GetCameraPosition(), _target, Vector3.UnitZ);
+        var projectionOrbit = Matrix4x4.CreatePerspectiveFieldOfView(DegToRad(60f), aspect, nearPlane, farPlane);
+        var viewOrbit = Matrix4x4.CreateLookAt(GetCameraPosition(), _target, Vector3.UnitZ);
         return viewOrbit * projectionOrbit;
     }
 
     private static float GetSourceVerticalFovRadians(float sourceFovDeg)
     {
-        var hRad = MathHelper.DegreesToRadians(Math.Clamp(sourceFovDeg, 1.0f, 179.0f));
+        var hRad = DegToRad(Math.Clamp(sourceFovDeg, 1.0f, 179.0f));
         var vRad = 2f * MathF.Atan(MathF.Tan(hRad * 0.5f) * (3f / 4f));
-        return Math.Clamp(vRad, MathHelper.DegreesToRadians(1.0f), MathHelper.DegreesToRadians(179.0f));
+        return Math.Clamp(vRad, DegToRad(1.0f), DegToRad(179.0f));
     }
 
-    private void ApplyCommonUniforms(ref Matrix4 mvp, Vector3 color)
+    private void ApplyConstants(Matrix4x4 mvp, Vector3 color)
     {
-        GL.UseProgram(_shaderProgram);
-        if (_mvpLocation >= 0)
-            GL.UniformMatrix4(_mvpLocation, false, ref mvp);
-        if (_colorLocation >= 0)
-            GL.Uniform3(_colorLocation, color);
-        if (_lightDirLocation >= 0)
-            GL.Uniform3(_lightDirLocation, _lightDir);
-        if (_ambientLocation >= 0)
-            GL.Uniform1(_ambientLocation, AmbientLight);
+        if (_context == null || _constantBuffer == null)
+            return;
+
+        var constants = new ShaderConstants
+        {
+            Mvp = mvp,
+            Color = new Vector4(color.X, color.Y, color.Z, 1f),
+            LightDirAmbient = new Vector4(_lightDir.X, _lightDir.Y, _lightDir.Z, AmbientLight)
+        };
+
+        _context.UpdateSubresource(ref constants, _constantBuffer);
     }
 
     private void Orbit(float deltaX, float deltaY)
@@ -1235,7 +1271,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var forwardFromAngles = GetForwardVector(pitch, yaw);
         var worldUp = Vector3.UnitZ;
         var right = Vector3.Cross(forwardFromAngles, worldUp);
-        if (right.LengthSquared < 1e-6f)
+        if (right.LengthSquared() < 1e-6f)
             right = Vector3.Cross(forwardFromAngles, Vector3.UnitX);
         right = Vector3.Normalize(right);
         var up = Vector3.Normalize(Vector3.Cross(right, forwardFromAngles));
@@ -1427,7 +1463,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
                 desiredVel -= up * verticalSpeed;
         }
 
-        var desiredSpeed = desiredVel.Length;
+        var desiredSpeed = desiredVel.Length();
         var maxSpeed = moveSpeed;
         if ((useAnalog && Math.Abs(analogRY) > 0.0001f) || (!useAnalog && (IsKeyDown(Key.Space) || IsCtrlDown())))
             maxSpeed = MathF.Max(verticalSpeed, moveSpeed);
@@ -1601,7 +1637,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
                 var omega = MathF.Log(2.0f) / _freecamConfig.HalfRot;
                 var damping = MathF.Max(1.0f, _freecamConfig.RotDampingRatio);
                 var target = _freecamRawQuat;
-                var qErr = target * Quaternion.Invert(_freecamSmoothedQuat);
+                var qErr = target * Quaternion.Inverse(_freecamSmoothedQuat);
 
                 var clampedW = Math.Clamp(qErr.W, -1f, 1f);
                 var angle = 2f * MathF.Acos(clampedW);
@@ -1619,7 +1655,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
             {
                 var t = deltaTime / _freecamConfig.HalfRot;
                 var target = _freecamRawQuat;
-                var qErr = Quaternion.Normalize(Quaternion.Invert(_freecamSmoothedQuat) * target);
+                var qErr = Quaternion.Normalize(Quaternion.Inverse(_freecamSmoothedQuat) * target);
                 var w = Math.Clamp(qErr.W, -1f, 1f);
                 var targetAngle = 2f * MathF.Acos(w);
                 var sinHalf = MathF.Sqrt(MathF.Max(0f, 1f - w * w));
@@ -1659,12 +1695,12 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private static Quaternion BuildQuat(float pitchDeg, float yawDeg, float rollDeg)
     {
-        var pitchRad = MathHelper.DegreesToRadians(pitchDeg);
-        var yawRad = MathHelper.DegreesToRadians(yawDeg);
-        var rollRad = MathHelper.DegreesToRadians(rollDeg);
-        var qPitch = Quaternion.FromAxisAngle(Vector3.UnitY, pitchRad);
-        var qYaw = Quaternion.FromAxisAngle(Vector3.UnitZ, yawRad);
-        var qRoll = Quaternion.FromAxisAngle(Vector3.UnitX, rollRad);
+        var pitchRad = DegToRad(pitchDeg);
+        var yawRad = DegToRad(yawDeg);
+        var rollRad = DegToRad(rollDeg);
+        var qPitch = Quaternion.CreateFromAxisAngle(Vector3.UnitY, pitchRad);
+        var qYaw = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yawRad);
+        var qRoll = Quaternion.CreateFromAxisAngle(Vector3.UnitX, rollRad);
         return Quaternion.Normalize(qYaw * qPitch * qRoll);
     }
 
@@ -1688,13 +1724,13 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private static Quaternion IntegrateQuat(Quaternion q, Vector3 angularVelocity, float deltaTime)
     {
-        var speed = angularVelocity.Length;
+        var speed = angularVelocity.Length();
         if (speed <= 1e-8f || deltaTime <= 0f)
             return q;
 
         var angle = speed * deltaTime;
         var axis = angularVelocity / speed;
-        var dq = Quaternion.FromAxisAngle(axis, angle);
+        var dq = Quaternion.CreateFromAxisAngle(axis, angle);
         return Quaternion.Normalize(dq * q);
     }
 
@@ -1732,7 +1768,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var sin = Vector3.Dot(cross, fwd);
         var cos = Vector3.Dot(baseUp, desiredUp);
         var rollRad = MathF.Atan2(sin, cos);
-        return (float)MathHelper.RadiansToDegrees(rollRad);
+        return (float)RadToDeg(rollRad);
     }
 
     private static void GetYawPitchFromForward(Vector3 forward, out float yawDeg, out float pitchDeg)
@@ -1740,15 +1776,15 @@ public sealed class OpenTkViewport : OpenGlControlBase
         forward = Vector3.Normalize(forward);
         var yaw = MathF.Atan2(forward.Y, forward.X);
         var pitch = -MathF.Asin(Math.Clamp(forward.Z, -1f, 1f));
-        yawDeg = (float)MathHelper.RadiansToDegrees(yaw);
-        pitchDeg = (float)MathHelper.RadiansToDegrees(pitch);
+        yawDeg = (float)RadToDeg(yaw);
+        pitchDeg = (float)RadToDeg(pitch);
     }
 
-    private Matrix4 CreateFreecamView(FreecamTransform transform)
+    private Matrix4x4 CreateFreecamView(FreecamTransform transform)
     {
         var forward = GetForwardFromQuat(transform.Orientation);
         var up = GetUpFromQuat(transform.Orientation);
-        return Matrix4.LookAt(transform.Position, transform.Position + forward, up);
+        return Matrix4x4.CreateLookAt(transform.Position, transform.Position + forward, up);
     }
 
     private void GetFreecamBasis(FreecamTransform transform, out Vector3 forward, out Vector3 up)
@@ -1888,8 +1924,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private static Vector3 GetForwardVector(float pitchDeg, float yawDeg)
     {
-        var pitch = MathHelper.DegreesToRadians(pitchDeg);
-        var yaw = MathHelper.DegreesToRadians(yawDeg);
+        var pitch = DegToRad(pitchDeg);
+        var yaw = DegToRad(yawDeg);
         var cosPitch = MathF.Cos(pitch);
         return new Vector3(
             cosPitch * MathF.Cos(yaw),
@@ -1899,19 +1935,25 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private static Vector3 GetRightVector(float yawDeg)
     {
-        var yaw = MathHelper.DegreesToRadians(yawDeg);
+        var yaw = DegToRad(yawDeg);
         return new Vector3(MathF.Sin(yaw), -MathF.Cos(yaw), 0f);
     }
 
     private static Vector3 GetUpVector(float pitchDeg, float yawDeg)
     {
-        var pitch = MathHelper.DegreesToRadians(pitchDeg);
-        var yaw = MathHelper.DegreesToRadians(yawDeg);
+        var pitch = DegToRad(pitchDeg);
+        var yaw = DegToRad(yawDeg);
         return new Vector3(
             MathF.Sin(pitch) * MathF.Cos(yaw),
             MathF.Sin(pitch) * MathF.Sin(yaw),
             MathF.Cos(pitch));
     }
+
+    private const float TwoPi = MathF.PI * 2f;
+
+    private static float DegToRad(float degrees) => degrees * (MathF.PI / 180f);
+
+    private static float RadToDeg(float radians) => radians * (180f / MathF.PI);
 
     private static float Clamp(float value, float min, float max)
     {
@@ -1942,154 +1984,801 @@ public sealed class OpenTkViewport : OpenGlControlBase
         return target + (change + temp) * exp;
     }
 
-    private int CreateShaderProgram()
+    private bool EnsureDevice()
     {
-        var version = GL.GetString(StringName.Version) ?? "unknown";
-        var glsl = GL.GetString(StringName.ShadingLanguageVersion) ?? "unknown";
-        var isEs = version.Contains("OpenGL ES", StringComparison.OrdinalIgnoreCase);
-        var errors = new List<string>();
+        if (_device != null && _context != null && _d3dReady)
+            return true;
 
-        var esVariants = new[]
-        {
-            new ShaderVariant("es300", VertexEs300, FragmentEs300, BindAttribLocation: false),
-            new ShaderVariant("es100", VertexEs100, FragmentEs100, BindAttribLocation: true)
-        };
-        var desktopVariants = new[]
-        {
-            new ShaderVariant("gl330", Vertex330, Fragment330, BindAttribLocation: false),
-            new ShaderVariant("gl150", Vertex150, Fragment150, BindAttribLocation: false),
-            new ShaderVariant("gl120", Vertex120, Fragment120, BindAttribLocation: true)
-        };
+        var levels = new[] { Vortice.Direct3D.FeatureLevel.Level_11_1, Vortice.Direct3D.FeatureLevel.Level_11_0 };
+        var result = D3D11CreateDevice(
+            null,
+            DriverType.Hardware,
+            DeviceCreationFlags.BgraSupport,
+            levels,
+            out ID3D11Device device,
+            out _,
+            out ID3D11DeviceContext context);
 
-        var variants = new List<ShaderVariant>();
-        if (isEs)
+        if (result.Failure)
         {
-            variants.AddRange(esVariants);
-            variants.AddRange(desktopVariants);
-        }
-        else
-        {
-            variants.AddRange(desktopVariants);
-            variants.AddRange(esVariants);
+            result = D3D11CreateDevice(
+                null,
+                DriverType.Warp,
+                DeviceCreationFlags.BgraSupport,
+                levels,
+                out device,
+                out _,
+                out context);
         }
 
-        foreach (var variant in variants)
+        if (result.Failure || device == null || context == null)
         {
-            var vertexShader = CompileShader(ShaderType.VertexShader, variant.VertexSource, out var vertexError);
-            if (vertexShader == 0)
-            {
-                if (!string.IsNullOrWhiteSpace(vertexError))
-                    errors.Add($"Vertex {variant.Name}: {vertexError}");
-                continue;
-            }
-
-            var fragmentShader = CompileShader(ShaderType.FragmentShader, variant.FragmentSource, out var fragmentError);
-            if (fragmentShader == 0)
-            {
-                if (!string.IsNullOrWhiteSpace(fragmentError))
-                    errors.Add($"Fragment {variant.Name}: {fragmentError}");
-                GL.DeleteShader(vertexShader);
-                continue;
-            }
-
-            var program = GL.CreateProgram();
-            GL.AttachShader(program, vertexShader);
-            GL.AttachShader(program, fragmentShader);
-            if (variant.BindAttribLocation)
-            {
-                GL.BindAttribLocation(program, 0, "aPos");
-                GL.BindAttribLocation(program, 1, "aNormal");
-            }
-
-            GL.LinkProgram(program);
-
-            GL.GetProgram(program, GetProgramParameterName.LinkStatus, out var linked);
-            if (linked == 0)
-            {
-                var info = GL.GetProgramInfoLog(program);
-                if (!string.IsNullOrWhiteSpace(info))
-                    errors.Add($"Link {variant.Name}: {info}");
-                GL.DeleteProgram(program);
-                program = 0;
-            }
-
-            if (program != 0)
-            {
-                GL.DetachShader(program, vertexShader);
-                GL.DetachShader(program, fragmentShader);
-            }
-            GL.DeleteShader(vertexShader);
-            GL.DeleteShader(fragmentShader);
-
-            if (program != 0)
-            {
-                _statusPrefix = $"GL: {version} | GLSL: {glsl} | Shader: {variant.Name}";
-                return program;
-            }
+            SetStatusText("D3D11 init failed.");
+            return false;
         }
 
-        _statusPrefix = errors.Count > 0
-            ? $"Shader compile failed ({version}). {string.Join(" | ", errors)}"
-            : $"Shader compile failed ({version}).";
-
-        return 0;
-    }
-
-    private int CompileShader(ShaderType type, string source, out string? error)
-    {
-        error = null;
-        var shader = GL.CreateShader(type);
-        GL.ShaderSource(shader, source);
-        GL.CompileShader(shader);
-
-        GL.GetShader(shader, ShaderParameter.CompileStatus, out var status);
-        if (status == 0)
+        _device = device;
+        _context = context;
+        _device1 = _device.QueryInterfaceOrNull<ID3D11Device1>();
+        _factory = Vortice.DXGI.DXGI.CreateDXGIFactory2<IDXGIFactory2>(false);
+        if (!_deviceLogged)
         {
-            error = GL.GetShaderInfoLog(shader);
-            GL.DeleteShader(shader);
-            return 0;
+            _deviceLogged = true;
+            LogMessage($"Device ready. hwnd=0x{_hwnd.ToInt64():X} device1={(_device1 != null)} factory={(_factory != null)}");
         }
 
-        return shader;
-    }
+        try
+        {
+            using var multithread = context.QueryInterfaceOrNull<ID3D11Multithread>();
+            multithread?.SetMultithreadProtected(true);
+        }
+        catch
+        {
+            // Ignore if multithread interface isn't available.
+        }
 
-    private bool CheckVaoSupport()
-    {
-        var version = GL.GetString(StringName.Version) ?? string.Empty;
-        var extensions = GL.GetString(StringName.Extensions) ?? string.Empty;
-        if (version.Contains("OpenGL ES", StringComparison.OrdinalIgnoreCase))
-            return version.Contains("OpenGL ES 3", StringComparison.OrdinalIgnoreCase) || extensions.Contains("GL_OES_vertex_array_object", StringComparison.OrdinalIgnoreCase);
+        if (!InitializeShaders())
+            return false;
 
+        InitializeStates();
+        InitializeDirect2D();
+        _d3dReady = true;
+        _statusPrefix = "D3D11 device ready";
+        UpdateStatusText();
         return true;
     }
 
-    private void BindGeometry(int vao, int vbo)
+    private bool InitializeShaders()
     {
-        if (_supportsVao && vao != 0)
+        if (_device == null)
+            return false;
+
+        _vertexShader?.Dispose();
+        _pixelShader?.Dispose();
+        _inputLayout?.Dispose();
+        _constantBuffer?.Dispose();
+        _vertexShader = null;
+        _pixelShader = null;
+        _inputLayout = null;
+        _constantBuffer = null;
+
+        var result = CompileShaderBlob(VertexShaderHlsl, "VSMain", "vs_5_0", ShaderFlags.OptimizationLevel3, out var vsBlob, out var vsError);
+        if (result.Failure || vsBlob == null)
         {
-            GL.BindVertexArray(vao);
+            _statusPrefix = $"VS compile failed: {vsError?.AsString()}";
+            return false;
+        }
+
+        result = CompileShaderBlob(PixelShaderHlsl, "PSMain", "ps_5_0", ShaderFlags.OptimizationLevel3, out var psBlob, out var psError);
+        if (result.Failure || psBlob == null)
+        {
+            _statusPrefix = $"PS compile failed: {psError?.AsString()}";
+            return false;
+        }
+
+        _vertexShader = _device.CreateVertexShader(vsBlob);
+        _pixelShader = _device.CreatePixelShader(psBlob);
+
+        var elements = new[]
+        {
+            new Vortice.Direct3D11.InputElementDescription("POSITION", 0, Format.R32G32B32_Float, 0, 0),
+            new Vortice.Direct3D11.InputElementDescription("NORMAL", 0, Format.R32G32B32_Float, 12, 0)
+        };
+        _inputLayout = _device.CreateInputLayout(elements, vsBlob);
+
+        int size = AlignConstantBufferSize(Marshal.SizeOf<ShaderConstants>());
+        _constantBuffer = _device.CreateBuffer(new BufferDescription((uint)size, BindFlags.ConstantBuffer, ResourceUsage.Default));
+        return true;
+    }
+
+    private static Result CompileShaderBlob(string source, string entryPoint, string profile, ShaderFlags flags, out Blob? shaderBlob, out Blob? errorBlob)
+    {
+        var bytes = Encoding.UTF8.GetBytes(source);
+        unsafe
+        {
+            fixed (byte* pData = bytes)
+            {
+                return Compiler.Compile(
+                    pData,
+                    new PointerUSize((ulong)bytes.Length),
+                    "inline",
+                    null,
+                    null,
+                    entryPoint,
+                    profile,
+                    flags,
+                    EffectFlags.None,
+                    out shaderBlob,
+                    out errorBlob);
+            }
+        }
+    }
+
+    private void InitializeStates()
+    {
+        if (_device == null)
+            return;
+
+        _rasterizer?.Dispose();
+        _depthEnabledState?.Dispose();
+        _depthDisabledState?.Dispose();
+
+        _rasterizer = _device.CreateRasterizerState(new RasterizerDescription
+        {
+            CullMode = CullMode.None,
+            FillMode = Vortice.Direct3D11.FillMode.Solid,
+            DepthClipEnable = true
+        });
+
+        _depthEnabledState = _device.CreateDepthStencilState(new DepthStencilDescription
+        {
+            DepthEnable = true,
+            DepthWriteMask = DepthWriteMask.All,
+            DepthFunc = Vortice.Direct3D11.ComparisonFunction.LessEqual
+        });
+
+        _depthDisabledState = _device.CreateDepthStencilState(new DepthStencilDescription
+        {
+            DepthEnable = false,
+            DepthWriteMask = DepthWriteMask.Zero,
+            DepthFunc = Vortice.Direct3D11.ComparisonFunction.Always
+        });
+    }
+
+    private void InitializeDirect2D()
+    {
+        if (_device == null)
+            return;
+
+        _d2dTarget?.Dispose();
+        _d2dTarget = null;
+        _d2dTextBrush?.Dispose();
+        _d2dTextBrush = null;
+        _labelFormat?.Dispose();
+        _labelFormat = null;
+        _dwriteFactory?.Dispose();
+        _dwriteFactory = null;
+        _d2dContext?.Dispose();
+        _d2dContext = null;
+        _d2dDevice?.Dispose();
+        _d2dDevice = null;
+        _d2dFactory?.Dispose();
+        _d2dFactory = null;
+
+        _d2dFactory = Vortice.Direct2D1.D2D1.D2D1CreateFactory<ID2D1Factory1>(D2DFactoryType.MultiThreaded);
+        using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
+        _d2dDevice = _d2dFactory.CreateDevice(dxgiDevice);
+        _d2dContext = _d2dDevice.CreateDeviceContext(DeviceContextOptions.None);
+        _dwriteFactory = Vortice.DirectWrite.DWrite.DWriteCreateFactory<IDWriteFactory>(DWriteFactoryType.Shared);
+        _labelFormat = _labelFormat = _dwriteFactory.CreateTextFormat(
+                                                                        "Segoe UI",
+                                                                        fontCollection: null,
+                                                                        fontWeight: Vortice.DirectWrite.FontWeight.Bold,
+                                                                        fontStyle: Vortice.DirectWrite.FontStyle.Normal,
+                                                                        fontStretch: Vortice.DirectWrite.FontStretch.Normal,
+                                                                        fontSize: 18.0f,
+                                                                        localeName: "en-us"
+                                                                    );
+        _labelFormat.TextAlignment = Vortice.DirectWrite.TextAlignment.Center;
+        _labelFormat.ParagraphAlignment = ParagraphAlignment.Center;
+        _d2dTextBrush = _d2dContext.CreateSolidColorBrush(new Color4(1f, 1f, 1f, 1f));
+    }
+
+    private bool EnsureSwapChain(int width, int height)
+    {
+        if (_factory == null || _device == null || _hwnd == IntPtr.Zero)
+        {
+            if (!_swapchainFailureLogged)
+            {
+                _swapchainFailureLogged = true;
+                LogMessage($"EnsureSwapChain failed: factory={(_factory != null)} device={(_device != null)} hwnd=0x{_hwnd.ToInt64():X}");
+            }
+            return false;
+        }
+
+        if (_swapChain == null || _swapWidth != width || _swapHeight != height)
+        {
+            ResetD2DTarget();
+            ReleaseSwapChain();
+            var desc = new SwapChainDescription1
+            {
+                Width = (uint)width,
+                Height = (uint)height,
+                Format = Format.B8G8R8A8_UNorm,
+                BufferCount = 2,
+                BufferUsage = Usage.RenderTargetOutput,
+                SampleDescription = new SampleDescription(1, 0),
+                Scaling = Scaling.Stretch,
+                SwapEffect = SwapEffect.FlipDiscard,
+                AlphaMode = AlphaMode.Ignore
+            };
+
+            _swapChain = _factory.CreateSwapChainForHwnd(_device, _hwnd, desc, null, null);
+            _swapWidth = width;
+            _swapHeight = height;
+            if (!_swapchainLogged)
+            {
+                _swapchainLogged = true;
+                LogMessage($"SwapChain created: {_swapWidth}x{_swapHeight} hwnd=0x{_hwnd.ToInt64():X}");
+            }
+        }
+
+        return _swapChain != null;
+    }
+
+    private bool EnsureDepthStencil(int width, int height)
+    {
+        if (_device == null)
+            return false;
+
+        if (_depthTexture != null && _renderWidth == width && _renderHeight == height)
+            return true;
+
+        _depthStencilView?.Dispose();
+        _depthStencilView = null;
+        _depthTexture?.Dispose();
+        _depthTexture = null;
+
+        var depthDesc = new Texture2DDescription
+        {
+            Width = (uint)width,
+            Height = (uint)height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.D24_UNorm_S8_UInt,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.DepthStencil,
+            CPUAccessFlags = CpuAccessFlags.None,
+            MiscFlags = ResourceOptionFlags.None
+        };
+
+        try
+        {
+            _depthTexture = _device.CreateTexture2D(depthDesc);
+            _depthStencilView = _device.CreateDepthStencilView(_depthTexture);
+            _renderWidth = width;
+            _renderHeight = height;
+            return true;
+        }
+        catch (SharpGenException ex)
+        {
+            LogMessage($"Depth setup failed: 0x{ex.ResultCode.Code:X8}");
+            return false;
+        }
+    }
+
+    private void ReleaseSwapChain()
+    {
+        _swapChain?.Dispose();
+        _swapChain = null;
+        _swapWidth = 0;
+        _swapHeight = 0;
+        ResetD2DTarget();
+    }
+
+    private void DrawGeometry(ID3D11Buffer buffer, int vertexCount, PrimitiveTopology topology, bool depthEnabled, int startVertex = 0)
+    {
+        if (_context == null)
+            return;
+
+        _context.OMSetDepthStencilState(depthEnabled ? _depthEnabledState : _depthDisabledState);
+        SetVertexBuffer(buffer, (uint)VertexStride, 0);
+        _context.IASetPrimitiveTopology(topology);
+        _context.Draw((uint)vertexCount, (uint)startVertex);
+    }
+
+    private void SetVertexBuffer(ID3D11Buffer buffer, uint stride, uint offset)
+    {
+        if (_context == null)
+            return;
+
+        var buffers = new[] { buffer };
+        var strides = new[] { stride };
+        var offsets = new[] { offset };
+        _context.IASetVertexBuffers(0, buffers, strides, offsets);
+    }
+
+    private ID3D11Buffer CreateVertexBuffer(float[] vertices, bool dynamic)
+    {
+        if (_device == null)
+            throw new InvalidOperationException("D3D11 device not initialized.");
+
+        var desc = new BufferDescription((uint)(vertices.Length * sizeof(float)), BindFlags.VertexBuffer,
+            dynamic ? ResourceUsage.Dynamic : ResourceUsage.Immutable,
+            dynamic ? CpuAccessFlags.Write : CpuAccessFlags.None);
+
+        if (!dynamic)
+        {
+            var handle = GCHandle.Alloc(vertices, GCHandleType.Pinned);
+            try
+            {
+                var subresource = new SubresourceData(handle.AddrOfPinnedObject(), 0, 0);
+                return _device.CreateBuffer(desc, subresource);
+            }
+            finally
+            {
+                handle.Free();
+            }
+        }
+
+        var buffer = _device.CreateBuffer(desc);
+        UpdateDynamicVertexBuffer(buffer, vertices);
+        return buffer;
+    }
+
+    private void UpdateDynamicVertexBuffer(ID3D11Buffer buffer, float[] vertices)
+    {
+        if (_context == null)
+            return;
+
+        var map = _context.Map(buffer, 0, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
+        Marshal.Copy(vertices, 0, map.DataPointer, vertices.Length);
+        _context.Unmap(buffer, 0);
+    }
+
+
+    private void DisposeD3D()
+    {
+        ReleaseSwapChain();
+
+        _meshBuffer?.Dispose();
+        _meshBuffer = null;
+        _gridBuffer?.Dispose();
+        _gridBuffer = null;
+        _groundBuffer?.Dispose();
+        _groundBuffer = null;
+        _debugBuffer?.Dispose();
+        _debugBuffer = null;
+        _pinBuffer?.Dispose();
+        _pinBuffer = null;
+
+        _vertexShader?.Dispose();
+        _vertexShader = null;
+        _pixelShader?.Dispose();
+        _pixelShader = null;
+        _inputLayout?.Dispose();
+        _inputLayout = null;
+        _constantBuffer?.Dispose();
+        _constantBuffer = null;
+        _rasterizer?.Dispose();
+        _rasterizer = null;
+        _depthEnabledState?.Dispose();
+        _depthEnabledState = null;
+        _depthDisabledState?.Dispose();
+        _depthDisabledState = null;
+
+        _d2dTarget?.Dispose();
+        _d2dTarget = null;
+        _d2dTextBrush?.Dispose();
+        _d2dTextBrush = null;
+        _labelFormat?.Dispose();
+        _labelFormat = null;
+        _dwriteFactory?.Dispose();
+        _dwriteFactory = null;
+        _d2dContext?.Dispose();
+        _d2dContext = null;
+        _d2dDevice?.Dispose();
+        _d2dDevice = null;
+        _d2dFactory?.Dispose();
+        _d2dFactory = null;
+
+        _context?.Dispose();
+        _context = null;
+        _device1?.Dispose();
+        _device1 = null;
+        _device?.Dispose();
+        _device = null;
+        _factory?.Dispose();
+        _factory = null;
+        _d3dReady = false;
+    }
+
+    private static int AlignConstantBufferSize(int size)
+    {
+        const int alignment = 16;
+        return (size + alignment - 1) / alignment * alignment;
+    }
+
+    #region Win32 host
+    private static ushort _wndClass;
+    private static readonly object _classLock = new();
+    private static WndProcDelegate? _wndProc;
+    private static IntPtr _wndProcPtr = IntPtr.Zero;
+
+    private static void EnsureClass()
+    {
+        if (_classRegistered)
+            return;
+
+        lock (_classLock)
+        {
+            if (_classRegistered)
+                return;
+
+            if (_wndProc == null)
+            {
+                _wndProc = HostWndProc;
+                _wndProcPtr = Marshal.GetFunctionPointerForDelegate(_wndProc);
+            }
+
+            SetLastError(0);
+            LogMessage($"RegisterClassEx: name={WndClassName}");
+            var wc = new WNDCLASSEX
+            {
+                cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
+                lpfnWndProc = _wndProcPtr,
+                hInstance = GetModuleHandle(null),
+                lpszClassName = WndClassName
+            };
+            _wndClass = RegisterClassEx(ref wc);
+            if (_wndClass == 0)
+            {
+                int error = Marshal.GetLastWin32Error();
+                if (error == 1410)
+                {
+                    _classRegistered = true;
+                    LogMessage("RegisterClassEx: class already exists, continuing.");
+                }
+                else
+                {
+                    LogMessage($"RegisterClassEx failed: error={error}");
+                }
+            }
+            else
+            {
+                _classRegistered = true;
+            }
+        }
+    }
+
+    private static IntPtr CreateChildWindow(IntPtr parent)
+    {
+        EnsureClass();
+        if (!_classRegistered)
+        {
+            LogMessage("CreateChildWindow aborted: window class not registered.");
+            return IntPtr.Zero;
+        }
+        return CreateWindowEx(
+            0,
+            WndClassName,
+            string.Empty,
+            0x40000000 | 0x10000000 | 0x02000000,
+            0, 0, 32, 32,
+            parent,
+            IntPtr.Zero,
+            IntPtr.Zero,
+            IntPtr.Zero);
+    }
+
+    private static void RegisterHostWindow(IntPtr hwnd, D3D11Viewport host)
+    {
+        lock (_classLock)
+        {
+            _hostMap[hwnd] = new WeakReference<D3D11Viewport>(host);
+        }
+    }
+
+    private static void UnregisterHostWindow(IntPtr hwnd)
+    {
+        lock (_classLock)
+        {
+            _hostMap.Remove(hwnd);
+        }
+    }
+
+    private void UpdateChildWindowSize()
+    {
+        if (_hwnd == IntPtr.Zero)
+            return;
+
+        var b = Bounds;
+        if (b.Width <= 0 || b.Height <= 0)
+            return;
+
+        double scale = (VisualRoot as Avalonia.Rendering.IRenderRoot)?.RenderScaling ?? 1.0;
+        int x = (int)Math.Round(b.X * scale);
+        int y = (int)Math.Round(b.Y * scale);
+        int w = (int)Math.Round(b.Width * scale);
+        int h = (int)Math.Round(b.Height * scale);
+        _targetWidth = Math.Max(1, w);
+        _targetHeight = Math.Max(1, h);
+        SetWindowPos(_hwnd, IntPtr.Zero, x, y, w, h, 0x0020 | 0x0002);
+        RequestNextFrame();
+    }
+
+    private void HandleNativeMouse(uint msg, int x, int y, int xButton)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => HandleNativeMouse(msg, x, y, xButton));
             return;
         }
 
-        GL.BindBuffer(BufferTarget.ArrayBuffer, vbo);
-        GL.EnableVertexAttribArray(0);
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
-        GL.EnableVertexAttribArray(1);
-        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
+        var local = ClientToLocalPoint(x, y);
+        var shiftDown = IsShiftKeyDown();
+        var updateKind = msg switch
+        {
+            0x0201 => PointerUpdateKind.LeftButtonPressed,
+            0x0202 => PointerUpdateKind.LeftButtonReleased,
+            0x0204 => PointerUpdateKind.RightButtonPressed,
+            0x0205 => PointerUpdateKind.RightButtonReleased,
+            0x0207 => PointerUpdateKind.MiddleButtonPressed,
+            0x0208 => PointerUpdateKind.MiddleButtonReleased,
+            0x020B => xButton == 1 ? PointerUpdateKind.XButton1Pressed : PointerUpdateKind.XButton2Pressed,
+            0x020C => xButton == 1 ? PointerUpdateKind.XButton1Released : PointerUpdateKind.XButton2Released,
+            _ => PointerUpdateKind.Other
+        };
+
+        switch (msg)
+        {
+            case 0x0201: // WM_LBUTTONDOWN
+            case 0x0204: // WM_RBUTTONDOWN
+            case 0x0207: // WM_MBUTTONDOWN
+            case 0x020B: // WM_XBUTTONDOWN
+                HandleNativePointerPressed(local, updateKind, shiftDown);
+                break;
+            case 0x0202: // WM_LBUTTONUP
+            case 0x0205: // WM_RBUTTONUP
+            case 0x0208: // WM_MBUTTONUP
+            case 0x020C: // WM_XBUTTONUP
+                HandleNativePointerReleased(local, updateKind);
+                break;
+            case 0x0200: // WM_MOUSEMOVE
+                HandleNativePointerMoved(local);
+                break;
+        }
     }
 
-    private void UnbindGeometry()
+    private void HandleNativePointerPressed(Point position, PointerUpdateKind updateKind, bool shiftDown)
     {
-        if (_supportsVao)
+        Focus();
+        var middlePressed = updateKind == PointerUpdateKind.MiddleButtonPressed;
+        var rightPressed = updateKind == PointerUpdateKind.RightButtonPressed;
+        var leftPressed = updateKind == PointerUpdateKind.LeftButtonPressed;
+        _mouseButton4Down = updateKind == PointerUpdateKind.XButton1Pressed;
+        _mouseButton5Down = updateKind == PointerUpdateKind.XButton2Pressed;
+
+        UpdateInputStatus($"Input: down M:{middlePressed} Shift:{shiftDown}");
+
+        if (leftPressed && TryHandlePinClick(position))
+            return;
+
+        if (rightPressed)
         {
-            GL.BindVertexArray(0);
+            BeginFreecam(position);
             return;
         }
 
-        GL.DisableVertexAttribArray(0);
-        GL.DisableVertexAttribArray(1);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+        if (!middlePressed)
+            return;
+
+        if (_freecamActive)
+            DisableFreecam();
+
+        _dragging = true;
+        _panning = shiftDown;
+        _lastPointer = position;
     }
+
+    private void HandleNativePointerReleased(Point position, PointerUpdateKind updateKind)
+    {
+        _mouseButton4Down = updateKind == PointerUpdateKind.XButton1Pressed;
+        _mouseButton5Down = updateKind == PointerUpdateKind.XButton2Pressed;
+
+        var rightReleased = updateKind == PointerUpdateKind.RightButtonReleased;
+        if (_freecamActive && rightReleased)
+        {
+            EndFreecamInput();
+            return;
+        }
+
+        if (!_dragging)
+            return;
+
+        var released = updateKind == PointerUpdateKind.MiddleButtonReleased;
+        if (released)
+        {
+            _dragging = false;
+            _panning = false;
+            UpdateInputStatus("Input: up");
+        }
+    }
+
+    private void HandleNativePointerMoved(Point position)
+    {
+        if (_freecamActive && _freecamInputEnabled)
+        {
+            if (_freecamIgnoreNextDelta)
+            {
+                _freecamIgnoreNextDelta = false;
+                CenterFreecamCursor();
+                UpdateInputStatus("Input: freecam");
+                RequestNextFrame();
+                return;
+            }
+
+            var scale = MathF.Max(0.01f, ViewportMouseScale);
+            var dx = (float)(position.X - _freecamCenterLocal.X) * scale;
+            var dy = (float)(position.Y - _freecamCenterLocal.Y) * scale;
+            if (dx != 0 || dy != 0)
+                _freecamMouseDelta += new Vector2(dx, dy);
+            CenterFreecamCursor();
+            UpdateInputStatus("Input: freecam");
+            RequestNextFrame();
+            return;
+        }
+
+        if (!_dragging)
+        {
+            UpdateInputStatus("Input: move");
+            return;
+        }
+
+        var delta = position - _lastPointer;
+        _lastPointer = position;
+
+        if (_panning)
+            Pan((float)delta.X, (float)delta.Y);
+        else
+            Orbit((float)delta.X, (float)delta.Y);
+
+        UpdateInputStatus("Input: drag");
+        RequestNextFrame();
+    }
+
+    private Point ClientToLocalPoint(int x, int y)
+    {
+        double scale = (VisualRoot as Avalonia.Rendering.IRenderRoot)?.RenderScaling ?? 1.0;
+        return new Point(x / scale, y / scale);
+    }
+
+    private static bool IsShiftKeyDown()
+    {
+        const int VK_SHIFT = 0x10;
+        return (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    }
+
+    private void InitializeAfterNativeCreated()
+    {
+        if (_nativeInitDone || _hwnd == IntPtr.Zero)
+            return;
+
+        _nativeInitDone = true;
+        LogMessage($"InitializeAfterNativeCreated hwnd=0x{_hwnd.ToInt64():X}");
+        EnsureDevice();
+        UpdateGrid(10f, 20);
+        CreateGroundPlane(10f);
+        UpdateChildWindowSize();
+        StartRenderLoop();
+        RequestNextFrame();
+    }
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern ushort RegisterClassEx([In] ref WNDCLASSEX lpwcx);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateWindowEx(
+        int dwExStyle,
+        string lpClassName,
+        string lpWindowName,
+        int dwStyle,
+        int x,
+        int y,
+        int nWidth,
+        int nHeight,
+        IntPtr hWndParent,
+        IntPtr hMenu,
+        IntPtr hInstance,
+        IntPtr lpParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool DestroyWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    [DllImport("user32.dll")]
+    private static extern short GetKeyState(int nVirtKey);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll")]
+    private static extern void SetLastError(int dwErrCode);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
+
+    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    private static IntPtr HostWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        const uint WM_NCHITTEST = 0x0084;
+        const int HTCLIENT = 1;
+        const uint WM_MOUSEMOVE = 0x0200;
+        const uint WM_LBUTTONDOWN = 0x0201;
+        const uint WM_LBUTTONUP = 0x0202;
+        const uint WM_RBUTTONDOWN = 0x0204;
+        const uint WM_RBUTTONUP = 0x0205;
+        const uint WM_MBUTTONDOWN = 0x0207;
+        const uint WM_MBUTTONUP = 0x0208;
+        const uint WM_XBUTTONDOWN = 0x020B;
+        const uint WM_XBUTTONUP = 0x020C;
+
+        if (msg == WM_NCHITTEST)
+            return new IntPtr(HTCLIENT);
+
+        D3D11Viewport? host = null;
+        lock (_classLock)
+        {
+            if (_hostMap.TryGetValue(hWnd, out var weak) && weak.TryGetTarget(out var target))
+                host = target;
+        }
+
+        if (host == null)
+            return DefWindowProc(hWnd, msg, wParam, lParam);
+
+        if (msg == WM_MOUSEMOVE || msg == WM_LBUTTONDOWN || msg == WM_LBUTTONUP ||
+            msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP || msg == WM_MBUTTONDOWN || msg == WM_MBUTTONUP ||
+            msg == WM_XBUTTONDOWN || msg == WM_XBUTTONUP)
+        {
+            int x = (short)(lParam.ToInt64() & 0xFFFF);
+            int y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+            int xButton = (int)((wParam.ToInt64() >> 16) & 0xFFFF);
+            host.HandleNativeMouse(msg, x, y, xButton);
+            return IntPtr.Zero;
+        }
+
+        return DefWindowProc(hWnd, msg, wParam, lParam);
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WNDCLASSEX
+    {
+        public uint cbSize;
+        public uint style;
+        public IntPtr lpfnWndProc;
+        public int cbClsExtra;
+        public int cbWndExtra;
+        public IntPtr hInstance;
+        public IntPtr hIcon;
+        public IntPtr hCursor;
+        public IntPtr hbrBackground;
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string lpszMenuName;
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string lpszClassName;
+        public IntPtr hIconSm;
+    }
+    #endregion
 
     private static void AddVertex(float[] buffer, ref int index, float x, float y, float z, float nx, float ny, float nz)
     {
@@ -2103,7 +2792,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private void CreateGroundPlane(float size)
     {
-        if (!_glReady)
+        if (!EnsureDevice())
             return;
 
         var half = size * 0.5f;
@@ -2118,84 +2807,39 @@ public sealed class OpenTkViewport : OpenGlControlBase
             -half, half, 0f, 0f, 0f, 1f
         };
 
-        if (_groundVao != 0)
-            GL.DeleteVertexArray(_groundVao);
-        if (_groundVbo != 0)
-            GL.DeleteBuffer(_groundVbo);
-
-        _groundVao = _supportsVao ? GL.GenVertexArray() : 0;
-        _groundVbo = GL.GenBuffer();
-
-        if (_supportsVao)
-            GL.BindVertexArray(_groundVao);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, _groundVbo);
-        GL.BufferData(BufferTarget.ArrayBuffer, vertices.Length * sizeof(float), vertices, BufferUsageHint.StaticDraw);
-
-        GL.EnableVertexAttribArray(0);
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
-        GL.EnableVertexAttribArray(1);
-        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
-
-        if (_supportsVao)
-            GL.BindVertexArray(0);
-
+        _groundBuffer?.Dispose();
+        _groundBuffer = CreateVertexBuffer(vertices, dynamic: false);
         _groundVertexCount = vertices.Length / 6;
         RequestNextFrame();
         UpdateStatusText();
     }
 
-    private void CreateDebugTriangle()
-    {
-        if (!_glReady)
-            return;
-
-        var vertices = new[]
-        {
-            -0.8f, -0.8f, 0f, 0f, 0f, 1f,
-            0.8f, -0.8f, 0f, 0f, 0f, 1f,
-            0.0f, 0.8f, 0f, 0f, 0f, 1f
-        };
-
-        if (_debugVao != 0)
-            GL.DeleteVertexArray(_debugVao);
-        if (_debugVbo != 0)
-            GL.DeleteBuffer(_debugVbo);
-
-        _debugVao = _supportsVao ? GL.GenVertexArray() : 0;
-        _debugVbo = GL.GenBuffer();
-
-        if (_supportsVao)
-            GL.BindVertexArray(_debugVao);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, _debugVbo);
-        GL.BufferData(BufferTarget.ArrayBuffer, vertices.Length * sizeof(float), vertices, BufferUsageHint.StaticDraw);
-
-        GL.EnableVertexAttribArray(0);
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
-        GL.EnableVertexAttribArray(1);
-        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
-
-        if (_supportsVao)
-            GL.BindVertexArray(0);
-
-        _debugVertexCount = vertices.Length / 6;
-        RequestNextFrame();
-    }
 
     private void RebuildPins()
     {
         _pinsDirty = false;
-        if (_pins.Count == 0 || !_glReady)
+        if (_pins.Count == 0 || !EnsureDevice())
         {
             _pinDraws.Clear();
             _pinLabels = new List<PinLabel>();
+            lock (_labelLock)
+            {
+                _labelHitCache = new List<PinLabel>();
+            }
             _pinVertexCount = 0;
-            if (_pinVao != 0)
-                GL.DeleteVertexArray(_pinVao);
-            if (_pinVbo != 0)
-                GL.DeleteBuffer(_pinVbo);
-            _pinVao = 0;
-            _pinVbo = 0;
+            _pinBuffer?.Dispose();
+            _pinBuffer = null;
             return;
+        }
+
+        float pinScale;
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            pinScale = PinScale;
+        }
+        else
+        {
+            pinScale = (float)Dispatcher.UIThread.InvokeAsync(() => PinScale).GetAwaiter().GetResult();
         }
 
         var data = new List<float>(_pins.Count * 256);
@@ -2204,40 +2848,21 @@ public sealed class OpenTkViewport : OpenGlControlBase
         foreach (var pin in _pins)
         {
             var start = data.Count / 6;
-            var added = AppendPinGeometry(pin, data, labels);
+            var added = AppendPinGeometry(pin, data, labels, pinScale);
             _pinDraws.Add(new PinDrawCall { Start = start, Count = added, Color = pin.Color });
         }
 
-        if (_pinVao != 0)
-            GL.DeleteVertexArray(_pinVao);
-        if (_pinVbo != 0)
-            GL.DeleteBuffer(_pinVbo);
-
-        _pinVao = _supportsVao ? GL.GenVertexArray() : 0;
-        _pinVbo = GL.GenBuffer();
-        if (_supportsVao)
-            GL.BindVertexArray(_pinVao);
-
-        GL.BindBuffer(BufferTarget.ArrayBuffer, _pinVbo);
-        GL.BufferData(BufferTarget.ArrayBuffer, data.Count * sizeof(float), data.ToArray(), BufferUsageHint.DynamicDraw);
-
-        GL.EnableVertexAttribArray(0);
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
-        GL.EnableVertexAttribArray(1);
-        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
-
-        if (_supportsVao)
-            GL.BindVertexArray(0);
-
+        _pinBuffer?.Dispose();
+        _pinBuffer = CreateVertexBuffer(data.ToArray(), dynamic: true);
         _pinVertexCount = data.Count / 6;
         _pinLabels = labels;
     }
 
-    private int AppendPinGeometry(PinRenderData pin, List<float> buffer, List<PinLabel> labels)
+    private int AppendPinGeometry(PinRenderData pin, List<float> buffer, List<PinLabel> labels, float pinScale)
     {
         var added = 0;
         var forward = pin.Forward;
-        if (forward.LengthSquared < 0.0001f)
+        if (forward.LengthSquared() < 0.0001f)
             forward = new Vector3(0, 0, 1);
         forward = Vector3.Normalize(forward);
 
@@ -2253,7 +2878,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         }
 
         var pos = pin.Position;
-        var scale = PinScale;
+        var scale = pinScale;
         var sphereRadius = 0.12f * scale;
         var coneLength = sphereRadius * 1.8f;
         var coneBaseRadius = sphereRadius;
@@ -2306,7 +2931,7 @@ public sealed class OpenTkViewport : OpenGlControlBase
         {
             Text = pin.Label,
             World = pin.Position + labelOffset,
-            LabelBrush = new SolidColorBrush(ToAvaloniaColor(pin.Color))
+            LabelColor = ToAvaloniaColor(pin.Color)
         });
         return added;
     }
@@ -2317,8 +2942,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var verts = new List<Vector3>();
         for (int i = 0; i < segments; i++)
         {
-            float a0 = i * MathHelper.TwoPi / segments;
-            float a1 = (i + 1) * MathHelper.TwoPi / segments;
+            float a0 = i * TwoPi / segments;
+            float a1 = (i + 1) * TwoPi / segments;
             verts.Add(new Vector3(0, 0, 1));
             verts.Add(new Vector3(MathF.Cos(a0), MathF.Sin(a0), 0));
             verts.Add(new Vector3(MathF.Cos(a1), MathF.Sin(a1), 0));
@@ -2334,13 +2959,13 @@ public sealed class OpenTkViewport : OpenGlControlBase
         var norms = new List<Vector3>();
         for (int i = 0; i < segments; i++)
         {
-            float a0 = i * MathHelper.TwoPi / segments;
-            float a1 = (i + 1) * MathHelper.TwoPi / segments;
+            float a0 = i * TwoPi / segments;
+            float a1 = (i + 1) * TwoPi / segments;
             var apex = new Vector3(0, 0, 1);
             var p0 = new Vector3(MathF.Cos(a0), MathF.Sin(a0), 0);
             var p1 = new Vector3(MathF.Cos(a1), MathF.Sin(a1), 0);
             var normal = Vector3.Cross(p0 - apex, p1 - apex);
-            if (normal.LengthSquared < 0.0001f)
+            if (normal.LengthSquared() < 0.0001f)
                 normal = Vector3.UnitZ;
             else
                 normal = Vector3.Normalize(normal);
@@ -2369,8 +2994,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
             {
                 float u0 = lon / (float)lonSegments;
                 float u1 = (lon + 1) / (float)lonSegments;
-                float p0 = u0 * MathHelper.TwoPi;
-                float p1 = u1 * MathHelper.TwoPi;
+                float p0 = u0 * TwoPi;
+                float p1 = u1 * TwoPi;
 
                 var a = Spherical(t0, p0);
                 var b = Spherical(t1, p0);
@@ -2504,20 +3129,27 @@ public sealed class OpenTkViewport : OpenGlControlBase
         public Point Screen { get; set; }
         public double ScreenX { get; set; }
         public double ScreenY { get; set; }
+        public Avalonia.Media.Color LabelColor { get; set; }
         public IBrush? LabelBrush { get; set; }
     }
 
-    private readonly record struct ShaderVariant(string Name, string VertexSource, string FragmentSource, bool BindAttribLocation);
-
-    private Matrix3 GetMapRotation()
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ShaderConstants
     {
-        var yaw = MathHelper.DegreesToRadians(MapYaw);
-        var pitch = MathHelper.DegreesToRadians(MapPitch);
-        var roll = MathHelper.DegreesToRadians(MapRoll);
+        public Matrix4x4 Mvp;
+        public Vector4 Color;
+        public Vector4 LightDirAmbient;
+    }
 
-        var yawMat = Matrix3.CreateRotationZ(yaw);
-        var pitchMat = Matrix3.CreateRotationY(pitch);
-        var rollMat = Matrix3.CreateRotationX(roll);
+    private Matrix4x4 GetMapRotation()
+    {
+        var yaw = DegToRad(MapYaw);
+        var pitch = DegToRad(MapPitch);
+        var roll = DegToRad(MapRoll);
+
+        var yawMat = Matrix4x4.CreateRotationZ(yaw);
+        var pitchMat = Matrix4x4.CreateRotationY(pitch);
+        var rollMat = Matrix4x4.CreateRotationX(roll);
         return yawMat * pitchMat * rollMat;
     }
 
@@ -2536,8 +3168,8 @@ public sealed class OpenTkViewport : OpenGlControlBase
             var normal = new Vector3(mesh.Vertices[i + 3], mesh.Vertices[i + 4], mesh.Vertices[i + 5]);
 
             pos *= scale;
-            pos = Transform(pos, rotation) + offset;
-            normal = Transform(normal, rotation);
+            pos = Vector3.Transform(pos, rotation) + offset;
+            normal = Vector3.TransformNormal(normal, rotation);
 
             vertices[i] = pos.X;
             vertices[i + 1] = pos.Y;
@@ -2546,22 +3178,14 @@ public sealed class OpenTkViewport : OpenGlControlBase
             vertices[i + 4] = normal.Y;
             vertices[i + 5] = normal.Z;
 
-            min = Vector3.ComponentMin(min, pos);
-            max = Vector3.ComponentMax(max, pos);
+            min = Vector3.Min(min, pos);
+            max = Vector3.Max(max, pos);
         }
 
         return new ObjMesh(vertices, mesh.VertexCount, min, max);
     }
 
-    private static Vector3 Transform(Vector3 value, Matrix3 matrix)
-    {
-        return new Vector3(
-            value.X * matrix.M11 + value.Y * matrix.M21 + value.Z * matrix.M31,
-            value.X * matrix.M12 + value.Y * matrix.M22 + value.Z * matrix.M32,
-            value.X * matrix.M13 + value.Y * matrix.M23 + value.Z * matrix.M33);
-    }
-
-    private static Color ToAvaloniaColor(Vector3 color)
+    private static Avalonia.Media.Color ToAvaloniaColor(Vector3 color)
     {
         static byte ToByte(float value)
         {
@@ -2569,7 +3193,12 @@ public sealed class OpenTkViewport : OpenGlControlBase
             return (byte)MathF.Round(clamped * 255f);
         }
 
-        return Color.FromRgb(ToByte(color.X), ToByte(color.Y), ToByte(color.Z));
+        return Avalonia.Media.Color.FromRgb(ToByte(color.X), ToByte(color.Y), ToByte(color.Z));
+    }
+
+    private static Color4 ToColor4(Avalonia.Media.Color color)
+    {
+        return new Color4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
     }
 
     private void UpdateFreecamForFrame()
@@ -2587,6 +3216,12 @@ public sealed class OpenTkViewport : OpenGlControlBase
 
     private void RequestNextFrame()
     {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(RequestNextFrame);
+            return;
+        }
+
         float cap = ViewportFpsCap;
         if (cap <= 0)
         {
@@ -2632,51 +3267,239 @@ public sealed class OpenTkViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    private void UpdateLabelOverlay(Matrix4 viewProjection, int width, int height)
+    private void RequestNextFrameRendering()
     {
-        if (_pinLabels.Count == 0)
+        _renderSignal.Set();
+    }
+
+    private void StartRenderLoop()
+    {
+        if (_renderLoop != null)
+            return;
+
+        LogMessage("StartRenderLoop");
+        _renderCts = new CancellationTokenSource();
+        _renderLoop = Task.Run(() => RenderLoop(_renderCts.Token));
+        _renderSignal.Set();
+    }
+
+    private void StopRenderLoop()
+    {
+        _renderCts?.Cancel();
+        try
         {
-            if (_labels.Count > 0)
-                Dispatcher.UIThread.Post(_labels.Clear);
+            _renderLoop?.Wait(500);
+        }
+        catch
+        {
+            // ignore shutdown issues
+        }
+        _renderCts?.Dispose();
+        _renderCts = null;
+        _renderLoop = null;
+        _renderSignal.Reset();
+    }
+
+    private void RenderLoop(CancellationToken token)
+    {
+        LogMessage("RenderLoop started");
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                bool continuous = _freecamActive && _freecamInputEnabled;
+                if (!continuous)
+                {
+                    _renderSignal.Wait(token);
+                    _renderSignal.Reset();
+                    RenderFrame();
+                    continue;
+                }
+
+                float cap = _viewportFpsCapCached;
+                if (cap > 0)
+                {
+                    double targetMs = 1000.0 / cap;
+                    long nowTicks = _frameLimiter.ElapsedTicks;
+                    double elapsedMs = (nowTicks - _lastFrameTicks) * 1000.0 / Stopwatch.Frequency;
+                    if (elapsedMs < targetMs)
+                    {
+                        int wait = (int)Math.Max(1.0, targetMs - elapsedMs);
+                        _renderSignal.Wait(wait, token);
+                    }
+                    _renderSignal.Reset();
+                    _lastFrameTicks = _frameLimiter.ElapsedTicks;
+                    RenderFrame();
+                }
+                else
+                {
+                    _renderSignal.Wait(1, token);
+                    _renderSignal.Reset();
+                    RenderFrame();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"RenderLoop error: {ex}");
+                Thread.Sleep(50);
+            }
+        }
+        LogMessage("RenderLoop stopped");
+    }
+
+    private static void LogMessage(string message)
+    {
+        var line = $"[{DateTime.Now:HH:mm:ss.fff}] D3D11Viewport: {message}";
+        try
+        {
+            Console.WriteLine(line);
+            if (!_logPathAnnounced)
+            {
+                _logPathAnnounced = true;
+                Console.WriteLine($"[D3D11Viewport] Log file: {LogPath}");
+            }
+            File.AppendAllText(LogPath, line + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            if (!_logWriteFailedLogged)
+            {
+                _logWriteFailedLogged = true;
+                Console.WriteLine($"[D3D11Viewport] Log file write failed: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+    }
+
+    private static void ResetLogFile()
+    {
+        try
+        {
+            File.WriteAllText(LogPath, string.Empty);
+        }
+        catch
+        {
+            // ignore logging failures
+        }
+    }
+
+    private static string GetLogPath()
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "d3d11_viewport.log");
+            using var _ = File.AppendText(path);
+            return path;
+        }
+        catch
+        {
+            return Path.Combine(Path.GetTempPath(), "d3d11_viewport.log");
+        }
+    }
+
+    private void DrawLabelOverlay(Matrix4x4 viewProjection, int width, int height, ID3D11Texture2D backBuffer)
+    {
+        if (_pinLabels.Count == 0 || _d2dContext == null || _d2dTextBrush == null || _labelFormat == null)
+        {
+            lock (_labelLock)
+            {
+                _labelHitCache = new List<PinLabel>();
+            }
             return;
         }
 
+        if (!EnsureD2DTarget(backBuffer, width, height))
+            return;
+
+        const float fontSize = 16f;
+        const float fontWidthFactor = 0.6f;
+        const float padding = 6f;
+
         var projected = new List<PinLabel>(_pinLabels.Count);
+        _d2dContext.Target = _d2dTarget;
+        _d2dContext.BeginDraw();
+        _d2dContext.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Grayscale;
+        _d2dContext.Transform = Matrix3x2.Identity;
+
         foreach (var label in _pinLabels)
         {
-            var world = label.World;
-            var clip = Vector4.TransformRow(new Vector4(world, 1f), viewProjection);
-
-            if (Math.Abs(clip.W) < 1e-5f)
-                continue;
-            var ndc = clip / clip.W;
-            if (ndc.Z < -1f || ndc.Z > 1f)
+            if (string.IsNullOrEmpty(label.Text))
                 continue;
 
-            var x = (ndc.X * 0.5f + 0.5f) * width;
-            var y = (-ndc.Y * 0.5f + 0.5f) * height;
-            projected.Add(new PinLabel
-            {
-                Text = label.Text,
-                World = label.World,
-                Screen = new Point(x, y),
-                ScreenX = x,
-                ScreenY = y,
-                LabelBrush = label.LabelBrush
-            });
+            if (!TryProjectToScreen(label.World, viewProjection, width, height, out var screen))
+                continue;
+
+            var textWidth = Math.Max(1f, label.Text.Length * fontSize * fontWidthFactor) + padding;
+            var textHeight = fontSize * 1.2f + padding;
+            var rect = new Vortice.RawRectF(
+                (float)screen.X - textWidth * 0.5f,
+                (float)screen.Y - textHeight * 0.5f,
+                (float)screen.X + textWidth * 0.5f,
+                (float)screen.Y + textHeight * 0.5f);
+
+            _d2dTextBrush.Color = ToColor4(label.LabelColor);
+            _d2dContext.DrawText(label.Text, _labelFormat, rect, _d2dTextBrush);
+
+            label.Screen = screen;
+            label.ScreenX = screen.X;
+            label.ScreenY = screen.Y;
+            projected.Add(label);
         }
 
-        Dispatcher.UIThread.Post(() =>
+        try
         {
-            _labels.Clear();
-            foreach (var label in projected)
-                _labels.Add(label);
-        });
+            _d2dContext.EndDraw();
+        }
+        catch (SharpGenException ex)
+        {
+            LogMessage($"D2D EndDraw failed: 0x{ex.ResultCode.Code:X8}");
+            _d2dTarget?.Dispose();
+            _d2dTarget = null;
+        }
+
+        lock (_labelLock)
+        {
+            _labelHitCache = projected;
+        }
     }
 
-    private static bool TryProjectToScreen(Vector3 world, Matrix4 viewProjection, int width, int height, out Point screen)
+    private bool EnsureD2DTarget(ID3D11Texture2D backBuffer, int width, int height)
     {
-        var clip = Vector4.TransformRow(new Vector4(world, 1f), viewProjection);
+        if (_d2dContext == null)
+            return false;
+
+        if (_d2dTarget != null && _d2dTargetWidth == width && _d2dTargetHeight == height)
+            return true;
+
+        _d2dTarget?.Dispose();
+        _d2dTarget = null;
+
+        using var surface = backBuffer.QueryInterface<IDXGISurface>();
+        double scale = (VisualRoot as Avalonia.Rendering.IRenderRoot)?.RenderScaling ?? 1.0;
+        float dpi = (float)(96.0 * scale);
+        var props = new BitmapProperties1(
+            new Vortice.DCommon.PixelFormat(Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied),
+            dpi,
+            dpi,
+            BitmapOptions.Target | BitmapOptions.CannotDraw);
+        _d2dTarget = _d2dContext.CreateBitmapFromDxgiSurface(surface, props);
+        _d2dTargetWidth = width;
+        _d2dTargetHeight = height;
+        return true;
+    }
+
+    private void ResetD2DTarget()
+    {
+        if (_d2dContext != null)
+            _d2dContext.Target = null;
+        _d2dTarget?.Dispose();
+        _d2dTarget = null;
+        _d2dTargetWidth = 0;
+        _d2dTargetHeight = 0;
+    }
+
+    private static bool TryProjectToScreen(Vector3 world, Matrix4x4 viewProjection, int width, int height, out Point screen)
+    {
+        var clip = Vector4.Transform(new Vector4(world, 1f), viewProjection);
         if (Math.Abs(clip.W) < 1e-5f)
         {
             screen = default;
@@ -2696,157 +3519,61 @@ public sealed class OpenTkViewport : OpenGlControlBase
         return true;
     }
 
-    private const string Vertex330 = """
-        #version 330 core
-        layout(location = 0) in vec3 aPos;
-        layout(location = 1) in vec3 aNormal;
-        uniform mat4 uMvp;
-        out vec3 vNormal;
-        void main()
-        {
-            vNormal = aNormal;
-            gl_Position = uMvp * vec4(aPos, 1.0);
-        }
-        """;
+    private const string VertexShaderHlsl = @"
+cbuffer Constants : register(b0)
+{
+    row_major float4x4 uMvp;
+    float4 uColor;
+    float4 uLightDirAmbient;
+};
 
-    private const string Fragment330 = """
-        #version 330 core
-        in vec3 vNormal;
-        out vec4 FragColor;
-        uniform vec3 uColor;
-        uniform vec3 uLightDir;
-        uniform float uAmbient;
-        void main()
-        {
-            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
-            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
-            FragColor = vec4(lit, 1.0);
-        }
-        """;
+struct VS_IN
+{
+    float3 Pos : POSITION;
+    float3 Normal : NORMAL;
+};
 
-    private const string Vertex150 = """
-        #version 150
-        in vec3 aPos;
-        in vec3 aNormal;
-        uniform mat4 uMvp;
-        out vec3 vNormal;
-        void main()
-        {
-            vNormal = aNormal;
-            gl_Position = uMvp * vec4(aPos, 1.0);
-        }
-        """;
+struct VS_OUT
+{
+    float4 Pos : SV_POSITION;
+    float3 Normal : NORMAL;
+};
 
-    private const string Fragment150 = """
-        #version 150
-        in vec3 vNormal;
-        out vec4 FragColor;
-        uniform vec3 uColor;
-        uniform vec3 uLightDir;
-        uniform float uAmbient;
-        void main()
-        {
-            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
-            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
-            FragColor = vec4(lit, 1.0);
-        }
-        """;
-
-    private const string Vertex120 = """
-        #version 120
-        attribute vec3 aPos;
-        attribute vec3 aNormal;
-        uniform mat4 uMvp;
-        varying vec3 vNormal;
-        void main()
-        {
-            vNormal = aNormal;
-            gl_Position = uMvp * vec4(aPos, 1.0);
-        }
-        """;
-
-    private const string Fragment120 = """
-        #version 120
-        uniform vec3 uColor;
-        uniform vec3 uLightDir;
-        uniform float uAmbient;
-        varying vec3 vNormal;
-        void main()
-        {
-            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
-            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
-            gl_FragColor = vec4(lit, 1.0);
-        }
-        """;
-
-    private const string VertexEs300 = """
-        #version 300 es
-        precision mediump float;
-        layout(location = 0) in vec3 aPos;
-        layout(location = 1) in vec3 aNormal;
-        uniform mat4 uMvp;
-        out vec3 vNormal;
-        void main()
-        {
-            vNormal = aNormal;
-            gl_Position = uMvp * vec4(aPos, 1.0);
-        }
-        """;
-
-    private const string FragmentEs300 = """
-        #version 300 es
-        precision mediump float;
-        out vec4 FragColor;
-        in vec3 vNormal;
-        uniform vec3 uColor;
-        uniform vec3 uLightDir;
-        uniform float uAmbient;
-        void main()
-        {
-            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
-            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
-            FragColor = vec4(lit, 1.0);
-        }
-        """;
-
-    private const string VertexEs100 = """
-        attribute vec3 aPos;
-        attribute vec3 aNormal;
-        uniform mat4 uMvp;
-        varying vec3 vNormal;
-        void main()
-        {
-            vNormal = aNormal;
-            gl_Position = uMvp * vec4(aPos, 1.0);
-        }
-        """;
-
-    private const string FragmentEs100 = """
-        precision mediump float;
-        uniform vec3 uColor;
-        uniform vec3 uLightDir;
-        uniform float uAmbient;
-        varying vec3 vNormal;
-        void main()
-        {
-            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
-            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
-            gl_FragColor = vec4(lit, 1.0);
-        }
-        """;
-
-    private sealed class AvaloniaBindingsContext : OpenTK.IBindingsContext
-    {
-        private readonly GlInterface _gl;
-
-        public AvaloniaBindingsContext(GlInterface gl)
-        {
-            _gl = gl;
-        }
-
-        public IntPtr GetProcAddress(string procName)
-        {
-            return _gl.GetProcAddress(procName);
-        }
-    }
+VS_OUT VSMain(VS_IN input)
+{
+    VS_OUT output;
+    float4 clip = mul(float4(input.Pos, 1.0), uMvp);
+    clip.z = clip.z * 0.5 + clip.w * 0.5;
+    output.Pos = clip;
+    output.Normal = input.Normal;
+    return output;
 }
+";
+
+    private const string PixelShaderHlsl = @"
+cbuffer Constants : register(b0)
+{
+    row_major float4x4 uMvp;
+    float4 uColor;
+    float4 uLightDirAmbient;
+};
+
+struct VS_OUT
+{
+    float4 Pos : SV_POSITION;
+    float3 Normal : NORMAL;
+};
+
+float4 PSMain(VS_OUT input) : SV_Target
+{
+    float3 n = normalize(input.Normal);
+    float ndl = max(dot(n, normalize(uLightDirAmbient.xyz)), 0.0);
+    float3 lit = uColor.xyz * (uLightDirAmbient.w + (1.0 - uLightDirAmbient.w) * ndl);
+    return float4(lit, 1.0);
+}
+";
+}
+
+
+
+

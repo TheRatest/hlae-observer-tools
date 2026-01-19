@@ -7,7 +7,7 @@ using HlaeObsTools.Services.Gsi;
 using HlaeObsTools.Services.Viewport3D;
 using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.Services.Input;
-using OpenTK.Mathematics;
+using System.Numerics;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -56,7 +56,7 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         if (_webSocketClient == null)
             return;
 
-        if (state.RawForward.LengthSquared < 0.0001f)
+        if (state.RawForward.LengthSquared() < 0.0001f)
             return;
 
         var pitch = state.RawPitch;
