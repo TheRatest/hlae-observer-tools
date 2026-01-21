@@ -1,5 +1,5 @@
 using System;
-using System.ComponentModel;
+using System.Collections.Specialized;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -12,7 +12,8 @@ namespace HlaeObsTools.Views.Docks;
 
 public partial class NetConsoleDockView : UserControl
 {
-    private INotifyPropertyChanged? _vmPropertyChanged;
+    private INotifyCollectionChanged? _logLinesChanged;
+    private bool _scrollPending;
 
     public NetConsoleDockView()
     {
@@ -22,16 +23,16 @@ public partial class NetConsoleDockView : UserControl
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
-        if (_vmPropertyChanged != null)
+        if (_logLinesChanged != null)
         {
-            _vmPropertyChanged.PropertyChanged -= OnVmPropertyChanged;
-            _vmPropertyChanged = null;
+            _logLinesChanged.CollectionChanged -= OnLogLinesChanged;
+            _logLinesChanged = null;
         }
 
-        _vmPropertyChanged = DataContext as INotifyPropertyChanged;
-        if (_vmPropertyChanged != null)
+        if (DataContext is NetConsoleDockViewModel vm)
         {
-            _vmPropertyChanged.PropertyChanged += OnVmPropertyChanged;
+            _logLinesChanged = vm.LogLines;
+            _logLinesChanged.CollectionChanged += OnLogLinesChanged;
         }
     }
 
@@ -97,11 +98,11 @@ public partial class NetConsoleDockView : UserControl
         }
     }
 
-    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnLogLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(NetConsoleDockViewModel.LogText))
+        if (e.Action == NotifyCollectionChangedAction.Add || e.Action == NotifyCollectionChangedAction.Reset)
         {
-            ScrollLogToEnd();
+            RequestScrollToEnd();
         }
     }
 
@@ -124,28 +125,49 @@ public partial class NetConsoleDockView : UserControl
         }
     }
 
-    private void ScrollLogToEnd()
+    private async void OnLogKeyDown(object? sender, KeyEventArgs e)
     {
-        if (LogTextBox == null)
+        if (e.Key != Key.C || !e.KeyModifiers.HasFlag(KeyModifiers.Control))
             return;
 
+        if (LogListBox?.SelectedItems is not { Count: > 0 } selected)
+            return;
+
+        var text = string.Join(Environment.NewLine, selected.Cast<string>());
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null)
+            return;
+
+        await clipboard.SetTextAsync(text);
+        e.Handled = true;
+    }
+
+    private void RequestScrollToEnd()
+    {
+        if (_scrollPending)
+            return;
+
+        _scrollPending = true;
         Dispatcher.UIThread.Post(() =>
         {
-            if (LogTextBox == null)
-                return;
-
-            var text = LogTextBox.Text ?? string.Empty;
-            LogTextBox.CaretIndex = text.Length;
-
-            var scrollViewer = LogTextBox.GetVisualDescendants()
-                                         .OfType<ScrollViewer>()
-                                         .FirstOrDefault();
-            if (scrollViewer != null)
-            {
-                var extent = scrollViewer.Extent;
-                scrollViewer.Offset = new Vector(extent.Width, extent.Height);
-            }
+            _scrollPending = false;
+            ScrollLogToEndCore();
         }, DispatcherPriority.Background);
+    }
+
+    private void ScrollLogToEndCore()
+    {
+        if (LogListBox == null)
+            return;
+
+        var scrollViewer = LogListBox.GetVisualDescendants()
+                                     .OfType<ScrollViewer>()
+                                     .FirstOrDefault();
+        if (scrollViewer != null)
+        {
+            var extent = scrollViewer.Extent;
+            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, extent.Height);
+        }
     }
 
     private void MoveCaretToEnd()

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -15,6 +16,7 @@ namespace HlaeObsTools.ViewModels.Docks;
 public class NetConsoleDockViewModel : Tool, IDisposable
 {
     private const int MaxLogLines = 500;
+    private const int MaxLogFlushBatch = 200;
     private const int MaxSuggestions = 50;
 
     private readonly ObservableCollection<string> _logLines = new();
@@ -23,6 +25,8 @@ public class NetConsoleDockViewModel : Tool, IDisposable
     private readonly DelegateCommand _toggleConnectionCommand;
     private readonly DelegateCommand _sendCommand;
     private readonly List<string> _history = new();
+    private readonly ConcurrentQueue<string> _pendingLogLines = new();
+    private readonly DispatcherTimer _logFlushTimer;
 
     private Cs2NetConsoleClient? _client;
     private string _currentHost = "127.0.0.1";
@@ -31,7 +35,6 @@ public class NetConsoleDockViewModel : Tool, IDisposable
     private string _hostPortText = "127.0.0.1:54545";
     private string _inputText = string.Empty;
     private string _statusText = "Not connected";
-    private string _logText = string.Empty;
     private bool _isConnected;
     private bool _isConnecting;
     private bool _disposed;
@@ -49,6 +52,12 @@ public class NetConsoleDockViewModel : Tool, IDisposable
 
         _toggleConnectionCommand = new DelegateCommand(_ => ToggleConnectionAsync(), _ => CanToggleConnection);
         _sendCommand = new DelegateCommand(_ => SendAsync(), _ => IsConnected && !IsConnecting);
+
+        _logFlushTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(50)
+        };
+        _logFlushTimer.Tick += (_, _) => FlushPendingLogs();
     }
 
     public ObservableCollection<string> LogLines => _logLines;
@@ -92,12 +101,6 @@ public class NetConsoleDockViewModel : Tool, IDisposable
     {
         get => _statusText;
         private set => SetProperty(ref _statusText, value);
-    }
-
-    public string LogText
-    {
-        get => _logText;
-        private set => SetProperty(ref _logText, value);
     }
 
     public bool IsHistoryActive => _historyIndex != -1;
@@ -350,21 +353,13 @@ public class NetConsoleDockViewModel : Tool, IDisposable
     private void AppendLogLines(string prefix, IEnumerable<string> lines)
     {
         var timestamp = DateTime.Now;
-        RunOnUi(() =>
+        foreach (var line in lines)
         {
-            foreach (var line in lines)
-            {
-                var content = string.IsNullOrWhiteSpace(line) ? "<empty>" : line;
-                _logLines.Add($"[{timestamp:HH:mm:ss}] [{prefix}] {content}");
-            }
+            var content = string.IsNullOrWhiteSpace(line) ? "<empty>" : line;
+            _pendingLogLines.Enqueue($"[{timestamp:HH:mm:ss}] [{prefix}] {content}");
+        }
 
-            while (_logLines.Count > MaxLogLines)
-            {
-                _logLines.RemoveAt(0);
-            }
-
-            LogText = string.Join(Environment.NewLine, _logLines);
-        });
+        StartLogFlushTimer();
     }
 
     private void UpdateSuggestions(string text)
@@ -481,6 +476,40 @@ public class NetConsoleDockViewModel : Tool, IDisposable
         }
     }
 
+    private void StartLogFlushTimer()
+    {
+        if (_logFlushTimer.IsEnabled)
+            return;
+
+        RunOnUi(() =>
+        {
+            if (!_logFlushTimer.IsEnabled)
+            {
+                _logFlushTimer.Start();
+            }
+        });
+    }
+
+    private void FlushPendingLogs()
+    {
+        var added = 0;
+        while (added < MaxLogFlushBatch && _pendingLogLines.TryDequeue(out var line))
+        {
+            _logLines.Add(line);
+            added++;
+        }
+
+        while (_logLines.Count > MaxLogLines)
+        {
+            _logLines.RemoveAt(0);
+        }
+
+        if (_pendingLogLines.IsEmpty)
+        {
+            _logFlushTimer.Stop();
+        }
+    }
+
     private void CleanupClient()
     {
         _client = null;
@@ -526,6 +555,11 @@ public class NetConsoleDockViewModel : Tool, IDisposable
         }
 
         _client = null;
+
+        if (_logFlushTimer.IsEnabled)
+        {
+            RunOnUi(() => _logFlushTimer.Stop());
+        }
     }
 
     private static IReadOnlyList<ConsoleCommandInfo> LoadCommands()

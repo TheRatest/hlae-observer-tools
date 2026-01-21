@@ -35,18 +35,22 @@
               BorderBrush="#2E2E2E"
               BorderThickness="1"
               Padding="6">
-        <TextBox x:Name="LogTextBox"
-                 Text="{Binding LogText}"
-                 IsReadOnly="True"
-                 AcceptsReturn="True"
-                 AcceptsTab="True"
+        <ListBox x:Name="LogListBox"
+                 ItemsSource="{Binding LogLines}"
+                 SelectionMode="Multiple"
+                 KeyDown="OnLogKeyDown"
                  BorderThickness="0"
                  Background="Transparent"
                  Foreground="#E0E0E0"
-                 FontFamily="Consolas, 'Cascadia Mono', monospace"
-                 TextWrapping="Wrap"
-                 Padding="0"
-                 IsTabStop="False" />
+                 Padding="0">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding}"
+                         FontFamily="Consolas, 'Cascadia Mono', monospace"
+                         TextWrapping="Wrap" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
       </Border>
 
       <Grid Grid.Row="2" RowDefinitions="Auto,Auto" RowSpacing="4">
