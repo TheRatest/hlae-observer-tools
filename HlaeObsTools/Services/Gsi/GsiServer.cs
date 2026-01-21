@@ -308,15 +308,11 @@ public sealed class GsiServer : IDisposable
                     }
 
                     int playerSlot = playerElem.TryGetProperty("observer_slot", out var slotElem) ? slotElem.GetInt32() : -1;
-                    if (playerSlot < 0 || playerSlot > 9)
-                    {
-                        playerSlot = -1;
-                    }
                     if (playerSlot < 0 && LastKnownObserverSlots.TryGetValue(steamId, out var lastSlot))
                     {
                         playerSlot = lastSlot;
                     }
-                    if (playerSlot >= 0 && playerSlot <= 9)
+                    if (playerSlot >= 0)
                     {
                         LastKnownObserverSlots[steamId] = playerSlot;
                     }
@@ -442,7 +438,9 @@ public sealed class GsiServer : IDisposable
         bool needsNormalize = players.Any(p =>
             p.Slot < 0 || p.Slot > 9 ||
             (string.Equals(p.Team, "CT", StringComparison.OrdinalIgnoreCase) && p.Slot >= 5) ||
-            (string.Equals(p.Team, "T", StringComparison.OrdinalIgnoreCase) && p.Slot >= 0 && p.Slot < 5));
+            (string.Equals(p.Team, "T", StringComparison.OrdinalIgnoreCase) && p.Slot >= 0 && p.Slot < 5)) ||
+            HasDuplicateSlots(players, "CT") ||
+            HasDuplicateSlots(players, "T");
 
         if (!needsNormalize)
             return;
@@ -462,29 +460,33 @@ public sealed class GsiServer : IDisposable
         if (teamPlayers.Count == 0)
             return;
 
-        var available = new List<int>
+        for (int i = 0; i < teamPlayers.Count; i++)
         {
-            slotOffset,
-            slotOffset + 1,
-            slotOffset + 2,
-            slotOffset + 3,
-            slotOffset + 4
-        };
-
-        foreach (var player in teamPlayers)
-        {
-            if (player.Slot >= slotOffset && player.Slot < slotOffset + 5 && available.Contains(player.Slot))
+            if (i < 5)
             {
-                available.Remove(player.Slot);
-                continue;
+                teamPlayers[i].Slot = slotOffset + i;
             }
-
-            if (available.Count == 0)
-                break;
-
-            player.Slot = available[0];
-            available.RemoveAt(0);
+            else
+            {
+                teamPlayers[i].Slot = -1;
+            }
         }
+    }
+
+    private static bool HasDuplicateSlots(List<GsiPlayer> players, string team)
+    {
+        var seen = new HashSet<int>();
+        foreach (var player in players)
+        {
+            if (!string.Equals(player.Team, team, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (player.Slot < 0 || player.Slot > 9)
+                continue;
+            if (!seen.Add(player.Slot))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool IsCoachName(string? name)
