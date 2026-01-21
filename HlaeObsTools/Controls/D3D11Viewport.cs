@@ -34,6 +34,7 @@ using static Vortice.Direct3D11.D3D11;
 using D2DFactoryType = Vortice.Direct2D1.FactoryType;
 using DWriteFactoryType = Vortice.DirectWrite.FactoryType;
 using SharpGen.Runtime;
+using HlaeObsTools.Services.Graphics;
 
 namespace HlaeObsTools.Controls;
 
@@ -80,6 +81,8 @@ public sealed class D3D11Viewport : NativeControlHost
     private ID3D11Device1? _device1;
     private ID3D11DeviceContext? _context;
     private IDXGIFactory2? _factory;
+    private object? _deviceLock;
+    private bool _ownsDevice;
     private IDXGISwapChain1? _swapChain;
     private int _swapWidth;
     private int _swapHeight;
@@ -802,6 +805,11 @@ public sealed class D3D11Viewport : NativeControlHost
             LogMessage("RenderFrame entered");
         }
 
+        var deviceLock = _deviceLock;
+        if (deviceLock != null)
+            Monitor.Enter(deviceLock);
+        try
+        {
         var width = Math.Max(1, _targetWidth);
         var height = Math.Max(1, _targetHeight);
         if (!EnsureSwapChain(width, height))
@@ -882,6 +890,12 @@ public sealed class D3D11Viewport : NativeControlHost
         {
             LogMessage($"Present failed: 0x{ex.ResultCode.Code:X8}");
             ReleaseSwapChain();
+        }
+        }
+        finally
+        {
+            if (deviceLock != null)
+                Monitor.Exit(deviceLock);
         }
     }
 
@@ -1989,52 +2003,23 @@ public sealed class D3D11Viewport : NativeControlHost
         if (_device != null && _context != null && _d3dReady)
             return true;
 
-        var levels = new[] { Vortice.Direct3D.FeatureLevel.Level_11_1, Vortice.Direct3D.FeatureLevel.Level_11_0 };
-        var result = D3D11CreateDevice(
-            null,
-            DriverType.Hardware,
-            DeviceCreationFlags.BgraSupport,
-            levels,
-            out ID3D11Device device,
-            out _,
-            out ID3D11DeviceContext context);
-
-        if (result.Failure)
-        {
-            result = D3D11CreateDevice(
-                null,
-                DriverType.Warp,
-                DeviceCreationFlags.BgraSupport,
-                levels,
-                out device,
-                out _,
-                out context);
-        }
-
-        if (result.Failure || device == null || context == null)
+        var service = D3D11DeviceService.Instance;
+        if (!service.IsReady)
         {
             SetStatusText("D3D11 init failed.");
             return false;
         }
 
-        _device = device;
-        _context = context;
-        _device1 = _device.QueryInterfaceOrNull<ID3D11Device1>();
-        _factory = Vortice.DXGI.DXGI.CreateDXGIFactory2<IDXGIFactory2>(false);
+        _device = service.Device;
+        _context = service.Context;
+        _device1 = service.Device1 ?? _device.QueryInterfaceOrNull<ID3D11Device1>();
+        _factory = service.Factory;
+        _deviceLock = service.ContextLock;
+        _ownsDevice = false;
         if (!_deviceLogged)
         {
             _deviceLogged = true;
             LogMessage($"Device ready. hwnd=0x{_hwnd.ToInt64():X} device1={(_device1 != null)} factory={(_factory != null)}");
-        }
-
-        try
-        {
-            using var multithread = context.QueryInterfaceOrNull<ID3D11Multithread>();
-            multithread?.SetMultithreadProtected(true);
-        }
-        catch
-        {
-            // Ignore if multithread interface isn't available.
         }
 
         if (!InitializeShaders())
@@ -2383,14 +2368,25 @@ public sealed class D3D11Viewport : NativeControlHost
         _d2dFactory?.Dispose();
         _d2dFactory = null;
 
-        _context?.Dispose();
-        _context = null;
-        _device1?.Dispose();
-        _device1 = null;
-        _device?.Dispose();
-        _device = null;
-        _factory?.Dispose();
-        _factory = null;
+        if (_ownsDevice)
+        {
+            _context?.Dispose();
+            _context = null;
+            _device1?.Dispose();
+            _device1 = null;
+            _device?.Dispose();
+            _device = null;
+            _factory?.Dispose();
+            _factory = null;
+        }
+        else
+        {
+            _context = null;
+            _device1 = null;
+            _device = null;
+            _factory = null;
+        }
+        _deviceLock = null;
         _d3dReady = false;
     }
 

@@ -17,6 +17,7 @@ using Vortice.Direct3D11;
 using Vortice.DXGI;
 using static Vortice.Direct3D11.D3D11;
 using static Vortice.DXGI.DXGI;
+using HlaeObsTools.Services.Graphics;
 
 namespace HlaeObsTools.Controls;
 
@@ -34,6 +35,8 @@ public class D3DSharedTextureHost : NativeControlHost
     private ID3D11Device1? _device1;
     private ID3D11DeviceContext? _context;
     private IDXGIFactory2? _factory;
+    private object? _deviceLock;
+    private bool _ownsDevice;
     private IDXGIAdapter1? _adapter;
     private IDXGISwapChain1? _swapChain;
     private ID3D11Texture2D? _sharedTexture;
@@ -121,16 +124,28 @@ public class D3DSharedTextureHost : NativeControlHost
         _texAspect = 0;
         _targetWidth = 0;
         _targetHeight = 0;
-        _context?.Release();
-        _context = null;
-        _device1?.Release();
-        _device1 = null;
-        _device?.Release();
-        _device = null;
-        _adapter?.Release();
-        _adapter = null;
-        _factory?.Release();
-        _factory = null;
+        if (_ownsDevice)
+        {
+            _context?.Release();
+            _context = null;
+            _device1?.Release();
+            _device1 = null;
+            _device?.Release();
+            _device = null;
+            _adapter?.Release();
+            _adapter = null;
+            _factory?.Release();
+            _factory = null;
+        }
+        else
+        {
+            _context = null;
+            _device1 = null;
+            _device = null;
+            _adapter = null;
+            _factory = null;
+        }
+        _deviceLock = null;
     }
 
     public void SetSharedTextureHandle(IntPtr handle)
@@ -188,64 +203,74 @@ public class D3DSharedTextureHost : NativeControlHost
                 if (_swapChain != null && _context != null)
                 {
                     using var backBuffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
-
-                    if (_sharedTexture != null)
+                    var deviceLock = _deviceLock;
+                    if (deviceLock != null)
+                        Monitor.Enter(deviceLock);
+                    try
                     {
-                        _loggedFallback = false;
-                        bool acquired = true;
-                        bool locked = false;
-                        try
+                        if (_sharedTexture != null)
                         {
-                            if (_sharedKeyedMutex != null)
+                            _loggedFallback = false;
+                            bool acquired = true;
+                            bool locked = false;
+                            try
                             {
-                                _sharedKeyedMutex.AcquireSync(1, 3000);
-                                locked = true;
+                                if (_sharedKeyedMutex != null)
+                                {
+                                    _sharedKeyedMutex.AcquireSync(1, 3000);
+                                    locked = true;
+                                }
+
+                                _context.CopyResource(backBuffer, _sharedTexture);
+                            }
+                            catch (SharpGen.Runtime.SharpGenException ex)
+                            {
+                                acquired = false;
+                                Log($"CopyResource/Acquire failed: {ex.ResultCode.Code}");
+                            }
+                            catch (Exception ex)
+                            {
+                                acquired = false;
+                                Log($"CopyResource threw {ex.GetType().Name}: {ex.Message}");
+                            }
+                            finally
+                            {
+                                if (locked && _sharedKeyedMutex != null)
+                                {
+                                    try { _sharedKeyedMutex.ReleaseSync(0); } catch { /* ignore */ }
+                                }
                             }
 
-                            _context.CopyResource(backBuffer, _sharedTexture);
-                        }
-                        catch (SharpGen.Runtime.SharpGenException ex)
-                        {
-                            acquired = false;
-                            Log($"CopyResource/Acquire failed: {ex.ResultCode.Code}");
-                        }
-                        catch (Exception ex)
-                        {
-                            acquired = false;
-                            Log($"CopyResource threw {ex.GetType().Name}: {ex.Message}");
-                        }
-                        finally
-                        {
-                            if (locked && _sharedKeyedMutex != null)
+                            if (!acquired && token.IsCancellationRequested)
                             {
-                                try { _sharedKeyedMutex.ReleaseSync(0); } catch { /* ignore */ }
+                                break;
+                            }
+                            else if (!acquired)
+                            {
+                                ReleaseSwapChain();
+                                _sharedTexture?.Release();
+                                _sharedTexture = null;
+                                _sharedKeyedMutex?.Release();
+                                _sharedKeyedMutex = null;
+                                _texAspect = 0;
+                                continue;
                             }
                         }
-
-                        if (!acquired && token.IsCancellationRequested)
+                        else
                         {
-                            break;
-                        }
-                        else if (!acquired)
-                        {
-                            ReleaseSwapChain();
-                            _sharedTexture?.Release();
-                            _sharedTexture = null;
-                            _sharedKeyedMutex?.Release();
-                            _sharedKeyedMutex = null;
-                            _texAspect = 0;
-                            continue;
+                            using var rtv = _device!.CreateRenderTargetView(backBuffer);
+                            _context.ClearRenderTargetView(rtv, new Color4(1f, 0f, 1f, 1f));
+                            if (!_loggedFallback)
+                            {
+                                Log("Shared texture still null; showing magenta fallback.");
+                                _loggedFallback = true;
+                            }
                         }
                     }
-                    else
+                    finally
                     {
-                        using var rtv = _device!.CreateRenderTargetView(backBuffer);
-                        _context.ClearRenderTargetView(rtv, new Color4(1f, 0f, 1f, 1f));
-                        if (!_loggedFallback)
-                        {
-                            Log("Shared texture still null; showing magenta fallback.");
-                            _loggedFallback = true;
-                        }
+                        if (deviceLock != null)
+                            Monitor.Exit(deviceLock);
                     }
                     try
                     {
@@ -284,41 +309,25 @@ public class D3DSharedTextureHost : NativeControlHost
     {
         if (_device != null) return true;
 
-        var levels = new[] { FeatureLevel.Level_11_1, FeatureLevel.Level_11_0 };
-        Result res = D3D11CreateDevice(
-            null,
-            DriverType.Hardware,
-            DeviceCreationFlags.BgraSupport,
-            levels,
-            out _device,
-            out _,
-            out _context);
-
-        if (res.Failure)
-        {
-            res = D3D11CreateDevice(
-                null,
-                DriverType.Warp,
-                DeviceCreationFlags.BgraSupport,
-                levels,
-                out _device,
-                out _,
-                out _context);
-        }
-
-        if (res.Failure || _device == null || _context == null)
+        var service = D3D11DeviceService.Instance;
+        if (!service.IsReady)
             return false;
 
-        _device1 = _device.QueryInterfaceOrNull<ID3D11Device1>();
+        _device = service.Device;
+        _context = service.Context;
+        _device1 = service.Device1 ?? _device.QueryInterfaceOrNull<ID3D11Device1>();
+        _factory = service.Factory;
+        _deviceLock = service.ContextLock;
+        _ownsDevice = false;
+
         if (_device1 == null && !_loggedDevice1Missing)
         {
             Log("CreateDeviceAndFactory: ID3D11Device1 not available; cannot open shared texture by name.");
             _loggedDevice1Missing = true;
         }
 
-        _factory = CreateDXGIFactory2<IDXGIFactory2>(false);
         bool ok = _factory != null;
-        Log($"CreateDeviceAndFactory: res=0x{res.Code:X8} ok={ok}");
+        Log($"CreateDeviceAndFactory: shared device ok={ok}");
         return ok;
     }
 
@@ -373,6 +382,8 @@ public class D3DSharedTextureHost : NativeControlHost
 
     private void TryRecreateDeviceForSharedTexture()
     {
+        if (!_ownsDevice)
+            return;
         if (_factory == null) return;
 
         for (uint i = 0; ; i++)
@@ -392,6 +403,8 @@ public class D3DSharedTextureHost : NativeControlHost
 
     private bool TryCreateDeviceOnAdapter(IDXGIAdapter1 adapter)
     {
+        if (!_ownsDevice)
+            return false;
         ReleaseSwapChain();
         _sharedTexture?.Release();
         _sharedTexture = null;

@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using HlaeObsTools.Services.Graphics;
 using HlaeObsTools.Views;
 
 namespace HlaeObsTools;
@@ -19,6 +20,7 @@ public partial class App : Application
         {
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
             desktop.MainWindow = new MainWindow();
+            desktop.Exit += (_, _) => D3D11DeviceService.Instance.Dispose();
         }
 
         base.OnFrameworkInitializationCompleted();

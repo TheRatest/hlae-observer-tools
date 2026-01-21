@@ -9,6 +9,7 @@ using Vortice.DXGI;
 using static Vortice.Direct3D11.D3D11;
 using static Vortice.DXGI.DXGI;
 using SharpGen.Runtime;
+using HlaeObsTools.Services.Graphics;
 
 namespace HlaeObsTools.Services.Video.RTP;
 
@@ -24,6 +25,8 @@ public sealed class RtpSwapchainViewer : IDisposable
     private ID3D11Device? _device;
     private ID3D11DeviceContext? _context;
     private IDXGIFactory2? _factory;
+    private object? _deviceLock;
+    private bool _ownsDevice;
     private IDXGISwapChain1? _swapChain;
     private ID3D11Texture2D? _frameTexture;
     private int _frameWidth;
@@ -252,59 +255,70 @@ public sealed class RtpSwapchainViewer : IDisposable
             return;
 
         // Upload CPU BGRA to GPU texture via map/discard
-        MappedSubresource mapped;
+        var deviceLock = _deviceLock;
+        if (deviceLock != null)
+            Monitor.Enter(deviceLock);
         try
         {
-            mapped = _context.Map(_frameTexture, 0, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
-        }
-        catch (SharpGenException ex)
-        {
-            Console.WriteLine($"RtpSwapchainViewer Map failed (hr=0x{ex.HResult:X8}): {ex.Message}");
-            return;
-        }
-
-        try
-        {
-            unsafe
+            MappedSubresource mapped;
+            try
             {
-                byte* destBase = (byte*)mapped.DataPointer;
-                fixed (byte* srcBase = frame.Data)
+                mapped = _context.Map(_frameTexture, 0, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
+            }
+            catch (SharpGenException ex)
+            {
+                Console.WriteLine($"RtpSwapchainViewer Map failed (hr=0x{ex.HResult:X8}): {ex.Message}");
+                return;
+            }
+
+            try
+            {
+                unsafe
                 {
-                    if (!_firstFrameLogged)
+                    byte* destBase = (byte*)mapped.DataPointer;
+                    fixed (byte* srcBase = frame.Data)
                     {
-                        Console.WriteLine($"RTP Viewer first frame: {frame.Width}x{frame.Height} stride={frame.Stride} rowPitch={mapped.RowPitch}");
-                        _firstFrameLogged = true;
-                    }
-                    for (int y = 0; y < frame.Height; y++)
-                    {
-                        var srcOffset = y * frame.Stride;
-                        var dstOffset = y * mapped.RowPitch;
-                        Buffer.MemoryCopy(
-                            source: srcBase + srcOffset,
-                            destination: destBase + dstOffset,
-                            destinationSizeInBytes: mapped.RowPitch,
-                            sourceBytesToCopy: frame.Stride);
+                        if (!_firstFrameLogged)
+                        {
+                            Console.WriteLine($"RTP Viewer first frame: {frame.Width}x{frame.Height} stride={frame.Stride} rowPitch={mapped.RowPitch}");
+                            _firstFrameLogged = true;
+                        }
+                        for (int y = 0; y < frame.Height; y++)
+                        {
+                            var srcOffset = y * frame.Stride;
+                            var dstOffset = y * mapped.RowPitch;
+                            Buffer.MemoryCopy(
+                                source: srcBase + srcOffset,
+                                destination: destBase + dstOffset,
+                                destinationSizeInBytes: mapped.RowPitch,
+                                sourceBytesToCopy: frame.Stride);
+                        }
                     }
                 }
+            }
+            finally
+            {
+                _context.Unmap(_frameTexture, 0);
+            }
+
+            try
+            {
+                using var backBuffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
+                using var rtv = _device!.CreateRenderTargetView(backBuffer);
+                _context.ClearRenderTargetView(rtv, new Vortice.Mathematics.Color4(0f, 1f, 0f, 1f));
+                _context.CopyResource(backBuffer, _frameTexture);
+                _swapChain.Present(0, PresentFlags.None);
+            }
+            catch (SharpGenException ex)
+            {
+                Console.WriteLine($"RtpSwapchainViewer present failed (hr=0x{ex.HResult:X8}): {ex.Message}");
+                return;
             }
         }
         finally
         {
-            _context.Unmap(_frameTexture, 0);
-        }
-
-        try
-        {
-            using var backBuffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
-            using var rtv = _device!.CreateRenderTargetView(backBuffer);
-            _context.ClearRenderTargetView(rtv, new Vortice.Mathematics.Color4(0f, 1f, 0f, 1f));
-            _context.CopyResource(backBuffer, _frameTexture);
-            _swapChain.Present(0, PresentFlags.None);
-        }
-        catch (SharpGenException ex)
-        {
-            Console.WriteLine($"RtpSwapchainViewer present failed (hr=0x{ex.HResult:X8}): {ex.Message}");
-            return;
+            if (deviceLock != null)
+                Monitor.Exit(deviceLock);
         }
 
         LogLatency(frame);
@@ -335,33 +349,16 @@ public sealed class RtpSwapchainViewer : IDisposable
         if (_device != null)
             return true;
 
-        var levels = new[] { FeatureLevel.Level_11_1, FeatureLevel.Level_11_0 };
-        Result res = D3D11CreateDevice(
-            null,
-            DriverType.Hardware,
-            DeviceCreationFlags.BgraSupport,
-            levels,
-            out _device,
-            out _,
-            out _context);
-
-        if (res.Failure)
-        {
-            res = D3D11CreateDevice(
-                null,
-                DriverType.Warp,
-                DeviceCreationFlags.BgraSupport,
-                levels,
-                out _device,
-                out _,
-                out _context);
-        }
-
-        if (res.Failure || _device == null || _context == null)
+        var service = D3D11DeviceService.Instance;
+        if (!service.IsReady)
             return false;
 
-        _factory = CreateDXGIFactory2<IDXGIFactory2>(false);
-        return _factory != null;
+        _device = service.Device;
+        _context = service.Context;
+        _factory = service.Factory;
+        _deviceLock = service.ContextLock;
+        _ownsDevice = false;
+        return true;
     }
 
     private void EnsureSwapchain(int width, int height)
@@ -446,12 +443,22 @@ public sealed class RtpSwapchainViewer : IDisposable
         _frameTexture = null;
         _swapChain?.Dispose();
         _swapChain = null;
-        _context?.Dispose();
-        _context = null;
-        _device?.Dispose();
-        _device = null;
-        _factory?.Dispose();
-        _factory = null;
+        if (_ownsDevice)
+        {
+            _context?.Dispose();
+            _context = null;
+            _device?.Dispose();
+            _device = null;
+            _factory?.Dispose();
+            _factory = null;
+        }
+        else
+        {
+            _context = null;
+            _device = null;
+            _factory = null;
+        }
+        _deviceLock = null;
     }
 
     #region Window
