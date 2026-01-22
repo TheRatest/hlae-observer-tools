@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Platform;
@@ -27,6 +28,8 @@ public class NetConsoleDockViewModel : Tool, IDisposable
     private readonly List<string> _history = new();
     private readonly ConcurrentQueue<string> _pendingLogLines = new();
     private readonly DispatcherTimer _logFlushTimer;
+    private readonly StringBuilder _incomingBuffer = new();
+    private readonly object _incomingBufferLock = new();
 
     private Cs2NetConsoleClient? _client;
     private string _currentHost = "127.0.0.1";
@@ -215,6 +218,8 @@ public class NetConsoleDockViewModel : Tool, IDisposable
         client.Disconnected -= OnClientDisconnected;
         client.Error -= OnClientError;
 
+        FlushIncomingBuffer();
+
         await client.DisconnectSafeAsync();
         client.Dispose();
 
@@ -302,6 +307,7 @@ public class NetConsoleDockViewModel : Tool, IDisposable
 
     private void OnClientDisconnected(object? sender, EventArgs e)
     {
+        FlushIncomingBuffer();
         var client = _client;
         CleanupClient();
         client?.Dispose();
@@ -315,12 +321,14 @@ public class NetConsoleDockViewModel : Tool, IDisposable
 
     private void OnMessageReceived(object? sender, string message)
     {
-        var lines = message.Replace("\r\n", "\n", StringComparison.Ordinal)
-                           .Replace("\r", "\n", StringComparison.Ordinal)
-                           .Split('\n', StringSplitOptions.None)
-                           .Where(l => l.Length > 0);
+        var normalized = message.Replace("\r\n", "\n", StringComparison.Ordinal)
+                                .Replace("\r", "\n", StringComparison.Ordinal);
+        var lines = ExtractCompleteLines(normalized);
 
-        AppendLogLines("IN", lines);
+        if (lines.Count > 0)
+        {
+            AppendLogLines("IN", lines);
+        }
     }
 
     private void SetConnectedState()
@@ -476,6 +484,52 @@ public class NetConsoleDockViewModel : Tool, IDisposable
         }
     }
 
+    private List<string> ExtractCompleteLines(string text)
+    {
+        lock (_incomingBufferLock)
+        {
+            _incomingBuffer.Append(text);
+            var combined = _incomingBuffer.ToString();
+            var parts = combined.Split('\n');
+
+            _incomingBuffer.Clear();
+            var tailIndex = parts.Length - 1;
+            if (tailIndex >= 0 && parts[tailIndex].Length > 0)
+            {
+                _incomingBuffer.Append(parts[tailIndex]);
+            }
+
+            var lines = new List<string>(Math.Max(0, parts.Length - 1));
+            for (var i = 0; i < parts.Length - 1; i++)
+            {
+                if (parts[i].Length > 0)
+                {
+                    lines.Add(parts[i]);
+                }
+            }
+
+            return lines;
+        }
+    }
+
+    private void FlushIncomingBuffer()
+    {
+        string? leftover = null;
+        lock (_incomingBufferLock)
+        {
+            if (_incomingBuffer.Length > 0)
+            {
+                leftover = _incomingBuffer.ToString();
+                _incomingBuffer.Clear();
+            }
+        }
+
+        if (!string.IsNullOrEmpty(leftover))
+        {
+            AppendLog("IN", leftover);
+        }
+    }
+
     private void StartLogFlushTimer()
     {
         if (_logFlushTimer.IsEnabled)
@@ -550,6 +604,7 @@ public class NetConsoleDockViewModel : Tool, IDisposable
             client.Connected -= OnClientConnected;
             client.Disconnected -= OnClientDisconnected;
             client.Error -= OnClientError;
+            FlushIncomingBuffer();
             client.DisconnectSafeAsync().Wait();
             client.Dispose();
         }
