@@ -10,6 +10,7 @@ public sealed class AttachPresetViewModel : ViewModelBase
 {
     private static readonly string[] DefaultAttachmentOptions = new[]
     {
+        "POV",
         "knife","eholster","pistol","leg_l_iktarget","leg_r_iktarget","defusekit",
         "grenade0","grenade1","grenade2","grenade3","grenade4","primary","primary_smg",
         "c4","look_straight_ahead_stand","clip_limit","weapon_hand_l","weapon_hand_r",
