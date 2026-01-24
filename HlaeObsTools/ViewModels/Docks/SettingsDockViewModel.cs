@@ -210,6 +210,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 return;
 
             _viewport3DSettings.MapObjPath = path;
+            Console.WriteLine($"[Viewport3D] Map path set: {path}");
         }
 
         private async Task<string?> PickObjFileToLoadAsync()
@@ -224,11 +225,15 @@ namespace HlaeObsTools.ViewModels.Docks
             var result = await window.StorageProvider.OpenFilePickerAsync(
                 new FilePickerOpenOptions
                 {
-                    Title = "Load Map OBJ",
+                    Title = "Load Map File",
                     AllowMultiple = false,
                     FileTypeFilter =
                     [
-                        new FilePickerFileType("Wavefront OBJ")
+                        new FilePickerFileType("Source 2 Map (.vmap_c, .vpk)")
+                        {
+                            Patterns = ["*.vmap_c", "*.vpk"]
+                        },
+                        new FilePickerFileType("Wavefront OBJ (legacy)")
                         {
                             Patterns = ["*.obj"]
                         }

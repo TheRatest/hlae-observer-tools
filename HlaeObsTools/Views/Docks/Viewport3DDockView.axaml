@@ -6,21 +6,12 @@
              x:DataType="vm:Viewport3DDockViewModel">
     <Border Background="#151515" Padding="4">
         <Grid>
-            <controls:D3D11Viewport x:Name="Viewport"
-                                     MapPath="{Binding Viewport3DSettings.MapObjPath}"
-                                     FreecamSettings="{Binding FreecamSettings}"
-                                     InputSender="{Binding InputSender}"
-                                     PinScale="{Binding Viewport3DSettings.PinScale}"
-                                     PinOffsetZ="{Binding Viewport3DSettings.PinOffsetZ}"
-                                     ViewportMouseScale="{Binding Viewport3DSettings.ViewportMouseScale}"
-                                     ViewportFpsCap="{Binding Viewport3DSettings.ViewportFpsCap}"
-                                     MapScale="{Binding Viewport3DSettings.MapScale}"
-                                     MapYaw="{Binding Viewport3DSettings.MapYaw}"
-                                     MapPitch="{Binding Viewport3DSettings.MapPitch}"
-                                     MapRoll="{Binding Viewport3DSettings.MapRoll}"
-                                     MapOffsetX="{Binding Viewport3DSettings.MapOffsetX}"
-                                     MapOffsetY="{Binding Viewport3DSettings.MapOffsetY}"
-                                     MapOffsetZ="{Binding Viewport3DSettings.MapOffsetZ}" />
+            <controls:GLWorldViewport x:Name="Viewport"
+                                      MapPath="{Binding Viewport3DSettings.MapObjPath}"
+                                      FreecamSettings="{Binding FreecamSettings}"
+                                      InputSender="{Binding InputSender}"
+                                      ViewportMouseScale="{Binding Viewport3DSettings.ViewportMouseScale}"
+                                      ViewportFpsCap="{Binding Viewport3DSettings.ViewportFpsCap}" />
         </Grid>
     </Border>
 </UserControl>
