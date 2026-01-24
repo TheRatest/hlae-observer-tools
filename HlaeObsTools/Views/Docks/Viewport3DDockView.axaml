@@ -8,6 +8,8 @@
         <Grid>
             <controls:GLWorldViewport x:Name="Viewport"
                                       MapPath="{Binding Viewport3DSettings.MapObjPath}"
+                                      PinScale="{Binding Viewport3DSettings.PinScale}"
+                                      PinOffsetZ="{Binding Viewport3DSettings.PinOffsetZ}"
                                       FreecamSettings="{Binding FreecamSettings}"
                                       InputSender="{Binding InputSender}"
                                       ViewportMouseScale="{Binding Viewport3DSettings.ViewportMouseScale}"

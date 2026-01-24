@@ -1,11 +1,16 @@
+using System;
+using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using HlaeObsTools.ViewModels;
 using HlaeObsTools.ViewModels.Docks;
 namespace HlaeObsTools.Views.Docks;
 
 public partial class Viewport3DDockView : UserControl
 {
+    private Viewport3DDockViewModel? _viewModel;
+
     public Viewport3DDockView()
     {
         InitializeComponent();
@@ -14,6 +19,22 @@ public partial class Viewport3DDockView : UserControl
         AddHandler(PointerMovedEvent, OnViewportPointerMoved, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, true);
         AddHandler(PointerWheelChangedEvent, OnViewportPointerWheelChanged, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, true);
         AddHandler(KeyDownEvent, OnViewportKeyDown, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, true);
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+
+        if (_viewModel != null)
+        {
+            _viewModel.PinsUpdated -= OnPinsUpdated;
+        }
+
+        _viewModel = DataContext as Viewport3DDockViewModel;
+        if (_viewModel != null)
+        {
+            _viewModel.PinsUpdated += OnPinsUpdated;
+        }
     }
 
     private void OnViewportPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -34,6 +55,11 @@ public partial class Viewport3DDockView : UserControl
     private void OnViewportPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
         Viewport?.ForwardPointerWheel(e);
+    }
+
+    private void OnPinsUpdated(IReadOnlyList<ViewportPin> pins)
+    {
+        Viewport?.SetPins(pins);
     }
 
     private void OnViewportKeyDown(object? sender, KeyEventArgs e)

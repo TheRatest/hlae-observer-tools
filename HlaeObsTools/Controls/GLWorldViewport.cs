@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.ComponentModel;
@@ -47,6 +48,10 @@ public sealed class GLWorldViewport : NativeControlHost
 
     public static readonly StyledProperty<string?> MapPathProperty =
         AvaloniaProperty.Register<GLWorldViewport, string?>(nameof(MapPath));
+    public static readonly StyledProperty<float> PinScaleProperty =
+        AvaloniaProperty.Register<GLWorldViewport, float>(nameof(PinScale), 200.0f);
+    public static readonly StyledProperty<float> PinOffsetZProperty =
+        AvaloniaProperty.Register<GLWorldViewport, float>(nameof(PinOffsetZ), 55.0f);
     public static readonly StyledProperty<float> ViewportMouseScaleProperty =
         AvaloniaProperty.Register<GLWorldViewport, float>(nameof(ViewportMouseScale), 0.75f);
     public static readonly StyledProperty<float> ViewportFpsCapProperty =
@@ -76,6 +81,29 @@ public sealed class GLWorldViewport : NativeControlHost
     private bool _showEntityModels;
     private bool _renderLogged;
     private bool _mapHasExternalReferences;
+
+    private int _pinShaderProgram;
+    private int _pinMvpLocation = -1;
+    private int _pinColorLocation = -1;
+    private int _pinLightDirLocation = -1;
+    private int _pinAmbientLocation = -1;
+    private int _pinVao;
+    private int _pinVbo;
+    private int _pinVertexCount;
+    private bool _pinsDirty;
+    private readonly List<PinRenderData> _pins = new();
+    private readonly List<PinDrawCall> _pinDraws = new();
+    private readonly List<PinLabel> _pinLabels = new();
+    private IReadOnlyList<ViewportPin>? _pinSource;
+    private readonly object _pinLock = new();
+    private List<PinLabel> _labelHitCache = new();
+    private readonly object _labelLock = new();
+    private readonly Vector3[] _pinConeUnit = CreateUnitCone();
+    private readonly Vector3[] _pinConeNormals = CreateUnitConeNormals();
+    private readonly Vector3[] _pinSphereUnit;
+    private readonly Vector3[] _pinSphereNormals;
+    private static readonly Vector3 PinLightDir = Vector3.Normalize(new Vector3(0.4f, 0.9f, 0.2f));
+    private const float PinAmbientLight = 0.25f;
 
     private Vector3 _target = Vector3.Zero;
     private float _distance = 10f;
@@ -141,11 +169,14 @@ public sealed class GLWorldViewport : NativeControlHost
     {
         Focusable = true;
         IsHitTestVisible = true;
+        (_pinSphereUnit, _pinSphereNormals) = CreateUnitSphere(16, 32);
     }
 
     static GLWorldViewport()
     {
         MapPathProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnMapPathChanged(args));
+        PinScaleProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnPinScaleChanged());
+        PinOffsetZProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnPinOffsetChanged());
         ViewportFpsCapProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnViewportFpsCapChanged());
         FreecamSettingsProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
         InputSenderProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnInputSenderChanged(args));
@@ -155,6 +186,18 @@ public sealed class GLWorldViewport : NativeControlHost
     {
         get => GetValue(MapPathProperty);
         set => SetValue(MapPathProperty, value);
+    }
+
+    public float PinScale
+    {
+        get => GetValue(PinScaleProperty);
+        set => SetValue(PinScaleProperty, value);
+    }
+
+    public float PinOffsetZ
+    {
+        get => GetValue(PinOffsetZProperty);
+        set => SetValue(PinOffsetZProperty, value);
     }
 
     public float ViewportMouseScale
@@ -301,8 +344,16 @@ public sealed class GLWorldViewport : NativeControlHost
         var updateKind = point.Properties.PointerUpdateKind;
         var middlePressed = point.Properties.IsMiddleButtonPressed || updateKind == PointerUpdateKind.MiddleButtonPressed;
         var rightPressed = point.Properties.IsRightButtonPressed || updateKind == PointerUpdateKind.RightButtonPressed;
+        var leftPressed = point.Properties.IsLeftButtonPressed || updateKind == PointerUpdateKind.LeftButtonPressed;
         _mouseButton4Down = point.Properties.IsXButton1Pressed;
         _mouseButton5Down = point.Properties.IsXButton2Pressed;
+
+        if (leftPressed && TryHandlePinClick(point.Position))
+        {
+            Focus();
+            e.Handled = true;
+            return;
+        }
 
         if (rightPressed)
         {
@@ -494,11 +545,18 @@ public sealed class GLWorldViewport : NativeControlHost
     {
         var middlePressed = updateKind == PointerUpdateKind.MiddleButtonPressed;
         var rightPressed = updateKind == PointerUpdateKind.RightButtonPressed;
+        var leftPressed = updateKind == PointerUpdateKind.LeftButtonPressed;
 
         if (updateKind == PointerUpdateKind.XButton1Pressed)
             _mouseButton4Down = true;
         if (updateKind == PointerUpdateKind.XButton2Pressed)
             _mouseButton5Down = true;
+
+        if (leftPressed && TryHandlePinClick(position))
+        {
+            Focus();
+            return;
+        }
 
         if (rightPressed)
         {
@@ -1574,6 +1632,15 @@ public sealed class GLWorldViewport : NativeControlHost
         {
             if (_nativeWindow != null)
             {
+                try
+                {
+                    _nativeWindow.Context.MakeCurrent();
+                    DisposePinResources();
+                }
+                catch (Exception ex)
+                {
+                    LogMessage($"DisposePinResources failed: {ex.GetType().Name}: {ex.Message}");
+                }
                 _nativeWindow.Context.MakeNoneCurrent();
                 if (disposeWindow)
                 {
@@ -1658,6 +1725,251 @@ public sealed class GLWorldViewport : NativeControlHost
             RotCriticalDamping = _freecamSettings.RotCriticalDamping,
             RotDampingRatio = (float)_freecamSettings.RotDampingRatio
         };
+    }
+
+    public void SetPins(IReadOnlyList<ViewportPin> pins)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            var snapshot = pins.ToArray();
+            Dispatcher.UIThread.Post(() => SetPins(snapshot));
+            return;
+        }
+
+        _pinSource = pins;
+        UpdatePinsFromSource();
+    }
+
+    private void UpdatePinsFromSource()
+    {
+        lock (_pinLock)
+        {
+            _pins.Clear();
+            _pinLabels.Clear();
+
+            if (_pinSource == null || _pinSource.Count == 0)
+            {
+                _pinsDirty = true;
+                lock (_labelLock)
+                {
+                    _labelHitCache = new List<PinLabel>();
+                }
+                RequestNextFrame();
+                return;
+            }
+
+            var pinOffset = new Vector3(0f, 0f, PinOffsetZ);
+            foreach (var pin in _pinSource)
+            {
+                var position = new Vector3((float)pin.Position.X, (float)pin.Position.Y, (float)pin.Position.Z) + pinOffset;
+                var forward = new Vector3((float)pin.Forward.X, (float)pin.Forward.Y, (float)pin.Forward.Z);
+                var color = GetTeamColor(pin.Team);
+
+                _pins.Add(new PinRenderData
+                {
+                    Position = position,
+                    Forward = forward,
+                    Color = color,
+                    Label = pin.Label
+                });
+
+                if (!string.IsNullOrEmpty(pin.Label))
+                {
+                    _pinLabels.Add(new PinLabel
+                    {
+                        Text = pin.Label,
+                        World = position,
+                        Color = ToColor32(color)
+                    });
+                }
+            }
+        }
+
+        _pinsDirty = true;
+        RequestNextFrame();
+    }
+
+    private bool TryHandlePinClick(Point position)
+    {
+        lock (_pinLock)
+        {
+            if (_pins.Count == 0)
+                return false;
+        }
+
+        if (TryFindPinFromLabelHit(position, out var labelPin))
+        {
+            ActivateFreecamAtPin(labelPin);
+            return true;
+        }
+
+        if (TryFindPinFromMarkerHit(position, out var markerPin))
+        {
+            ActivateFreecamAtPin(markerPin);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryFindPinFromLabelHit(Point position, out PinRenderData pin)
+    {
+        pin = default!;
+        List<PinLabel> labels;
+        lock (_labelLock)
+        {
+            if (_labelHitCache.Count == 0)
+                return false;
+            labels = new List<PinLabel>(_labelHitCache);
+        }
+
+        const double fontSize = 16.0;
+        const double fontWidthFactor = 0.6;
+        const double padding = 6.0;
+
+        foreach (var label in labels)
+        {
+            if (string.IsNullOrEmpty(label.Text))
+                continue;
+
+            var width = Math.Max(1.0, label.Text.Length * fontSize * fontWidthFactor) + padding;
+            var height = fontSize * 1.2 + padding;
+            var halfW = width * 0.5;
+            var halfH = height * 0.5;
+
+            if (Math.Abs(position.X - label.ScreenX) <= halfW && Math.Abs(position.Y - label.ScreenY) <= halfH)
+            {
+                lock (_pinLock)
+                {
+                    for (int i = 0; i < _pins.Count; i++)
+                    {
+                        if (string.Equals(_pins[i].Label, label.Text, StringComparison.Ordinal))
+                        {
+                            pin = _pins[i];
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryFindPinFromMarkerHit(Point position, out PinRenderData pin)
+    {
+        pin = default!;
+        var width = Math.Max(1, _renderWidth);
+        var height = Math.Max(1, _renderHeight);
+        if (width <= 0 || height <= 0 || _renderer == null)
+            return false;
+
+        var viewProjection = _renderer.Camera.ViewProjectionMatrix;
+        const double hitRadius = 12.0;
+        var hitRadiusSq = hitRadius * hitRadius;
+        var bestDistSq = double.MaxValue;
+        var found = false;
+
+        lock (_pinLock)
+        {
+            foreach (var candidate in _pins)
+            {
+                if (!TryProjectToScreen(candidate.Position, viewProjection, width, height, out var screen))
+                    continue;
+
+                var dx = position.X - screen.X;
+                var dy = position.Y - screen.Y;
+                var distSq = dx * dx + dy * dy;
+                if (distSq <= hitRadiusSq && distSq < bestDistSq)
+                {
+                    bestDistSq = distSq;
+                    pin = candidate;
+                    found = true;
+                }
+            }
+        }
+
+        return found;
+    }
+
+    private void ActivateFreecamAtPin(PinRenderData pin)
+    {
+        var keepInputEnabled = _freecamInputEnabled;
+        if (!_freecamActive)
+        {
+            _orbitTargetBeforeFreecam = _target;
+            _orbitYawBeforeFreecam = _yaw;
+            _orbitPitchBeforeFreecam = _pitch;
+            _orbitDistanceBeforeFreecam = _distance;
+            _orbitStateSaved = true;
+        }
+
+        var forward = pin.Forward;
+        if (forward.LengthSquared() < 0.0001f)
+            forward = Vector3.UnitX;
+        forward = Vector3.Normalize(forward);
+
+        GetYawPitchFromForward(forward, out var yaw, out var pitch);
+        var fov = _freecamActive ? _freecamTransform.Fov : _freecamConfig.DefaultFov;
+
+        var forwardFromAngles = GetForwardVector(pitch, yaw);
+        var right = Vector3.Cross(forwardFromAngles, Vector3.UnitZ);
+        if (right.LengthSquared() < 1e-6f)
+            right = Vector3.Cross(forwardFromAngles, Vector3.UnitX);
+        right = Vector3.Normalize(right);
+        var up = Vector3.Normalize(Vector3.Cross(right, forwardFromAngles));
+        var roll = ComputeRollForUp(pitch, yaw, up);
+
+        _freecamTransform = new FreecamTransform
+        {
+            Position = pin.Position,
+            Yaw = yaw,
+            Pitch = pitch,
+            Roll = roll,
+            Fov = fov,
+            Orientation = BuildQuat(pitch, yaw, roll)
+        };
+        _freecamSmoothed = _freecamTransform;
+        _freecamActive = true;
+        _freecamInitialized = true;
+        _freecamInputEnabled = keepInputEnabled;
+        _freecamLastUpdate = DateTime.UtcNow;
+        ResetFreecamState();
+        RequestNextFrame();
+    }
+
+    private void OnPinScaleChanged()
+    {
+        _pinsDirty = true;
+        RequestNextFrame();
+    }
+
+    private void OnPinOffsetChanged()
+    {
+        if (_pinSource != null)
+        {
+            UpdatePinsFromSource();
+        }
+    }
+
+    private static Vector3 GetTeamColor(string team)
+    {
+        if (string.Equals(team, "CT", StringComparison.OrdinalIgnoreCase))
+            return new Vector3(0.35f, 0.65f, 1.0f);
+        if (string.Equals(team, "T", StringComparison.OrdinalIgnoreCase))
+            return new Vector3(1.0f, 0.7f, 0.2f);
+        return new Vector3(0.8f, 0.8f, 0.8f);
+    }
+
+    private static Color32 ToColor32(Vector3 color)
+    {
+        static byte ToByte(float value)
+        {
+            var clamped = Math.Clamp(value, 0f, 1f);
+            return (byte)MathF.Round(clamped * 255f);
+        }
+
+        return new Color32(ToByte(color.X), ToByte(color.Y), ToByte(color.Z), 255);
     }
 
     private void OnMapPathChanged(AvaloniaPropertyChangedEventArgs e)
@@ -1834,10 +2146,16 @@ public sealed class GLWorldViewport : NativeControlHost
             };
 
             _renderer.Render(renderContext);
+            if (_pinsDirty)
+            {
+                RebuildPins();
+            }
+            DrawPins(width, height);
             if (_mainFramebuffer != _defaultFramebuffer)
             {
                 _renderer.PostprocessRender(_mainFramebuffer, _defaultFramebuffer);
             }
+            AddPinLabels(width, height);
             _textRenderer?.Render(_renderer.Camera);
             try
             {
@@ -2174,6 +2492,695 @@ public sealed class GLWorldViewport : NativeControlHost
         _bindingsLoaded = true;
         return true;
     }
+
+    private void DrawPins(int width, int height)
+    {
+        if (_pinVertexCount <= 0 || _pinShaderProgram == 0 || _renderer == null || _mainFramebuffer == null)
+        {
+            return;
+        }
+
+        if (!EnsurePinResources())
+        {
+            return;
+        }
+
+        _mainFramebuffer.Bind(FramebufferTarget.Framebuffer);
+        GL.Viewport(0, 0, width, height);
+
+        var mvp = ToMatrix4(_renderer.Camera.ViewProjectionMatrix);
+        GL.UseProgram(_pinShaderProgram);
+        if (_pinMvpLocation >= 0)
+        {
+            GL.UniformMatrix4(_pinMvpLocation, false, ref mvp);
+        }
+        if (_pinLightDirLocation >= 0)
+        {
+            GL.Uniform3(_pinLightDirLocation, PinLightDir.X, PinLightDir.Y, PinLightDir.Z);
+        }
+        if (_pinAmbientLocation >= 0)
+        {
+            GL.Uniform1(_pinAmbientLocation, PinAmbientLight);
+        }
+
+        GL.BindVertexArray(_pinVao);
+        foreach (var draw in _pinDraws)
+        {
+            if (_pinColorLocation >= 0)
+            {
+                GL.Uniform3(_pinColorLocation, draw.Color.X, draw.Color.Y, draw.Color.Z);
+            }
+            GL.DrawArrays(PrimitiveType.Triangles, draw.Start, draw.Count);
+        }
+        GL.BindVertexArray(0);
+        GL.UseProgram(0);
+    }
+
+    private void AddPinLabels(int width, int height)
+    {
+        if (_textRenderer == null || _renderer == null || _pinLabels.Count == 0)
+        {
+            lock (_labelLock)
+            {
+                _labelHitCache = new List<PinLabel>();
+            }
+            return;
+        }
+
+        const float labelScale = 16f;
+        var projected = new List<PinLabel>(_pinLabels.Count);
+        var viewProjection = _renderer.Camera.ViewProjectionMatrix;
+        lock (_pinLock)
+        {
+            foreach (var label in _pinLabels)
+            {
+                if (string.IsNullOrEmpty(label.Text))
+                {
+                    continue;
+                }
+
+                if (TryProjectToScreen(label.World, viewProjection, width, height, out var screen))
+                {
+                    label.ScreenX = screen.X;
+                    label.ScreenY = screen.Y;
+                    projected.Add(label);
+                }
+
+                _textRenderer.AddTextBillboard(label.World, new TextRenderer.TextRenderRequest
+                {
+                    Text = label.Text,
+                    Scale = labelScale,
+                    Color = label.Color,
+                    CenterHorizontal = true,
+                    CenterVertical = true,
+                }, _renderer.Camera, fixedScale: true);
+            }
+        }
+
+        lock (_labelLock)
+        {
+            _labelHitCache = projected;
+        }
+    }
+
+    private bool EnsurePinResources()
+    {
+        if (_pinShaderProgram == 0)
+        {
+            _pinShaderProgram = CreatePinShaderProgram();
+            if (_pinShaderProgram == 0)
+            {
+                return false;
+            }
+
+            _pinMvpLocation = GL.GetUniformLocation(_pinShaderProgram, "uMvp");
+            _pinColorLocation = GL.GetUniformLocation(_pinShaderProgram, "uColor");
+            _pinLightDirLocation = GL.GetUniformLocation(_pinShaderProgram, "uLightDir");
+            _pinAmbientLocation = GL.GetUniformLocation(_pinShaderProgram, "uAmbient");
+        }
+
+        return true;
+    }
+
+    private void DisposePinResources()
+    {
+        if (_pinVao != 0)
+        {
+            GL.DeleteVertexArray(_pinVao);
+            _pinVao = 0;
+        }
+        if (_pinVbo != 0)
+        {
+            GL.DeleteBuffer(_pinVbo);
+            _pinVbo = 0;
+        }
+        if (_pinShaderProgram != 0)
+        {
+            GL.DeleteProgram(_pinShaderProgram);
+            _pinShaderProgram = 0;
+        }
+        _pinVertexCount = 0;
+        _pinDraws.Clear();
+    }
+
+    private void RebuildPins()
+    {
+        _pinsDirty = false;
+        lock (_pinLock)
+        {
+            if (_pins.Count == 0)
+            {
+                _pinVertexCount = 0;
+                _pinDraws.Clear();
+                if (_pinVao != 0)
+                {
+                    GL.DeleteVertexArray(_pinVao);
+                    _pinVao = 0;
+                }
+                if (_pinVbo != 0)
+                {
+                    GL.DeleteBuffer(_pinVbo);
+                    _pinVbo = 0;
+                }
+                return;
+            }
+        }
+
+        if (!EnsurePinResources())
+        {
+            return;
+        }
+
+        float pinScale;
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            pinScale = PinScale;
+        }
+        else
+        {
+            pinScale = Dispatcher.UIThread.InvokeAsync(() => PinScale).GetAwaiter().GetResult();
+        }
+
+        List<PinRenderData> pinsSnapshot;
+        lock (_pinLock)
+        {
+            pinsSnapshot = new List<PinRenderData>(_pins);
+        }
+
+        var data = new List<float>(pinsSnapshot.Count * 256);
+        _pinDraws.Clear();
+        foreach (var pin in pinsSnapshot)
+        {
+            var start = data.Count / 6;
+            var added = AppendPinGeometry(pin, data, pinScale);
+            _pinDraws.Add(new PinDrawCall { Start = start, Count = added, Color = pin.Color });
+        }
+
+        if (_pinVao != 0)
+        {
+            GL.DeleteVertexArray(_pinVao);
+        }
+        if (_pinVbo != 0)
+        {
+            GL.DeleteBuffer(_pinVbo);
+        }
+
+        _pinVao = GL.GenVertexArray();
+        _pinVbo = GL.GenBuffer();
+        GL.BindVertexArray(_pinVao);
+
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _pinVbo);
+        GL.BufferData(BufferTarget.ArrayBuffer, data.Count * sizeof(float), data.ToArray(), BufferUsageHint.DynamicDraw);
+
+        GL.EnableVertexAttribArray(0);
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
+        GL.EnableVertexAttribArray(1);
+        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
+
+        GL.BindVertexArray(0);
+
+        _pinVertexCount = data.Count / 6;
+    }
+
+    private int AppendPinGeometry(PinRenderData pin, List<float> buffer, float pinScale)
+    {
+        var added = 0;
+        var forward = pin.Forward;
+        if (forward.LengthSquared() < 0.0001f)
+            forward = new Vector3(0, 0, 1);
+        forward = Vector3.Normalize(forward);
+
+        var upHint = Vector3.UnitZ;
+        if (MathF.Abs(Vector3.Dot(forward, upHint)) > 0.95f)
+            upHint = Vector3.UnitX;
+        var right = Vector3.Normalize(Vector3.Cross(upHint, forward));
+        var up = Vector3.Normalize(Vector3.Cross(forward, right));
+
+        Vector3 TransformLocal(Vector3 local)
+        {
+            return right * local.X + up * local.Y + forward * local.Z;
+        }
+
+        var pos = pin.Position;
+        var scale = pinScale;
+        var sphereRadius = 0.12f * scale;
+        var coneLength = sphereRadius * 1.8f;
+        var coneBaseRadius = sphereRadius;
+        var coneBaseOffset = 0f;
+
+        for (int i = 0; i < _pinConeUnit.Length; i += 3)
+        {
+            var p1 = _pinConeUnit[i];
+            var p2 = _pinConeUnit[i + 1];
+            var p3 = _pinConeUnit[i + 2];
+
+            p1.X *= coneBaseRadius; p1.Y *= coneBaseRadius; p1.Z = p1.Z * coneLength - coneBaseOffset;
+            p2.X *= coneBaseRadius; p2.Y *= coneBaseRadius; p2.Z = p2.Z * coneLength - coneBaseOffset;
+            p3.X *= coneBaseRadius; p3.Y *= coneBaseRadius; p3.Z = p3.Z * coneLength - coneBaseOffset;
+
+            p1 = TransformLocal(p1) + pos;
+            p2 = TransformLocal(p2) + pos;
+            p3 = TransformLocal(p3) + pos;
+
+            var n1 = TransformLocal(_pinConeNormals[i]);
+            var n2 = TransformLocal(_pinConeNormals[i + 1]);
+            var n3 = TransformLocal(_pinConeNormals[i + 2]);
+
+            AppendVertex(p1, n1, buffer);
+            AppendVertex(p2, n2, buffer);
+            AppendVertex(p3, n3, buffer);
+            added += 3;
+        }
+
+        for (int i = 0; i < _pinSphereUnit.Length; i += 3)
+        {
+            var p1 = TransformLocal(_pinSphereUnit[i] * sphereRadius) + pos;
+            var p2 = TransformLocal(_pinSphereUnit[i + 1] * sphereRadius) + pos;
+            var p3 = TransformLocal(_pinSphereUnit[i + 2] * sphereRadius) + pos;
+
+            var n1 = TransformLocal(_pinSphereNormals[i]);
+            var n2 = TransformLocal(_pinSphereNormals[i + 1]);
+            var n3 = TransformLocal(_pinSphereNormals[i + 2]);
+
+            AppendVertex(p1, n1, buffer);
+            AppendVertex(p2, n2, buffer);
+            AppendVertex(p3, n3, buffer);
+            added += 3;
+        }
+
+        return added;
+    }
+
+    private static void AppendVertex(Vector3 position, Vector3 normal, List<float> vertices)
+    {
+        vertices.Add(position.X);
+        vertices.Add(position.Y);
+        vertices.Add(position.Z);
+        vertices.Add(normal.X);
+        vertices.Add(normal.Y);
+        vertices.Add(normal.Z);
+    }
+
+    private static Vector3[] CreateUnitCone()
+    {
+        const int segments = 16;
+        var verts = new List<Vector3>();
+        for (int i = 0; i < segments; i++)
+        {
+            float a0 = i * MathF.PI * 2f / segments;
+            float a1 = (i + 1) * MathF.PI * 2f / segments;
+            verts.Add(new Vector3(0, 0, 1));
+            verts.Add(new Vector3(MathF.Cos(a0), MathF.Sin(a0), 0));
+            verts.Add(new Vector3(MathF.Cos(a1), MathF.Sin(a1), 0));
+        }
+        return verts.ToArray();
+    }
+
+    private static Vector3[] CreateUnitConeNormals()
+    {
+        const int segments = 16;
+        var norms = new List<Vector3>();
+        for (int i = 0; i < segments; i++)
+        {
+            float a0 = i * MathF.PI * 2f / segments;
+            float a1 = (i + 1) * MathF.PI * 2f / segments;
+            var apex = new Vector3(0, 0, 1);
+            var p0 = new Vector3(MathF.Cos(a0), MathF.Sin(a0), 0);
+            var p1 = new Vector3(MathF.Cos(a1), MathF.Sin(a1), 0);
+            var normal = Vector3.Cross(p0 - apex, p1 - apex);
+            if (normal.LengthSquared() < 0.0001f)
+                normal = Vector3.UnitZ;
+            else
+                normal = Vector3.Normalize(normal);
+            norms.Add(normal);
+            norms.Add(normal);
+            norms.Add(normal);
+        }
+        return norms.ToArray();
+    }
+
+    private static (Vector3[] Vertices, Vector3[] Normals) CreateUnitSphere(int latSegments, int lonSegments)
+    {
+        var verts = new List<Vector3>(latSegments * lonSegments * 6);
+        var norms = new List<Vector3>(latSegments * lonSegments * 6);
+
+        for (int lat = 0; lat < latSegments; lat++)
+        {
+            float v0 = lat / (float)latSegments;
+            float v1 = (lat + 1) / (float)latSegments;
+            float t0 = v0 * MathF.PI;
+            float t1 = v1 * MathF.PI;
+
+            for (int lon = 0; lon < lonSegments; lon++)
+            {
+                float u0 = lon / (float)lonSegments;
+                float u1 = (lon + 1) / (float)lonSegments;
+                float p0 = u0 * MathF.PI * 2f;
+                float p1 = u1 * MathF.PI * 2f;
+
+                var a = Spherical(t0, p0);
+                var b = Spherical(t1, p0);
+                var c = Spherical(t1, p1);
+                var d = Spherical(t0, p1);
+
+                AppendSphereTri(a, b, c, verts, norms);
+                AppendSphereTri(a, c, d, verts, norms);
+            }
+        }
+
+        return (verts.ToArray(), norms.ToArray());
+    }
+
+    private static Vector3 Spherical(float theta, float phi)
+    {
+        var sinT = MathF.Sin(theta);
+        return new Vector3(
+            sinT * MathF.Cos(phi),
+            MathF.Cos(theta),
+            sinT * MathF.Sin(phi));
+    }
+
+    private static void AppendSphereTri(Vector3 a, Vector3 b, Vector3 c, List<Vector3> verts, List<Vector3> norms)
+    {
+        verts.Add(a);
+        verts.Add(b);
+        verts.Add(c);
+        norms.Add(a);
+        norms.Add(b);
+        norms.Add(c);
+    }
+
+    private int CreatePinShaderProgram()
+    {
+        var version = GL.GetString(StringName.Version) ?? "unknown";
+        var glsl = GL.GetString(StringName.ShadingLanguageVersion) ?? "unknown";
+        var isEs = version.Contains("OpenGL ES", StringComparison.OrdinalIgnoreCase);
+        var errors = new List<string>();
+
+        var esVariants = new[]
+        {
+            new ShaderVariant("es300", VertexEs300, FragmentEs300, BindAttribLocation: false),
+            new ShaderVariant("es100", VertexEs100, FragmentEs100, BindAttribLocation: true)
+        };
+        var desktopVariants = new[]
+        {
+            new ShaderVariant("gl330", Vertex330, Fragment330, BindAttribLocation: false),
+            new ShaderVariant("gl150", Vertex150, Fragment150, BindAttribLocation: false),
+            new ShaderVariant("gl120", Vertex120, Fragment120, BindAttribLocation: true)
+        };
+
+        var variants = new List<ShaderVariant>();
+        if (isEs)
+        {
+            variants.AddRange(esVariants);
+            variants.AddRange(desktopVariants);
+        }
+        else
+        {
+            variants.AddRange(desktopVariants);
+            variants.AddRange(esVariants);
+        }
+
+        foreach (var variant in variants)
+        {
+            var vertexShader = CompilePinShader(ShaderType.VertexShader, variant.VertexSource, out var vertexError);
+            if (vertexShader == 0)
+            {
+                if (!string.IsNullOrWhiteSpace(vertexError))
+                    errors.Add($"Vertex {variant.Name}: {vertexError}");
+                continue;
+            }
+
+            var fragmentShader = CompilePinShader(ShaderType.FragmentShader, variant.FragmentSource, out var fragmentError);
+            if (fragmentShader == 0)
+            {
+                if (!string.IsNullOrWhiteSpace(fragmentError))
+                    errors.Add($"Fragment {variant.Name}: {fragmentError}");
+                GL.DeleteShader(vertexShader);
+                continue;
+            }
+
+            var program = GL.CreateProgram();
+            GL.AttachShader(program, vertexShader);
+            GL.AttachShader(program, fragmentShader);
+            if (variant.BindAttribLocation)
+            {
+                GL.BindAttribLocation(program, 0, "aPos");
+                GL.BindAttribLocation(program, 1, "aNormal");
+            }
+
+            GL.LinkProgram(program);
+
+            GL.GetProgram(program, GetProgramParameterName.LinkStatus, out var linked);
+            if (linked == 0)
+            {
+                var info = GL.GetProgramInfoLog(program);
+                if (!string.IsNullOrWhiteSpace(info))
+                    errors.Add($"Link {variant.Name}: {info}");
+                GL.DeleteProgram(program);
+                program = 0;
+            }
+
+            if (program != 0)
+            {
+                GL.DetachShader(program, vertexShader);
+                GL.DetachShader(program, fragmentShader);
+            }
+            GL.DeleteShader(vertexShader);
+            GL.DeleteShader(fragmentShader);
+
+            if (program != 0)
+            {
+                LogMessage($"Pin shader: {variant.Name} (GL {version} | GLSL {glsl})");
+                return program;
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            LogMessage($"Pin shader compile failed ({version}): {string.Join(" | ", errors)}");
+        }
+        else
+        {
+            LogMessage($"Pin shader compile failed ({version}).");
+        }
+
+        return 0;
+    }
+
+    private static int CompilePinShader(ShaderType type, string source, out string? error)
+    {
+        error = null;
+        var shader = GL.CreateShader(type);
+        GL.ShaderSource(shader, source);
+        GL.CompileShader(shader);
+
+        GL.GetShader(shader, ShaderParameter.CompileStatus, out var status);
+        if (status == 0)
+        {
+            error = GL.GetShaderInfoLog(shader);
+            GL.DeleteShader(shader);
+            return 0;
+        }
+
+        return shader;
+    }
+
+    private static OpenTK.Mathematics.Matrix4 ToMatrix4(Matrix4x4 matrix)
+    {
+        return new OpenTK.Mathematics.Matrix4(
+            matrix.M11, matrix.M12, matrix.M13, matrix.M14,
+            matrix.M21, matrix.M22, matrix.M23, matrix.M24,
+            matrix.M31, matrix.M32, matrix.M33, matrix.M34,
+            matrix.M41, matrix.M42, matrix.M43, matrix.M44);
+    }
+
+    private static bool TryProjectToScreen(Vector3 world, Matrix4x4 viewProjection, int width, int height, out Point screen)
+    {
+        var clip = Vector4.Transform(new Vector4(world, 1f), viewProjection);
+        if (Math.Abs(clip.W) < 1e-5f)
+        {
+            screen = default;
+            return false;
+        }
+
+        var ndc = clip / clip.W;
+        if (ndc.Z < -1f || ndc.Z > 1f)
+        {
+            screen = default;
+            return false;
+        }
+
+        var x = (ndc.X * 0.5f + 0.5f) * width;
+        var y = (-ndc.Y * 0.5f + 0.5f) * height;
+        screen = new Point(x, y);
+        return true;
+    }
+
+    private sealed class PinRenderData
+    {
+        public required Vector3 Position { get; init; }
+        public required Vector3 Forward { get; init; }
+        public required Vector3 Color { get; init; }
+        public required string Label { get; init; }
+    }
+
+    private sealed class PinDrawCall
+    {
+        public required int Start { get; init; }
+        public required int Count { get; init; }
+        public required Vector3 Color { get; init; }
+    }
+
+    private sealed class PinLabel
+    {
+        public required string Text { get; init; }
+        public required Vector3 World { get; init; }
+        public required Color32 Color { get; init; }
+        public double ScreenX { get; set; }
+        public double ScreenY { get; set; }
+    }
+
+    private readonly record struct ShaderVariant(string Name, string VertexSource, string FragmentSource, bool BindAttribLocation);
+
+    private const string Vertex330 = """
+        #version 330 core
+        layout(location = 0) in vec3 aPos;
+        layout(location = 1) in vec3 aNormal;
+        uniform mat4 uMvp;
+        out vec3 vNormal;
+        void main()
+        {
+            vNormal = aNormal;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string Fragment330 = """
+        #version 330 core
+        in vec3 vNormal;
+        out vec4 FragColor;
+        uniform vec3 uColor;
+        uniform vec3 uLightDir;
+        uniform float uAmbient;
+        void main()
+        {
+            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
+            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
+            FragColor = vec4(lit, 1.0);
+        }
+        """;
+
+    private const string Vertex150 = """
+        #version 150
+        in vec3 aPos;
+        in vec3 aNormal;
+        uniform mat4 uMvp;
+        out vec3 vNormal;
+        void main()
+        {
+            vNormal = aNormal;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string Fragment150 = """
+        #version 150
+        in vec3 vNormal;
+        out vec4 FragColor;
+        uniform vec3 uColor;
+        uniform vec3 uLightDir;
+        uniform float uAmbient;
+        void main()
+        {
+            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
+            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
+            FragColor = vec4(lit, 1.0);
+        }
+        """;
+
+    private const string Vertex120 = """
+        #version 120
+        attribute vec3 aPos;
+        attribute vec3 aNormal;
+        uniform mat4 uMvp;
+        varying vec3 vNormal;
+        void main()
+        {
+            vNormal = aNormal;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string Fragment120 = """
+        #version 120
+        uniform vec3 uColor;
+        uniform vec3 uLightDir;
+        uniform float uAmbient;
+        varying vec3 vNormal;
+        void main()
+        {
+            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
+            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
+            gl_FragColor = vec4(lit, 1.0);
+        }
+        """;
+
+    private const string VertexEs300 = """
+        #version 300 es
+        precision mediump float;
+        layout(location = 0) in vec3 aPos;
+        layout(location = 1) in vec3 aNormal;
+        uniform mat4 uMvp;
+        out vec3 vNormal;
+        void main()
+        {
+            vNormal = aNormal;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string FragmentEs300 = """
+        #version 300 es
+        precision mediump float;
+        out vec4 FragColor;
+        in vec3 vNormal;
+        uniform vec3 uColor;
+        uniform vec3 uLightDir;
+        uniform float uAmbient;
+        void main()
+        {
+            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
+            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
+            FragColor = vec4(lit, 1.0);
+        }
+        """;
+
+    private const string VertexEs100 = """
+        attribute vec3 aPos;
+        attribute vec3 aNormal;
+        uniform mat4 uMvp;
+        varying vec3 vNormal;
+        void main()
+        {
+            vNormal = aNormal;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string FragmentEs100 = """
+        precision mediump float;
+        uniform vec3 uColor;
+        uniform vec3 uLightDir;
+        uniform float uAmbient;
+        varying vec3 vNormal;
+        void main()
+        {
+            float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
+            vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
+            gl_FragColor = vec4(lit, 1.0);
+        }
+        """;
 
     private void UpdateChildWindowSize()
     {
