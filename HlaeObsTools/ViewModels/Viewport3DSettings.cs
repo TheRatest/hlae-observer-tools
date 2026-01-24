@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Linq;
+
 namespace HlaeObsTools.ViewModels;
 
 /// <summary>
@@ -18,6 +21,19 @@ public sealed class Viewport3DSettings : ViewModelBase
     private float _mapOffsetY;
     private float _mapOffsetZ;
     private float _viewportFpsCap = 60.0f;
+    private bool _postprocessEnabled = true;
+    private bool _colorCorrectionEnabled = true;
+    private bool _dynamicShadowsEnabled = true;
+    private bool _wireframeEnabled;
+    private int _shadowTextureSize = 1024;
+    private string _renderMode = "Default";
+
+    public IReadOnlyList<string> RenderModeOptions { get; } = ValveResourceFormat.Renderer.RenderModes.Items
+        .Where(mode => !mode.IsHeader)
+        .Select(mode => mode.Name)
+        .ToArray();
+
+    public IReadOnlyList<int> ShadowTextureSizeOptions { get; } = new[] { 256, 512, 1024, 2048, 4096 };
 
     /// <summary>
     /// Path to the .obj map file.
@@ -134,5 +150,59 @@ public sealed class Viewport3DSettings : ViewModelBase
     {
         get => _viewportFpsCap;
         set => SetProperty(ref _viewportFpsCap, value);
+    }
+
+    /// <summary>
+    /// Toggle postprocessing in the 3D viewport.
+    /// </summary>
+    public bool PostprocessEnabled
+    {
+        get => _postprocessEnabled;
+        set => SetProperty(ref _postprocessEnabled, value);
+    }
+
+    /// <summary>
+    /// Toggle color correction in the 3D viewport.
+    /// </summary>
+    public bool ColorCorrectionEnabled
+    {
+        get => _colorCorrectionEnabled;
+        set => SetProperty(ref _colorCorrectionEnabled, value);
+    }
+
+    /// <summary>
+    /// Toggle dynamic shadows in the 3D viewport.
+    /// </summary>
+    public bool DynamicShadowsEnabled
+    {
+        get => _dynamicShadowsEnabled;
+        set => SetProperty(ref _dynamicShadowsEnabled, value);
+    }
+
+    /// <summary>
+    /// Toggle wireframe rendering in the 3D viewport.
+    /// </summary>
+    public bool WireframeEnabled
+    {
+        get => _wireframeEnabled;
+        set => SetProperty(ref _wireframeEnabled, value);
+    }
+
+    /// <summary>
+    /// Shadow map texture size (power-of-two).
+    /// </summary>
+    public int ShadowTextureSize
+    {
+        get => _shadowTextureSize;
+        set => SetProperty(ref _shadowTextureSize, value);
+    }
+
+    /// <summary>
+    /// Render mode for the VRF renderer.
+    /// </summary>
+    public string RenderMode
+    {
+        get => _renderMode;
+        set => SetProperty(ref _renderMode, string.IsNullOrWhiteSpace(value) ? "Default" : value);
     }
 }

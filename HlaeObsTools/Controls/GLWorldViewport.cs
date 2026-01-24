@@ -56,6 +56,18 @@ public sealed class GLWorldViewport : NativeControlHost
         AvaloniaProperty.Register<GLWorldViewport, float>(nameof(ViewportMouseScale), 0.75f);
     public static readonly StyledProperty<float> ViewportFpsCapProperty =
         AvaloniaProperty.Register<GLWorldViewport, float>(nameof(ViewportFpsCap), 60.0f);
+    public static readonly StyledProperty<bool> PostprocessEnabledProperty =
+        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(PostprocessEnabled), true);
+    public static readonly StyledProperty<bool> ColorCorrectionEnabledProperty =
+        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(ColorCorrectionEnabled), true);
+    public static readonly StyledProperty<bool> DynamicShadowsEnabledProperty =
+        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(DynamicShadowsEnabled), true);
+    public static readonly StyledProperty<bool> WireframeEnabledProperty =
+        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(WireframeEnabled), false);
+    public static readonly StyledProperty<int> ShadowTextureSizeProperty =
+        AvaloniaProperty.Register<GLWorldViewport, int>(nameof(ShadowTextureSize), 1024);
+    public static readonly StyledProperty<string> RenderModeProperty =
+        AvaloniaProperty.Register<GLWorldViewport, string>(nameof(RenderMode), "Default");
     public static readonly StyledProperty<FreecamSettings?> FreecamSettingsProperty =
         AvaloniaProperty.Register<GLWorldViewport, FreecamSettings?>(nameof(FreecamSettings));
     public static readonly StyledProperty<HlaeInputSender?> InputSenderProperty =
@@ -156,6 +168,12 @@ public sealed class GLWorldViewport : NativeControlHost
     private HlaeInputSender? _inputSender;
 
     private float _viewportFpsCapCached;
+    private bool _postprocessEnabledCached = true;
+    private bool _colorCorrectionEnabledCached = true;
+    private bool _dynamicShadowsEnabledCached = true;
+    private bool _wireframeEnabledCached;
+    private int _shadowTextureSizeCached = 1024;
+    private string _renderModeCached = "Default";
     private readonly Stopwatch _frameLimiter = Stopwatch.StartNew();
     private long _lastLimiterTicks;
     private long _lastFrameTimestamp;
@@ -178,6 +196,12 @@ public sealed class GLWorldViewport : NativeControlHost
         PinScaleProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnPinScaleChanged());
         PinOffsetZProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnPinOffsetChanged());
         ViewportFpsCapProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnViewportFpsCapChanged());
+        PostprocessEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnPostprocessEnabledChanged());
+        ColorCorrectionEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnColorCorrectionEnabledChanged());
+        DynamicShadowsEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnDynamicShadowsEnabledChanged());
+        WireframeEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnWireframeEnabledChanged());
+        ShadowTextureSizeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnShadowTextureSizeChanged());
+        RenderModeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnRenderModeChanged());
         FreecamSettingsProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
         InputSenderProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnInputSenderChanged(args));
     }
@@ -210,6 +234,42 @@ public sealed class GLWorldViewport : NativeControlHost
     {
         get => GetValue(ViewportFpsCapProperty);
         set => SetValue(ViewportFpsCapProperty, value);
+    }
+
+    public bool PostprocessEnabled
+    {
+        get => GetValue(PostprocessEnabledProperty);
+        set => SetValue(PostprocessEnabledProperty, value);
+    }
+
+    public bool ColorCorrectionEnabled
+    {
+        get => GetValue(ColorCorrectionEnabledProperty);
+        set => SetValue(ColorCorrectionEnabledProperty, value);
+    }
+
+    public bool DynamicShadowsEnabled
+    {
+        get => GetValue(DynamicShadowsEnabledProperty);
+        set => SetValue(DynamicShadowsEnabledProperty, value);
+    }
+
+    public bool WireframeEnabled
+    {
+        get => GetValue(WireframeEnabledProperty);
+        set => SetValue(WireframeEnabledProperty, value);
+    }
+
+    public int ShadowTextureSize
+    {
+        get => GetValue(ShadowTextureSizeProperty);
+        set => SetValue(ShadowTextureSizeProperty, value);
+    }
+
+    public string RenderMode
+    {
+        get => GetValue(RenderModeProperty);
+        set => SetValue(RenderModeProperty, value ?? "Default");
     }
 
     public FreecamSettings? FreecamSettings
@@ -269,6 +329,12 @@ public sealed class GLWorldViewport : NativeControlHost
     {
         base.OnAttachedToVisualTree(e);
         _viewportFpsCapCached = ViewportFpsCap;
+        _postprocessEnabledCached = PostprocessEnabled;
+        _colorCorrectionEnabledCached = ColorCorrectionEnabled;
+        _dynamicShadowsEnabledCached = DynamicShadowsEnabled;
+        _wireframeEnabledCached = WireframeEnabled;
+        _shadowTextureSizeCached = ShadowTextureSize;
+        _renderModeCached = string.IsNullOrWhiteSpace(RenderMode) ? "Default" : RenderMode;
         if (_hwnd != IntPtr.Zero)
         {
             InitializeAfterNativeCreated();
@@ -1663,6 +1729,42 @@ public sealed class GLWorldViewport : NativeControlHost
         RequestNextFrame();
     }
 
+    private void OnPostprocessEnabledChanged()
+    {
+        _postprocessEnabledCached = PostprocessEnabled;
+        ApplyRendererOptions();
+    }
+
+    private void OnColorCorrectionEnabledChanged()
+    {
+        _colorCorrectionEnabledCached = ColorCorrectionEnabled;
+        ApplyRendererOptions();
+    }
+
+    private void OnDynamicShadowsEnabledChanged()
+    {
+        _dynamicShadowsEnabledCached = DynamicShadowsEnabled;
+        ApplyRendererOptions();
+    }
+
+    private void OnWireframeEnabledChanged()
+    {
+        _wireframeEnabledCached = WireframeEnabled;
+        ApplyRendererOptions();
+    }
+
+    private void OnShadowTextureSizeChanged()
+    {
+        _shadowTextureSizeCached = ShadowTextureSize;
+        RequestRendererReload();
+    }
+
+    private void OnRenderModeChanged()
+    {
+        _renderModeCached = string.IsNullOrWhiteSpace(RenderMode) ? "Default" : RenderMode;
+        ApplyRendererOptions();
+    }
+
     private void OnFreecamSettingsChanged(AvaloniaPropertyChangedEventArgs e)
     {
         if (_freecamSettings != null)
@@ -1981,6 +2083,61 @@ public sealed class GLWorldViewport : NativeControlHost
         RequestNextFrame();
     }
 
+    private void ApplyRendererOptions()
+    {
+        if (_renderer == null || !_rendererReady)
+        {
+            return;
+        }
+
+        _renderer.Postprocess.Enabled = _postprocessEnabledCached && IsRenderModeDefault();
+        _renderer.Postprocess.ColorCorrectionEnabled = _colorCorrectionEnabledCached;
+        _renderer.Scene.LightingInfo.EnableDynamicShadows = _dynamicShadowsEnabledCached;
+        _renderer.IsWireframe = _wireframeEnabledCached;
+
+        ApplyRenderModeToScene(_renderer.Scene, _renderModeCached);
+        if (_renderer.SkyboxScene != null)
+        {
+            ApplyRenderModeToScene(_renderer.SkyboxScene, _renderModeCached);
+        }
+
+        if (_renderer.ViewBuffer?.Data != null)
+        {
+            _renderer.ViewBuffer.Data.RenderMode = RenderModes.GetShaderId(_renderModeCached);
+        }
+    }
+
+    private static void ApplyRenderModeToScene(Scene scene, string renderMode)
+    {
+        foreach (var node in scene.AllNodes)
+        {
+            node.SetRenderMode(renderMode);
+        }
+    }
+
+    private bool IsRenderModeDefault()
+    {
+        return string.Equals(_renderModeCached, "Default", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RequestRendererReload()
+    {
+        if (!_rendererReady)
+        {
+            return;
+        }
+
+        var mapPath = MapPath;
+        if (string.IsNullOrWhiteSpace(mapPath))
+        {
+            return;
+        }
+
+        _pendingMapPath = mapPath;
+        _mapLoadPending = true;
+        RequestNextFrame();
+    }
+
     private void StartRenderLoop()
     {
         if (_renderLoop != null)
@@ -2210,6 +2367,7 @@ public sealed class GLWorldViewport : NativeControlHost
 
             _rendererContext = new RendererContext(_fileLoader, NullLogger.Instance);
             _renderer = new Renderer(_rendererContext);
+            _renderer.ShadowTextureSize = _shadowTextureSizeCached;
             _textRenderer = new TextRenderer(_rendererContext, _renderer.Camera);
 
             GLEnvironment.Initialize(NullLogger.Instance);
@@ -2219,6 +2377,8 @@ public sealed class GLWorldViewport : NativeControlHost
             {
                 _renderer.LoadRendererResources();
                 _renderer.Postprocess.Load();
+                _renderer.Postprocess.Enabled = _postprocessEnabledCached && IsRenderModeDefault();
+                _renderer.Postprocess.ColorCorrectionEnabled = _colorCorrectionEnabledCached;
                 _renderer.Initialize();
                 _textRenderer.Load();
                 LogMessage("Renderer initialized.");
@@ -2264,6 +2424,7 @@ public sealed class GLWorldViewport : NativeControlHost
 
             PostSceneLoad(worldLoader.DefaultEnabledLayers);
             _rendererReady = true;
+            ApplyRendererOptions();
             _renderLogged = false;
             LogMessage("LoadMap completed.");
         }

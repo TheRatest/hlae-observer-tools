@@ -84,6 +84,12 @@ public class AppSettingsData
     public double MapOffsetY { get; set; }
     public double MapOffsetZ { get; set; }
     public double ViewportFpsCap { get; set; } = 60.0;
+    public bool ViewportPostprocessEnabled { get; set; } = true;
+    public bool ViewportColorCorrectionEnabled { get; set; } = true;
+    public bool ViewportDynamicShadowsEnabled { get; set; } = true;
+    public bool ViewportWireframeEnabled { get; set; }
+    public int ViewportShadowTextureSize { get; set; } = 1024;
+    public string ViewportRenderMode { get; set; } = "Default";
     public FreecamSettingsData FreecamSettings { get; set; } = new();
     public bool VmixReplayEnabled { get; set; }
     public string VmixReplayHost { get; set; } = "127.0.0.1";

@@ -163,7 +163,13 @@ public class MainDockFactory : Factory, IDisposable
             MapOffsetX = (float)_storedSettings.MapOffsetX,
             MapOffsetY = (float)_storedSettings.MapOffsetY,
             MapOffsetZ = (float)_storedSettings.MapOffsetZ,
-            ViewportFpsCap = (float)_storedSettings.ViewportFpsCap
+            ViewportFpsCap = (float)_storedSettings.ViewportFpsCap,
+            PostprocessEnabled = _storedSettings.ViewportPostprocessEnabled,
+            ColorCorrectionEnabled = _storedSettings.ViewportColorCorrectionEnabled,
+            DynamicShadowsEnabled = _storedSettings.ViewportDynamicShadowsEnabled,
+            WireframeEnabled = _storedSettings.ViewportWireframeEnabled,
+            ShadowTextureSize = _storedSettings.ViewportShadowTextureSize,
+            RenderMode = _storedSettings.ViewportRenderMode
         };
 
         // Create the docks (top-right hosts the CS2 console)
