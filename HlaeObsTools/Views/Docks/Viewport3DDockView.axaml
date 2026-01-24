@@ -18,6 +18,7 @@
                                       SkipTranslucentEnabled="{Binding Viewport3DSettings.SkipTranslucentEnabled}"
                                       ShowFps="{Binding Viewport3DSettings.ShowFps}"
                                       ShadowTextureSize="{Binding Viewport3DSettings.ShadowTextureSize}"
+                                      MaxTextureSize="{Binding Viewport3DSettings.MaxTextureSize}"
                                       RenderMode="{Binding Viewport3DSettings.RenderMode}"
                                       FreecamSettings="{Binding FreecamSettings}"
                                       InputSender="{Binding InputSender}"

@@ -306,6 +306,14 @@
                                         ItemsSource="{Binding Viewport3DSettings.ShadowTextureSizeOptions}"
                                         SelectedItem="{Binding Viewport3DSettings.ShadowTextureSize, Mode=TwoWay}"/>
                             </StackPanel>
+                            <StackPanel Orientation="Vertical" Spacing="4">
+                                <TextBlock Text="Max texture size"
+                                        Foreground="#CCCCCC"
+                                        FontWeight="SemiBold"/>
+                                <ComboBox Width="120"
+                                        ItemsSource="{Binding Viewport3DSettings.MaxTextureSizeOptions}"
+                                        SelectedItem="{Binding Viewport3DSettings.MaxTextureSize, Mode=TwoWay}"/>
+                            </StackPanel>
                         </StackPanel>
 
                         <TextBlock Text="Map scale"

@@ -29,6 +29,7 @@ public sealed class Viewport3DSettings : ViewModelBase
     private bool _skipTranslucentEnabled;
     private bool _showFps;
     private int _shadowTextureSize = 1024;
+    private int _maxTextureSize = 1024;
     private string _renderMode = "Default";
 
     public IReadOnlyList<string> RenderModeOptions { get; } = ValveResourceFormat.Renderer.RenderModes.Items
@@ -38,6 +39,7 @@ public sealed class Viewport3DSettings : ViewModelBase
         .ToArray();
 
     public IReadOnlyList<int> ShadowTextureSizeOptions { get; } = new[] { 256, 512, 1024, 2048, 4096 };
+    public IReadOnlyList<int> MaxTextureSizeOptions { get; } = new[] { 64, 128, 256, 512, 1024, 2048 };
 
     /// <summary>
     /// Path to the .obj map file.
@@ -226,6 +228,15 @@ public sealed class Viewport3DSettings : ViewModelBase
     {
         get => _shadowTextureSize;
         set => SetProperty(ref _shadowTextureSize, value);
+    }
+
+    /// <summary>
+    /// Maximum texture size to load for the viewport renderer.
+    /// </summary>
+    public int MaxTextureSize
+    {
+        get => _maxTextureSize;
+        set => SetProperty(ref _maxTextureSize, value);
     }
 
     /// <summary>

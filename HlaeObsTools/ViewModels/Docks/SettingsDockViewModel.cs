@@ -485,6 +485,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 ViewportSkipTranslucentEnabled = _viewport3DSettings.SkipTranslucentEnabled,
                 ViewportShowFps = _viewport3DSettings.ShowFps,
                 ViewportShadowTextureSize = _viewport3DSettings.ShadowTextureSize,
+                ViewportMaxTextureSize = _viewport3DSettings.MaxTextureSize,
                 ViewportRenderMode = _viewport3DSettings.RenderMode,
                 FreecamSettings = _freecamSettings.ToData(),
                 VmixReplayEnabled = _vmixReplaySettings.Enabled,

@@ -172,6 +172,7 @@ public class MainDockFactory : Factory, IDisposable
             SkipTranslucentEnabled = _storedSettings.ViewportSkipTranslucentEnabled,
             ShowFps = _storedSettings.ViewportShowFps,
             ShadowTextureSize = _storedSettings.ViewportShadowTextureSize,
+            MaxTextureSize = _storedSettings.ViewportMaxTextureSize,
             RenderMode = _storedSettings.ViewportRenderMode
         };
 

@@ -92,6 +92,7 @@ public class AppSettingsData
     public bool ViewportSkipTranslucentEnabled { get; set; }
     public bool ViewportShowFps { get; set; }
     public int ViewportShadowTextureSize { get; set; } = 1024;
+    public int ViewportMaxTextureSize { get; set; } = 1024;
     public string ViewportRenderMode { get; set; } = "Default";
     public FreecamSettingsData FreecamSettings { get; set; } = new();
     public bool VmixReplayEnabled { get; set; }

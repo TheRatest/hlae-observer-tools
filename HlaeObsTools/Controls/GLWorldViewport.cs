@@ -72,6 +72,8 @@ public sealed class GLWorldViewport : NativeControlHost
         AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(ShowFps), false);
     public static readonly StyledProperty<int> ShadowTextureSizeProperty =
         AvaloniaProperty.Register<GLWorldViewport, int>(nameof(ShadowTextureSize), 1024);
+    public static readonly StyledProperty<int> MaxTextureSizeProperty =
+        AvaloniaProperty.Register<GLWorldViewport, int>(nameof(MaxTextureSize), 1024);
     public static readonly StyledProperty<string> RenderModeProperty =
         AvaloniaProperty.Register<GLWorldViewport, string>(nameof(RenderMode), "Default");
     public static readonly StyledProperty<FreecamSettings?> FreecamSettingsProperty =
@@ -182,6 +184,7 @@ public sealed class GLWorldViewport : NativeControlHost
     private bool _skipTranslucentEnabledCached;
     private bool _showFpsCached;
     private int _shadowTextureSizeCached = 1024;
+    private int _maxTextureSizeCached = 1024;
     private string _renderModeCached = "Default";
 
     private float _fpsAccumulator;
@@ -217,6 +220,7 @@ public sealed class GLWorldViewport : NativeControlHost
         SkipTranslucentEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnSkipTranslucentEnabledChanged());
         ShowFpsProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnShowFpsChanged());
         ShadowTextureSizeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnShadowTextureSizeChanged());
+        MaxTextureSizeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnMaxTextureSizeChanged());
         RenderModeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnRenderModeChanged());
         FreecamSettingsProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
         InputSenderProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnInputSenderChanged(args));
@@ -300,6 +304,12 @@ public sealed class GLWorldViewport : NativeControlHost
         set => SetValue(ShadowTextureSizeProperty, value);
     }
 
+    public int MaxTextureSize
+    {
+        get => GetValue(MaxTextureSizeProperty);
+        set => SetValue(MaxTextureSizeProperty, value);
+    }
+
     public string RenderMode
     {
         get => GetValue(RenderModeProperty);
@@ -371,6 +381,7 @@ public sealed class GLWorldViewport : NativeControlHost
         _skipTranslucentEnabledCached = SkipTranslucentEnabled;
         _showFpsCached = ShowFps;
         _shadowTextureSizeCached = ShadowTextureSize;
+        _maxTextureSizeCached = MaxTextureSize;
         _renderModeCached = string.IsNullOrWhiteSpace(RenderMode) ? "Default" : RenderMode;
         if (_hwnd != IntPtr.Zero)
         {
@@ -1814,6 +1825,12 @@ public sealed class GLWorldViewport : NativeControlHost
         RequestRendererReload();
     }
 
+    private void OnMaxTextureSizeChanged()
+    {
+        _maxTextureSizeCached = MaxTextureSize;
+        RequestRendererReload();
+    }
+
     private void OnRenderModeChanged()
     {
         var wasFastUnlit = IsFastUnlit();
@@ -2444,6 +2461,7 @@ public sealed class GLWorldViewport : NativeControlHost
             }
 
             _rendererContext = new RendererContext(_fileLoader, NullLogger.Instance);
+            _rendererContext.MaxTextureSize = _maxTextureSizeCached;
             _renderer = new Renderer(_rendererContext);
             _renderer.ShadowTextureSize = _shadowTextureSizeCached;
             _textRenderer = new TextRenderer(_rendererContext, _renderer.Camera);
@@ -2640,6 +2658,7 @@ public sealed class GLWorldViewport : NativeControlHost
         }
 
         _renderer.Scene.EnableOcclusionCulling = _mapHasExternalReferences;
+        _renderer.Scene.FogEnabled = false;
         _renderer.Scene.Initialize();
         _renderer.SkyboxScene?.Initialize();
 
