@@ -273,8 +273,19 @@
                             <ToggleSwitch IsChecked="{Binding Viewport3DSettings.DynamicShadowsEnabled, Mode=TwoWay}"
                                         Content="Dynamic shadows"
                                         Foreground="#E6E6E6"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
                             <ToggleSwitch IsChecked="{Binding Viewport3DSettings.WireframeEnabled, Mode=TwoWay}"
                                         Content="Wireframe"
+                                        Foreground="#E6E6E6"/>
+                            <ToggleSwitch IsChecked="{Binding Viewport3DSettings.SkipWaterEnabled, Mode=TwoWay}"
+                                        Content="Skip water"
+                                        Foreground="#E6E6E6"/>
+                            <ToggleSwitch IsChecked="{Binding Viewport3DSettings.SkipTranslucentEnabled, Mode=TwoWay}"
+                                        Content="Skip translucents"
+                                        Foreground="#E6E6E6"/>
+                            <ToggleSwitch IsChecked="{Binding Viewport3DSettings.ShowFps, Mode=TwoWay}"
+                                        Content="Show FPS"
                                         Foreground="#E6E6E6"/>
                         </StackPanel>
 

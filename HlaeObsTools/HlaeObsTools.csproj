@@ -38,8 +38,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\references\ValveResourceFormat\ValveResourceFormat\ValveResourceFormat.csproj" />
-    <ProjectReference Include="..\..\references\ValveResourceFormat\Renderer\Renderer.csproj" />
+    <ProjectReference Include="..\external\ValveResourceFormat\ValveResourceFormat\ValveResourceFormat.csproj" />
+    <ProjectReference Include="..\external\ValveResourceFormat\Renderer\Renderer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

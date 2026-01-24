@@ -168,6 +168,9 @@ public class MainDockFactory : Factory, IDisposable
             ColorCorrectionEnabled = _storedSettings.ViewportColorCorrectionEnabled,
             DynamicShadowsEnabled = _storedSettings.ViewportDynamicShadowsEnabled,
             WireframeEnabled = _storedSettings.ViewportWireframeEnabled,
+            SkipWaterEnabled = _storedSettings.ViewportSkipWaterEnabled,
+            SkipTranslucentEnabled = _storedSettings.ViewportSkipTranslucentEnabled,
+            ShowFps = _storedSettings.ViewportShowFps,
             ShadowTextureSize = _storedSettings.ViewportShadowTextureSize,
             RenderMode = _storedSettings.ViewportRenderMode
         };

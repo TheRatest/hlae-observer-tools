@@ -88,6 +88,9 @@ public class AppSettingsData
     public bool ViewportColorCorrectionEnabled { get; set; } = true;
     public bool ViewportDynamicShadowsEnabled { get; set; } = true;
     public bool ViewportWireframeEnabled { get; set; }
+    public bool ViewportSkipWaterEnabled { get; set; }
+    public bool ViewportSkipTranslucentEnabled { get; set; }
+    public bool ViewportShowFps { get; set; }
     public int ViewportShadowTextureSize { get; set; } = 1024;
     public string ViewportRenderMode { get; set; } = "Default";
     public FreecamSettingsData FreecamSettings { get; set; } = new();

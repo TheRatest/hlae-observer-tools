@@ -25,12 +25,16 @@ public sealed class Viewport3DSettings : ViewModelBase
     private bool _colorCorrectionEnabled = true;
     private bool _dynamicShadowsEnabled = true;
     private bool _wireframeEnabled;
+    private bool _skipWaterEnabled;
+    private bool _skipTranslucentEnabled;
+    private bool _showFps;
     private int _shadowTextureSize = 1024;
     private string _renderMode = "Default";
 
     public IReadOnlyList<string> RenderModeOptions { get; } = ValveResourceFormat.Renderer.RenderModes.Items
         .Where(mode => !mode.IsHeader)
         .Select(mode => mode.Name)
+        .Concat(new[] { "FastUnlit" })
         .ToArray();
 
     public IReadOnlyList<int> ShadowTextureSizeOptions { get; } = new[] { 256, 512, 1024, 2048, 4096 };
@@ -186,6 +190,33 @@ public sealed class Viewport3DSettings : ViewModelBase
     {
         get => _wireframeEnabled;
         set => SetProperty(ref _wireframeEnabled, value);
+    }
+
+    /// <summary>
+    /// Skip rendering water passes in the 3D viewport.
+    /// </summary>
+    public bool SkipWaterEnabled
+    {
+        get => _skipWaterEnabled;
+        set => SetProperty(ref _skipWaterEnabled, value);
+    }
+
+    /// <summary>
+    /// Skip rendering translucent passes in the 3D viewport.
+    /// </summary>
+    public bool SkipTranslucentEnabled
+    {
+        get => _skipTranslucentEnabled;
+        set => SetProperty(ref _skipTranslucentEnabled, value);
+    }
+
+    /// <summary>
+    /// Show FPS overlay in the 3D viewport.
+    /// </summary>
+    public bool ShowFps
+    {
+        get => _showFps;
+        set => SetProperty(ref _showFps, value);
     }
 
     /// <summary>

@@ -64,6 +64,12 @@ public sealed class GLWorldViewport : NativeControlHost
         AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(DynamicShadowsEnabled), true);
     public static readonly StyledProperty<bool> WireframeEnabledProperty =
         AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(WireframeEnabled), false);
+    public static readonly StyledProperty<bool> SkipWaterEnabledProperty =
+        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(SkipWaterEnabled), false);
+    public static readonly StyledProperty<bool> SkipTranslucentEnabledProperty =
+        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(SkipTranslucentEnabled), false);
+    public static readonly StyledProperty<bool> ShowFpsProperty =
+        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(ShowFps), false);
     public static readonly StyledProperty<int> ShadowTextureSizeProperty =
         AvaloniaProperty.Register<GLWorldViewport, int>(nameof(ShadowTextureSize), 1024);
     public static readonly StyledProperty<string> RenderModeProperty =
@@ -172,8 +178,15 @@ public sealed class GLWorldViewport : NativeControlHost
     private bool _colorCorrectionEnabledCached = true;
     private bool _dynamicShadowsEnabledCached = true;
     private bool _wireframeEnabledCached;
+    private bool _skipWaterEnabledCached;
+    private bool _skipTranslucentEnabledCached;
+    private bool _showFpsCached;
     private int _shadowTextureSizeCached = 1024;
     private string _renderModeCached = "Default";
+
+    private float _fpsAccumulator;
+    private int _fpsSamples;
+    private float _fpsValue;
     private readonly Stopwatch _frameLimiter = Stopwatch.StartNew();
     private long _lastLimiterTicks;
     private long _lastFrameTimestamp;
@@ -200,6 +213,9 @@ public sealed class GLWorldViewport : NativeControlHost
         ColorCorrectionEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnColorCorrectionEnabledChanged());
         DynamicShadowsEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnDynamicShadowsEnabledChanged());
         WireframeEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnWireframeEnabledChanged());
+        SkipWaterEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnSkipWaterEnabledChanged());
+        SkipTranslucentEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnSkipTranslucentEnabledChanged());
+        ShowFpsProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnShowFpsChanged());
         ShadowTextureSizeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnShadowTextureSizeChanged());
         RenderModeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnRenderModeChanged());
         FreecamSettingsProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
@@ -258,6 +274,24 @@ public sealed class GLWorldViewport : NativeControlHost
     {
         get => GetValue(WireframeEnabledProperty);
         set => SetValue(WireframeEnabledProperty, value);
+    }
+
+    public bool SkipWaterEnabled
+    {
+        get => GetValue(SkipWaterEnabledProperty);
+        set => SetValue(SkipWaterEnabledProperty, value);
+    }
+
+    public bool SkipTranslucentEnabled
+    {
+        get => GetValue(SkipTranslucentEnabledProperty);
+        set => SetValue(SkipTranslucentEnabledProperty, value);
+    }
+
+    public bool ShowFps
+    {
+        get => GetValue(ShowFpsProperty);
+        set => SetValue(ShowFpsProperty, value);
     }
 
     public int ShadowTextureSize
@@ -333,6 +367,9 @@ public sealed class GLWorldViewport : NativeControlHost
         _colorCorrectionEnabledCached = ColorCorrectionEnabled;
         _dynamicShadowsEnabledCached = DynamicShadowsEnabled;
         _wireframeEnabledCached = WireframeEnabled;
+        _skipWaterEnabledCached = SkipWaterEnabled;
+        _skipTranslucentEnabledCached = SkipTranslucentEnabled;
+        _showFpsCached = ShowFps;
         _shadowTextureSizeCached = ShadowTextureSize;
         _renderModeCached = string.IsNullOrWhiteSpace(RenderMode) ? "Default" : RenderMode;
         if (_hwnd != IntPtr.Zero)
@@ -1753,6 +1790,24 @@ public sealed class GLWorldViewport : NativeControlHost
         ApplyRendererOptions();
     }
 
+    private void OnSkipWaterEnabledChanged()
+    {
+        _skipWaterEnabledCached = SkipWaterEnabled;
+        ApplyRendererOptions();
+    }
+
+    private void OnSkipTranslucentEnabledChanged()
+    {
+        _skipTranslucentEnabledCached = SkipTranslucentEnabled;
+        ApplyRendererOptions();
+    }
+
+    private void OnShowFpsChanged()
+    {
+        _showFpsCached = ShowFps;
+        RequestNextFrame();
+    }
+
     private void OnShadowTextureSizeChanged()
     {
         _shadowTextureSizeCached = ShadowTextureSize;
@@ -1761,7 +1816,14 @@ public sealed class GLWorldViewport : NativeControlHost
 
     private void OnRenderModeChanged()
     {
+        var wasFastUnlit = IsFastUnlit();
         _renderModeCached = string.IsNullOrWhiteSpace(RenderMode) ? "Default" : RenderMode;
+        var isFastUnlit = IsFastUnlit();
+        if (wasFastUnlit != isFastUnlit)
+        {
+            RequestRendererReload();
+            return;
+        }
         ApplyRendererOptions();
     }
 
@@ -2090,20 +2152,23 @@ public sealed class GLWorldViewport : NativeControlHost
             return;
         }
 
+        var effectiveRenderMode = GetEffectiveRenderMode();
         _renderer.Postprocess.Enabled = _postprocessEnabledCached && IsRenderModeDefault();
         _renderer.Postprocess.ColorCorrectionEnabled = _colorCorrectionEnabledCached;
-        _renderer.Scene.LightingInfo.EnableDynamicShadows = _dynamicShadowsEnabledCached;
+        _renderer.Scene.LightingInfo.EnableDynamicShadows = _dynamicShadowsEnabledCached && !IsFastUnlit();
         _renderer.IsWireframe = _wireframeEnabledCached;
+        _renderer.ShowWater = !_skipWaterEnabledCached;
+        _renderer.ShowTranslucent = !_skipTranslucentEnabledCached;
 
-        ApplyRenderModeToScene(_renderer.Scene, _renderModeCached);
+        ApplyRenderModeToScene(_renderer.Scene, effectiveRenderMode);
         if (_renderer.SkyboxScene != null)
         {
-            ApplyRenderModeToScene(_renderer.SkyboxScene, _renderModeCached);
+            ApplyRenderModeToScene(_renderer.SkyboxScene, effectiveRenderMode);
         }
 
         if (_renderer.ViewBuffer?.Data != null)
         {
-            _renderer.ViewBuffer.Data.RenderMode = RenderModes.GetShaderId(_renderModeCached);
+            _renderer.ViewBuffer.Data.RenderMode = RenderModes.GetShaderId(effectiveRenderMode);
         }
     }
 
@@ -2118,6 +2183,16 @@ public sealed class GLWorldViewport : NativeControlHost
     private bool IsRenderModeDefault()
     {
         return string.Equals(_renderModeCached, "Default", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsFastUnlit()
+    {
+        return string.Equals(_renderModeCached, "FastUnlit", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetEffectiveRenderMode()
+    {
+        return IsFastUnlit() ? "Default" : _renderModeCached;
     }
 
     private void RequestRendererReload()
@@ -2275,6 +2350,8 @@ public sealed class GLWorldViewport : NativeControlHost
             var delta = (float)Stopwatch.GetElapsedTime(_lastFrameTimestamp, now).TotalSeconds;
             _lastFrameTimestamp = now;
 
+            UpdateFps(delta);
+
             var width = Math.Max(1, _renderWidth);
             var height = Math.Max(1, _renderHeight);
             if (_mainFramebuffer.Width != width || _mainFramebuffer.Height != height)
@@ -2313,6 +2390,7 @@ public sealed class GLWorldViewport : NativeControlHost
                 _renderer.PostprocessRender(_mainFramebuffer, _defaultFramebuffer);
             }
             AddPinLabels(width, height);
+            AddFpsOverlay(width);
             _textRenderer?.Render(_renderer.Camera);
             try
             {
@@ -2407,14 +2485,20 @@ public sealed class GLWorldViewport : NativeControlHost
 
             _renderer.MainFramebuffer = _mainFramebuffer;
 
-            var worldPath = WorldLoader.GetWorldPathFromMap(resolvedMapPath);
+            var worldPath = WorldLoader.GetWorldNameFromMap(resolvedMapPath);
             LogMessage($"Resolved world path: {worldPath}");
-            using var worldResource = _fileLoader.LoadFile(worldPath);
+            using var worldResource = _fileLoader.LoadFileCompiled(worldPath);
             if (worldResource?.DataBlock is not World world)
             {
                 LogMessage("LoadMap failed: world resource not found or invalid.");
                 DisposeRenderer();
                 return;
+            }
+
+            if (IsFastUnlit())
+            {
+                _renderer.Scene.RenderAttributes["F_UNLIT"] = 1;
+                _renderer.Scene.RenderAttributes["F_FULLBRIGHT"] = 1;
             }
 
             _mapHasExternalReferences = worldResource.ExternalReferences != null;
@@ -3417,6 +3501,48 @@ public sealed class GLWorldViewport : NativeControlHost
     private static float GetEffectiveFpsCap(float cap)
     {
         return cap <= 0 ? MaxUncappedFps : cap;
+    }
+
+    private void UpdateFps(float deltaSeconds)
+    {
+        if (!_showFpsCached || deltaSeconds <= 0f)
+        {
+            return;
+        }
+
+        _fpsAccumulator += deltaSeconds;
+        _fpsSamples++;
+        if (_fpsAccumulator < 0.5f)
+        {
+            return;
+        }
+
+        _fpsValue = _fpsSamples / _fpsAccumulator;
+        _fpsAccumulator = 0f;
+        _fpsSamples = 0;
+    }
+
+    private void AddFpsOverlay(int width)
+    {
+        if (!_showFpsCached || _textRenderer == null || _renderer == null)
+        {
+            return;
+        }
+
+        var text = $"FPS: {_fpsValue:0.0}";
+        const float scale = 16f;
+        const float margin = 8f;
+        var textWidth = text.Length * 0.6f * scale;
+        var textBaseline = margin + scale;
+
+        _textRenderer.AddText(new TextRenderer.TextRenderRequest
+        {
+            Text = text,
+            X = Math.Max(margin, width - margin - textWidth),
+            Y = textBaseline,
+            Scale = scale,
+            Color = new Color32(230, 230, 230, 220),
+        });
     }
 
     private struct FreecamTransform
