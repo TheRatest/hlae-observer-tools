@@ -2209,7 +2209,7 @@ public sealed class VRFViewport : NativeControlHost
 
     private string GetEffectiveRenderMode()
     {
-        return IsFastUnlit() ? "Default" : _renderModeCached;
+        return IsFastUnlit() ? "Color" : _renderModeCached;
     }
 
     private void RequestRendererReload()
@@ -2515,6 +2515,7 @@ public sealed class VRFViewport : NativeControlHost
 
             if (IsFastUnlit())
             {
+                _renderer.Scene.RenderAttributes["VRF_FAST_UNLIT"] = 1;
                 _renderer.Scene.RenderAttributes["F_UNLIT"] = 1;
                 _renderer.Scene.RenderAttributes["F_FULLBRIGHT"] = 1;
             }
