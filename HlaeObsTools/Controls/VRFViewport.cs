@@ -33,53 +33,53 @@ using ValveResourceFormat.ResourceTypes;
 
 namespace HlaeObsTools.Controls;
 
-public sealed class GLWorldViewport : NativeControlHost
+public sealed class VRFViewport : NativeControlHost
 {
     private const float MaxUncappedFps = 1000f;
     private static readonly string LogPath = GetLogPath();
     private static bool _logPathAnnounced;
     private static bool _logWriteFailedLogged;
-    private static readonly string WndClassName = $"HLAE_GLViewportHost_{Guid.NewGuid():N}";
-    private static readonly Dictionary<IntPtr, WeakReference<GLWorldViewport>> HostMap = new();
+    private static readonly string WndClassName = $"HOT_VRFViewportHost{Guid.NewGuid():N}";
+    private static readonly Dictionary<IntPtr, WeakReference<VRFViewport>> HostMap = new();
     private static bool _classRegistered;
     private static readonly object ClassLock = new();
     private static WndProcDelegate? _wndProc;
     private static IntPtr _wndProcPtr = IntPtr.Zero;
 
     public static readonly StyledProperty<string?> MapPathProperty =
-        AvaloniaProperty.Register<GLWorldViewport, string?>(nameof(MapPath));
+        AvaloniaProperty.Register<VRFViewport, string?>(nameof(MapPath));
     public static readonly StyledProperty<float> PinScaleProperty =
-        AvaloniaProperty.Register<GLWorldViewport, float>(nameof(PinScale), 200.0f);
+        AvaloniaProperty.Register<VRFViewport, float>(nameof(PinScale), 200.0f);
     public static readonly StyledProperty<float> PinOffsetZProperty =
-        AvaloniaProperty.Register<GLWorldViewport, float>(nameof(PinOffsetZ), 55.0f);
+        AvaloniaProperty.Register<VRFViewport, float>(nameof(PinOffsetZ), 55.0f);
     public static readonly StyledProperty<float> ViewportMouseScaleProperty =
-        AvaloniaProperty.Register<GLWorldViewport, float>(nameof(ViewportMouseScale), 0.75f);
+        AvaloniaProperty.Register<VRFViewport, float>(nameof(ViewportMouseScale), 0.75f);
     public static readonly StyledProperty<float> ViewportFpsCapProperty =
-        AvaloniaProperty.Register<GLWorldViewport, float>(nameof(ViewportFpsCap), 60.0f);
+        AvaloniaProperty.Register<VRFViewport, float>(nameof(ViewportFpsCap), 60.0f);
     public static readonly StyledProperty<bool> PostprocessEnabledProperty =
-        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(PostprocessEnabled), true);
+        AvaloniaProperty.Register<VRFViewport, bool>(nameof(PostprocessEnabled), true);
     public static readonly StyledProperty<bool> ColorCorrectionEnabledProperty =
-        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(ColorCorrectionEnabled), true);
+        AvaloniaProperty.Register<VRFViewport, bool>(nameof(ColorCorrectionEnabled), true);
     public static readonly StyledProperty<bool> DynamicShadowsEnabledProperty =
-        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(DynamicShadowsEnabled), true);
+        AvaloniaProperty.Register<VRFViewport, bool>(nameof(DynamicShadowsEnabled), true);
     public static readonly StyledProperty<bool> WireframeEnabledProperty =
-        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(WireframeEnabled), false);
+        AvaloniaProperty.Register<VRFViewport, bool>(nameof(WireframeEnabled), false);
     public static readonly StyledProperty<bool> SkipWaterEnabledProperty =
-        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(SkipWaterEnabled), false);
+        AvaloniaProperty.Register<VRFViewport, bool>(nameof(SkipWaterEnabled), false);
     public static readonly StyledProperty<bool> SkipTranslucentEnabledProperty =
-        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(SkipTranslucentEnabled), false);
+        AvaloniaProperty.Register<VRFViewport, bool>(nameof(SkipTranslucentEnabled), false);
     public static readonly StyledProperty<bool> ShowFpsProperty =
-        AvaloniaProperty.Register<GLWorldViewport, bool>(nameof(ShowFps), false);
+        AvaloniaProperty.Register<VRFViewport, bool>(nameof(ShowFps), false);
     public static readonly StyledProperty<int> ShadowTextureSizeProperty =
-        AvaloniaProperty.Register<GLWorldViewport, int>(nameof(ShadowTextureSize), 1024);
+        AvaloniaProperty.Register<VRFViewport, int>(nameof(ShadowTextureSize), 1024);
     public static readonly StyledProperty<int> MaxTextureSizeProperty =
-        AvaloniaProperty.Register<GLWorldViewport, int>(nameof(MaxTextureSize), 1024);
+        AvaloniaProperty.Register<VRFViewport, int>(nameof(MaxTextureSize), 1024);
     public static readonly StyledProperty<string> RenderModeProperty =
-        AvaloniaProperty.Register<GLWorldViewport, string>(nameof(RenderMode), "Default");
+        AvaloniaProperty.Register<VRFViewport, string>(nameof(RenderMode), "Default");
     public static readonly StyledProperty<FreecamSettings?> FreecamSettingsProperty =
-        AvaloniaProperty.Register<GLWorldViewport, FreecamSettings?>(nameof(FreecamSettings));
+        AvaloniaProperty.Register<VRFViewport, FreecamSettings?>(nameof(FreecamSettings));
     public static readonly StyledProperty<HlaeInputSender?> InputSenderProperty =
-        AvaloniaProperty.Register<GLWorldViewport, HlaeInputSender?>(nameof(InputSender));
+        AvaloniaProperty.Register<VRFViewport, HlaeInputSender?>(nameof(InputSender));
 
     private IntPtr _hwnd;
     private NativeWindow? _nativeWindow;
@@ -199,31 +199,31 @@ public sealed class GLWorldViewport : NativeControlHost
     private Task? _renderLoop;
     private readonly ManualResetEventSlim _renderSignal = new(false);
 
-    public GLWorldViewport()
+    public VRFViewport()
     {
         Focusable = true;
         IsHitTestVisible = true;
         (_pinSphereUnit, _pinSphereNormals) = CreateUnitSphere(16, 32);
     }
 
-    static GLWorldViewport()
+    static VRFViewport()
     {
-        MapPathProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnMapPathChanged(args));
-        PinScaleProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnPinScaleChanged());
-        PinOffsetZProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnPinOffsetChanged());
-        ViewportFpsCapProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnViewportFpsCapChanged());
-        PostprocessEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnPostprocessEnabledChanged());
-        ColorCorrectionEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnColorCorrectionEnabledChanged());
-        DynamicShadowsEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnDynamicShadowsEnabledChanged());
-        WireframeEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnWireframeEnabledChanged());
-        SkipWaterEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnSkipWaterEnabledChanged());
-        SkipTranslucentEnabledProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnSkipTranslucentEnabledChanged());
-        ShowFpsProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnShowFpsChanged());
-        ShadowTextureSizeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnShadowTextureSizeChanged());
-        MaxTextureSizeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnMaxTextureSizeChanged());
-        RenderModeProperty.Changed.AddClassHandler<GLWorldViewport>((sender, _) => sender.OnRenderModeChanged());
-        FreecamSettingsProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
-        InputSenderProperty.Changed.AddClassHandler<GLWorldViewport>((sender, args) => sender.OnInputSenderChanged(args));
+        MapPathProperty.Changed.AddClassHandler<VRFViewport>((sender, args) => sender.OnMapPathChanged(args));
+        PinScaleProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnPinScaleChanged());
+        PinOffsetZProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnPinOffsetChanged());
+        ViewportFpsCapProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnViewportFpsCapChanged());
+        PostprocessEnabledProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnPostprocessEnabledChanged());
+        ColorCorrectionEnabledProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnColorCorrectionEnabledChanged());
+        DynamicShadowsEnabledProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnDynamicShadowsEnabledChanged());
+        WireframeEnabledProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnWireframeEnabledChanged());
+        SkipWaterEnabledProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnSkipWaterEnabledChanged());
+        SkipTranslucentEnabledProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnSkipTranslucentEnabledChanged());
+        ShowFpsProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnShowFpsChanged());
+        ShadowTextureSizeProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnShadowTextureSizeChanged());
+        MaxTextureSizeProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnMaxTextureSizeChanged());
+        RenderModeProperty.Changed.AddClassHandler<VRFViewport>((sender, _) => sender.OnRenderModeChanged());
+        FreecamSettingsProperty.Changed.AddClassHandler<VRFViewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
+        InputSenderProperty.Changed.AddClassHandler<VRFViewport>((sender, args) => sender.OnInputSenderChanged(args));
     }
 
     public string? MapPath
@@ -1699,7 +1699,7 @@ public sealed class GLWorldViewport : NativeControlHost
             StartVisible = false,
             WindowBorder = WindowBorder.Hidden,
             WindowState = GLWindowState.Normal,
-            Title = "HLAE GL Viewport",
+            Title = "HOT VRF Viewport",
             ClientSize = new Vector2i(32, 32),
         };
 
@@ -2615,14 +2615,14 @@ public sealed class GLWorldViewport : NativeControlHost
 
     private static void LogMessage(string message)
     {
-        var line = $"[{DateTime.Now:HH:mm:ss.fff}] GLWorldViewport: {message}";
+        var line = $"[{DateTime.Now:HH:mm:ss.fff}] VRFViewport: {message}";
         try
         {
             Console.WriteLine(line);
             if (!_logPathAnnounced)
             {
                 _logPathAnnounced = true;
-                Console.WriteLine($"[GLWorldViewport] Log file: {LogPath}");
+                Console.WriteLine($"[VRFViewport] Log file: {LogPath}");
             }
             File.AppendAllText(LogPath, line + Environment.NewLine);
         }
@@ -2631,7 +2631,7 @@ public sealed class GLWorldViewport : NativeControlHost
             if (!_logWriteFailedLogged)
             {
                 _logWriteFailedLogged = true;
-                Console.WriteLine($"[GLWorldViewport] Log file write failed: {ex.GetType().Name}: {ex.Message}");
+                Console.WriteLine($"[VRFViewport] Log file write failed: {ex.GetType().Name}: {ex.Message}");
             }
         }
     }
@@ -3683,11 +3683,11 @@ public sealed class GLWorldViewport : NativeControlHost
             IntPtr.Zero);
     }
 
-    private static void RegisterHostWindow(IntPtr hwnd, GLWorldViewport host)
+    private static void RegisterHostWindow(IntPtr hwnd, VRFViewport host)
     {
         lock (ClassLock)
         {
-            HostMap[hwnd] = new WeakReference<GLWorldViewport>(host);
+            HostMap[hwnd] = new WeakReference<VRFViewport>(host);
         }
     }
 
@@ -3718,7 +3718,7 @@ public sealed class GLWorldViewport : NativeControlHost
             return new IntPtr(HTCLIENT);
         }
 
-        GLWorldViewport? host = null;
+        VRFViewport? host = null;
         lock (ClassLock)
         {
             if (HostMap.TryGetValue(hWnd, out var weak) && weak.TryGetTarget(out var target))

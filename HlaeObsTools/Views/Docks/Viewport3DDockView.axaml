@@ -6,7 +6,7 @@
              x:DataType="vm:Viewport3DDockViewModel">
     <Border Background="#151515" Padding="4">
         <Grid>
-            <controls:GLWorldViewport x:Name="Viewport"
+            <controls:VRFViewport x:Name="Viewport"
                                       MapPath="{Binding Viewport3DSettings.MapObjPath}"
                                       PinScale="{Binding Viewport3DSettings.PinScale}"
                                       PinOffsetZ="{Binding Viewport3DSettings.PinOffsetZ}"
