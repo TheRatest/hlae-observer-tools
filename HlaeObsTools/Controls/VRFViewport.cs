@@ -33,7 +33,7 @@ using ValveResourceFormat.ResourceTypes;
 
 namespace HlaeObsTools.Controls;
 
-public sealed class VRFViewport : NativeControlHost
+public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 {
     private const float MaxUncappedFps = 1000f;
     private static readonly string LogPath = GetLogPath();

@@ -38,8 +38,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\external\ValveResourceFormat\ValveResourceFormat\ValveResourceFormat.csproj" />
-    <ProjectReference Include="..\external\ValveResourceFormat\Renderer\Renderer.csproj" />
+    <ProjectReference Include="..\external\ValveResourceFormat\ValveResourceFormat\ValveResourceFormat.csproj">
+      <SetConfiguration>Configuration=Release</SetConfiguration>
+    </ProjectReference>
+
+    <ProjectReference Include="..\external\ValveResourceFormat\Renderer\Renderer.csproj">
+      <SetConfiguration>Configuration=Release</SetConfiguration>
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>

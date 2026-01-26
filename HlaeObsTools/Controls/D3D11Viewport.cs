@@ -38,7 +38,7 @@ using HlaeObsTools.Services.Graphics;
 
 namespace HlaeObsTools.Controls;
 
-public sealed class D3D11Viewport : NativeControlHost
+public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
 {
     private static readonly string LogPath = GetLogPath();
     private static bool _logPathAnnounced;
@@ -72,6 +72,8 @@ public sealed class D3D11Viewport : NativeControlHost
         AvaloniaProperty.Register<D3D11Viewport, float>(nameof(ViewportMouseScale), 0.75f);
     public static readonly StyledProperty<float> ViewportFpsCapProperty =
         AvaloniaProperty.Register<D3D11Viewport, float>(nameof(ViewportFpsCap), 60.0f);
+    public static readonly StyledProperty<bool> ShowFpsProperty =
+        AvaloniaProperty.Register<D3D11Viewport, bool>(nameof(ShowFps), false);
     public static readonly StyledProperty<FreecamSettings?> FreecamSettingsProperty =
         AvaloniaProperty.Register<D3D11Viewport, FreecamSettings?>(nameof(FreecamSettings));
     public static readonly StyledProperty<HlaeInputSender?> InputSenderProperty =
@@ -103,6 +105,7 @@ public sealed class D3D11Viewport : NativeControlHost
     private ID2D1SolidColorBrush? _d2dTextBrush;
     private IDWriteFactory? _dwriteFactory;
     private IDWriteTextFormat? _labelFormat;
+    private IDWriteTextFormat? _fpsFormat;
     private int _d2dTargetWidth;
     private int _d2dTargetHeight;
     private ID3D11Buffer? _meshBuffer;
@@ -131,6 +134,11 @@ public sealed class D3D11Viewport : NativeControlHost
     private bool _swapchainFailureLogged;
     private bool _nativeInitDone;
     private float _viewportFpsCapCached;
+    private bool _showFpsCached;
+    private long _fpsLastTicks;
+    private double _fpsAccumMs;
+    private int _fpsFrameCount;
+    private float _fpsValue;
     private string _statusPrefix = string.Empty;
     private bool _showDebugTriangle;
     private bool _showGroundPlane = true;
@@ -229,6 +237,7 @@ public sealed class D3D11Viewport : NativeControlHost
         FreecamSettingsProperty.Changed.AddClassHandler<D3D11Viewport>((sender, args) => sender.OnFreecamSettingsChanged(args));
         InputSenderProperty.Changed.AddClassHandler<D3D11Viewport>((sender, args) => sender.OnInputSenderChanged(args));
         ViewportFpsCapProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnViewportFpsCapChanged());
+        ShowFpsProperty.Changed.AddClassHandler<D3D11Viewport>((sender, _) => sender.OnShowFpsChanged());
     }
 
     public string? MapPath
@@ -312,6 +321,12 @@ public sealed class D3D11Viewport : NativeControlHost
         set => SetValue(ViewportFpsCapProperty, value);
     }
 
+    public bool ShowFps
+    {
+        get => GetValue(ShowFpsProperty);
+        set => SetValue(ShowFpsProperty, value);
+    }
+
     public FreecamSettings? FreecamSettings
     {
         get => GetValue(FreecamSettingsProperty);
@@ -374,6 +389,8 @@ public sealed class D3D11Viewport : NativeControlHost
         base.OnAttachedToVisualTree(e);
         ResetLogFile();
         _viewportFpsCapCached = ViewportFpsCap;
+        _showFpsCached = ShowFps;
+        ResetFpsCounter();
         if (_hwnd != IntPtr.Zero)
         {
             InitializeAfterNativeCreated();
@@ -829,6 +846,7 @@ public sealed class D3D11Viewport : NativeControlHost
         }
 
         UpdateFreecamForFrame();
+        UpdateFpsCounter();
 
         if (_meshDirty)
             UploadPendingMesh();
@@ -884,7 +902,7 @@ public sealed class D3D11Viewport : NativeControlHost
         _context.Flush();
         try
         {
-            _swapChain.Present(0, PresentFlags.None);
+            _swapChain.Present(0, PresentFlags.AllowTearing);
         }
         catch (SharpGenException ex)
         {
@@ -934,6 +952,48 @@ public sealed class D3D11Viewport : NativeControlHost
             _frameLimiterTimer.Stop();
         _frameLimiterPending = false;
         RequestNextFrame();
+    }
+
+    private void OnShowFpsChanged()
+    {
+        _showFpsCached = ShowFps;
+        ResetFpsCounter();
+        RequestNextFrame();
+    }
+
+    private void ResetFpsCounter()
+    {
+        _fpsLastTicks = 0;
+        _fpsAccumMs = 0;
+        _fpsFrameCount = 0;
+        _fpsValue = 0;
+    }
+
+    private void UpdateFpsCounter()
+    {
+        if (!_showFpsCached)
+            return;
+
+        var nowTicks = _frameLimiter.ElapsedTicks;
+        if (_fpsLastTicks == 0)
+        {
+            _fpsLastTicks = nowTicks;
+            return;
+        }
+
+        var deltaMs = (nowTicks - _fpsLastTicks) * 1000.0 / Stopwatch.Frequency;
+        _fpsLastTicks = nowTicks;
+        if (deltaMs <= 0)
+            return;
+
+        _fpsAccumMs += deltaMs;
+        _fpsFrameCount++;
+        if (_fpsAccumMs >= 250.0)
+        {
+            _fpsValue = (float)(_fpsFrameCount / (_fpsAccumMs / 1000.0));
+            _fpsAccumMs = 0;
+            _fpsFrameCount = 0;
+        }
     }
 
     private void OnMapTransformChanged()
@@ -2141,6 +2201,8 @@ public sealed class D3D11Viewport : NativeControlHost
         _d2dTextBrush = null;
         _labelFormat?.Dispose();
         _labelFormat = null;
+        _fpsFormat?.Dispose();
+        _fpsFormat = null;
         _dwriteFactory?.Dispose();
         _dwriteFactory = null;
         _d2dContext?.Dispose();
@@ -2166,6 +2228,16 @@ public sealed class D3D11Viewport : NativeControlHost
                                                                     );
         _labelFormat.TextAlignment = Vortice.DirectWrite.TextAlignment.Center;
         _labelFormat.ParagraphAlignment = ParagraphAlignment.Center;
+        _fpsFormat = _dwriteFactory.CreateTextFormat(
+            "Segoe UI",
+            fontCollection: null,
+            fontWeight: Vortice.DirectWrite.FontWeight.SemiBold,
+            fontStyle: Vortice.DirectWrite.FontStyle.Normal,
+            fontStretch: Vortice.DirectWrite.FontStretch.Normal,
+            fontSize: 14.0f,
+            localeName: "en-us");
+        _fpsFormat.TextAlignment = Vortice.DirectWrite.TextAlignment.Trailing;
+        _fpsFormat.ParagraphAlignment = ParagraphAlignment.Near;
         _d2dTextBrush = _d2dContext.CreateSolidColorBrush(new Color4(1f, 1f, 1f, 1f));
     }
 
@@ -2195,7 +2267,8 @@ public sealed class D3D11Viewport : NativeControlHost
                 SampleDescription = new SampleDescription(1, 0),
                 Scaling = Scaling.Stretch,
                 SwapEffect = SwapEffect.FlipDiscard,
-                AlphaMode = AlphaMode.Ignore
+                AlphaMode = AlphaMode.Ignore,
+                Flags = SwapChainFlags.AllowTearing
             };
 
             _swapChain = _factory.CreateSwapChainForHwnd(_device, _hwnd, desc, null, null);
@@ -2359,6 +2432,8 @@ public sealed class D3D11Viewport : NativeControlHost
         _d2dTextBrush = null;
         _labelFormat?.Dispose();
         _labelFormat = null;
+        _fpsFormat?.Dispose();
+        _fpsFormat = null;
         _dwriteFactory?.Dispose();
         _dwriteFactory = null;
         _d2dContext?.Dispose();
@@ -3394,7 +3469,18 @@ public sealed class D3D11Viewport : NativeControlHost
 
     private void DrawLabelOverlay(Matrix4x4 viewProjection, int width, int height, ID3D11Texture2D backBuffer)
     {
-        if (_pinLabels.Count == 0 || _d2dContext == null || _d2dTextBrush == null || _labelFormat == null)
+        var drawPins = _pinLabels.Count > 0;
+        var drawFps = _showFpsCached;
+        if (!drawPins && !drawFps)
+        {
+            lock (_labelLock)
+            {
+                _labelHitCache = new List<PinLabel>();
+            }
+            return;
+        }
+
+        if (_d2dContext == null || _d2dTextBrush == null || _labelFormat == null)
         {
             lock (_labelLock)
             {
@@ -3416,29 +3502,41 @@ public sealed class D3D11Viewport : NativeControlHost
         _d2dContext.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Grayscale;
         _d2dContext.Transform = Matrix3x2.Identity;
 
-        foreach (var label in _pinLabels)
+        if (drawPins)
         {
-            if (string.IsNullOrEmpty(label.Text))
-                continue;
+            foreach (var label in _pinLabels)
+            {
+                if (string.IsNullOrEmpty(label.Text))
+                    continue;
 
-            if (!TryProjectToScreen(label.World, viewProjection, width, height, out var screen))
-                continue;
+                if (!TryProjectToScreen(label.World, viewProjection, width, height, out var screen))
+                    continue;
 
-            var textWidth = Math.Max(1f, label.Text.Length * fontSize * fontWidthFactor) + padding;
-            var textHeight = fontSize * 1.2f + padding;
-            var rect = new Vortice.RawRectF(
-                (float)screen.X - textWidth * 0.5f,
-                (float)screen.Y - textHeight * 0.5f,
-                (float)screen.X + textWidth * 0.5f,
-                (float)screen.Y + textHeight * 0.5f);
+                var textWidth = Math.Max(1f, label.Text.Length * fontSize * fontWidthFactor) + padding;
+                var textHeight = fontSize * 1.2f + padding;
+                var rect = new Vortice.RawRectF(
+                    (float)screen.X - textWidth * 0.5f,
+                    (float)screen.Y - textHeight * 0.5f,
+                    (float)screen.X + textWidth * 0.5f,
+                    (float)screen.Y + textHeight * 0.5f);
 
-            _d2dTextBrush.Color = ToColor4(label.LabelColor);
-            _d2dContext.DrawText(label.Text, _labelFormat, rect, _d2dTextBrush);
+                _d2dTextBrush.Color = ToColor4(label.LabelColor);
+                _d2dContext.DrawText(label.Text, _labelFormat, rect, _d2dTextBrush);
 
-            label.Screen = screen;
-            label.ScreenX = screen.X;
-            label.ScreenY = screen.Y;
-            projected.Add(label);
+                label.Screen = screen;
+                label.ScreenX = screen.X;
+                label.ScreenY = screen.Y;
+                projected.Add(label);
+            }
+        }
+
+        if (drawFps && _fpsFormat != null)
+        {
+            const float margin = 8f;
+            var text = $"FPS: {_fpsValue:0.0}";
+            var rect = new Vortice.RawRectF(margin, margin, width - margin, margin + 24f);
+            _d2dTextBrush.Color = new Color4(0.9f, 0.9f, 0.9f, 0.85f);
+            _d2dContext.DrawText(text, _fpsFormat, rect, _d2dTextBrush);
         }
 
         try

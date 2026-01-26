@@ -152,6 +152,7 @@ public class MainDockFactory : Factory, IDisposable
         var viewport3DSettings = new Viewport3DSettings
         {
             MapObjPath = _storedSettings.MapObjPath ?? string.Empty,
+            UseLegacyD3D11Viewport = _storedSettings.ViewportUseLegacyD3D11,
             UseAltPlayerBinds = _storedSettings.UseAltPlayerBinds,
             PinScale = (float)_storedSettings.PinScale,
             PinOffsetZ = (float)_storedSettings.PinOffsetZ,

@@ -73,6 +73,7 @@ public class AppSettingsData
     public int RtpPort { get; set; } = 5000;
     public int GsiPort { get; set; } = 31337;
     public string MapObjPath { get; set; } = string.Empty;
+    public bool ViewportUseLegacyD3D11 { get; set; }
     public double PinScale { get; set; } = 200.0;
     public double PinOffsetZ { get; set; } = 55.0;
     public double ViewportMouseScale { get; set; } = 0.75;

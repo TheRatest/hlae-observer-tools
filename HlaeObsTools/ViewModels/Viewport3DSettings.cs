@@ -10,6 +10,7 @@ public sealed class Viewport3DSettings : ViewModelBase
 {
     private string _mapObjPath = string.Empty;
     private bool _useAltPlayerBinds;
+    private bool _useLegacyD3D11Viewport;
     private float _pinScale = 200.0f;
     private float _pinOffsetZ = 55.0f;
     private float _viewportMouseScale = 0.75f;
@@ -49,6 +50,26 @@ public sealed class Viewport3DSettings : ViewModelBase
         get => _mapObjPath;
         set => SetProperty(ref _mapObjPath, value ?? string.Empty);
     }
+
+    /// <summary>
+    /// Use the legacy D3D11 viewport (Wavefront OBJ maps).
+    /// </summary>
+    public bool UseLegacyD3D11Viewport
+    {
+        get => _useLegacyD3D11Viewport;
+        set
+        {
+            if (!SetProperty(ref _useLegacyD3D11Viewport, value))
+                return;
+
+            OnPropertyChanged(nameof(IsLegacyViewportMode));
+            OnPropertyChanged(nameof(IsVrfViewportMode));
+        }
+    }
+
+    public bool IsLegacyViewportMode => UseLegacyD3D11Viewport;
+
+    public bool IsVrfViewportMode => !UseLegacyD3D11Viewport;
 
     /// <summary>
     /// Whether to use alternative player bind labels (Q,E,R,T,Z for slots 6-0).

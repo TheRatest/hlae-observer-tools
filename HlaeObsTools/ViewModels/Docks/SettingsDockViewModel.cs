@@ -227,17 +227,21 @@ namespace HlaeObsTools.ViewModels.Docks
                 {
                     Title = "Load Map File",
                     AllowMultiple = false,
-                    FileTypeFilter =
-                    [
-                        new FilePickerFileType("Source 2 Map (.vmap_c, .vpk)")
+                    FileTypeFilter = _viewport3DSettings.UseLegacyD3D11Viewport
+                        ? new List<FilePickerFileType>
                         {
-                            Patterns = ["*.vmap_c", "*.vpk"]
-                        },
-                        new FilePickerFileType("Wavefront OBJ (legacy)")
-                        {
-                            Patterns = ["*.obj"]
+                            new FilePickerFileType("Wavefront OBJ (legacy)")
+                            {
+                                Patterns = ["*.obj"]
+                            }
                         }
-                    ]
+                        : new List<FilePickerFileType>
+                        {
+                            new FilePickerFileType("Source 2 Map (.vmap_c, .vpk)")
+                            {
+                                Patterns = ["*.vmap_c", "*.vpk"]
+                            }
+                        }
                 });
 
             if (result is { Count: > 0 })
@@ -466,6 +470,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 RtpPort = RtpPort,
                 GsiPort = GsiPort,
                 MapObjPath = _viewport3DSettings.MapObjPath,
+                ViewportUseLegacyD3D11 = _viewport3DSettings.UseLegacyD3D11Viewport,
                 PinScale = _viewport3DSettings.PinScale,
                 PinOffsetZ = _viewport3DSettings.PinOffsetZ,
                 ViewportMouseScale = _viewport3DSettings.ViewportMouseScale,
@@ -656,6 +661,11 @@ namespace HlaeObsTools.ViewModels.Docks
         {
             if (_suppressSettingsSave)
                 return;
+
+            if (e.PropertyName == nameof(Viewport3DSettings.UseLegacyD3D11Viewport))
+            {
+                _viewport3DSettings.MapObjPath = string.Empty;
+            }
 
             SaveSettings();
         }

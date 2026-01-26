@@ -1,29 +1,11 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HlaeObsTools.ViewModels.Docks"
-             xmlns:controls="using:HlaeObsTools.Controls"
              x:Class="HlaeObsTools.Views.Docks.Viewport3DDockView"
              x:DataType="vm:Viewport3DDockViewModel">
     <Border Background="#151515" Padding="4">
         <Grid>
-            <controls:VRFViewport x:Name="Viewport"
-                                      MapPath="{Binding Viewport3DSettings.MapObjPath}"
-                                      PinScale="{Binding Viewport3DSettings.PinScale}"
-                                      PinOffsetZ="{Binding Viewport3DSettings.PinOffsetZ}"
-                                      PostprocessEnabled="{Binding Viewport3DSettings.PostprocessEnabled}"
-                                      ColorCorrectionEnabled="{Binding Viewport3DSettings.ColorCorrectionEnabled}"
-                                      DynamicShadowsEnabled="{Binding Viewport3DSettings.DynamicShadowsEnabled}"
-                                      WireframeEnabled="{Binding Viewport3DSettings.WireframeEnabled}"
-                                      SkipWaterEnabled="{Binding Viewport3DSettings.SkipWaterEnabled}"
-                                      SkipTranslucentEnabled="{Binding Viewport3DSettings.SkipTranslucentEnabled}"
-                                      ShowFps="{Binding Viewport3DSettings.ShowFps}"
-                                      ShadowTextureSize="{Binding Viewport3DSettings.ShadowTextureSize}"
-                                      MaxTextureSize="{Binding Viewport3DSettings.MaxTextureSize}"
-                                      RenderMode="{Binding Viewport3DSettings.RenderMode}"
-                                      FreecamSettings="{Binding FreecamSettings}"
-                                      InputSender="{Binding InputSender}"
-                                      ViewportMouseScale="{Binding Viewport3DSettings.ViewportMouseScale}"
-                                      ViewportFpsCap="{Binding Viewport3DSettings.ViewportFpsCap}" />
+            <ContentControl x:Name="ViewportHost" />
         </Grid>
     </Border>
 </UserControl>
