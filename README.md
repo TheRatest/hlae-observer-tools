@@ -6,7 +6,7 @@ HLAE Observer Tools is a (remote) observing control system for Counter-Strike 2 
 
 ## Getting Started
 
-1. Install .NET Desktop Runtime 8.0 https://dotnet.microsoft.com/en-us/download/dotnet/8.0
+1. Install .NET Desktop Runtime 10 https://dotnet.microsoft.com/en-us/download/dotnet/10.0
 2. Download the latest the custom HLAE and HOT build from  https://github.com/papesgit/hot/releases/latest
 3. Launch CS2 with HLAE (File>Launch CS2, Example launch parameters: `-steam -insecure +sv_lan 1 -novid -console -afxDisableSteamStorage -allow_third_party_software -netconport 54545`)
 4. Launch HlaeObsTools.exe (as admin if used over LAN/remote)
@@ -52,6 +52,8 @@ This repository includes binaries from a modified fork of
 Half-Life Advanced Effects (HLAE), licensed under the MIT License.
 
 This application uses Avalonia UI, licensed under the MIT License.
+
+This application uses ValveResourceFormat libraries, licensed under the MIT License.
 
 See `THIRD_PARTY_LICENSES.md` for details.
 
