@@ -59,7 +59,7 @@ public class SettingsStorage
 
 public class AppSettingsData
 {
-    public List<AttachmentPresetData> AttachPresets { get; set; } = new();
+    public List<AttachmentPresetData>? AttachPresets { get; set; }
     public List<AttachmentPresetPageData> AttachPresetPages { get; set; } = new();
     public int ActiveAttachPresetPage { get; set; }
     public double MarkerScale { get; set; } = 1.0;

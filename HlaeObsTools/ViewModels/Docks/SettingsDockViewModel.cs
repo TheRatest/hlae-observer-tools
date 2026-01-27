@@ -456,7 +456,6 @@ namespace HlaeObsTools.ViewModels.Docks
         {
             var data = new AppSettingsData
             {
-                AttachPresets = _hudSettings.ToLegacyAttachPresetData().ToList(),
                 AttachPresetPages = _hudSettings.ToAttachPresetPageData().ToList(),
                 ActiveAttachPresetPage = _hudSettings.ActiveAttachPresetPage,
                 MarkerScale = _radarSettings.MarkerScale,
