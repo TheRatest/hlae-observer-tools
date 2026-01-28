@@ -494,6 +494,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 ViewportShowFps = _viewport3DSettings.ShowFps,
                 ViewportCampathMode = _viewport3DSettings.ViewportCampathMode,
                 ViewportCampathOverlayEnabled = _viewport3DSettings.ViewportCampathOverlayEnabled,
+                CampathGizmoLocalSpace = _viewport3DSettings.CampathGizmoLocalSpace,
                 ViewportShadowTextureSize = _viewport3DSettings.ShadowTextureSize,
                 ViewportMaxTextureSize = _viewport3DSettings.MaxTextureSize,
                 ViewportRenderMode = _viewport3DSettings.RenderMode,

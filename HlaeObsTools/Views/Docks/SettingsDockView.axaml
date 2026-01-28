@@ -177,6 +177,9 @@
                                 <ToggleSwitch IsChecked="{Binding Viewport3DSettings.ViewportCampathOverlayEnabled, Mode=TwoWay}"
                                               Content="Draw Path"
                                               Foreground="#E6E6E6"/>
+                                <ToggleSwitch IsChecked="{Binding Viewport3DSettings.CampathGizmoLocalSpace, Mode=TwoWay}"
+                                              Content="Gizmo Local"
+                                              Foreground="#E6E6E6"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                 <TextBlock Text="Duration" Foreground="#AAAAAA"/>

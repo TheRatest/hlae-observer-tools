@@ -23,6 +23,7 @@ public partial class Viewport3DDockView : UserControl
     private IReadOnlyList<ViewportPin>? _lastPins;
     private CampathEditorViewModel? _campathEditor;
     private bool _frameTickSubscribed;
+    private bool _gizmoSubscribed;
 
     public Viewport3DDockView()
     {
@@ -50,6 +51,7 @@ public partial class Viewport3DDockView : UserControl
             _viewModel.PreviewFreecamPose -= OnPreviewFreecamPose;
             _viewModel.PreviewFreecamEnded -= OnPreviewFreecamEnded;
             UnsubscribeFrameTick();
+            UnsubscribeGizmo();
         }
 
         _viewModel = DataContext as Viewport3DDockViewModel;
@@ -79,6 +81,10 @@ public partial class Viewport3DDockView : UserControl
             UpdateCampathPreview();
             UpdateCampathOverlay();
         }
+        else if (e.PropertyName == nameof(Viewport3DSettings.CampathGizmoLocalSpace))
+        {
+            UpdateCampathGizmo();
+        }
     }
 
     private void EnsureViewport()
@@ -101,6 +107,7 @@ public partial class Viewport3DDockView : UserControl
         _viewport = (IViewport3DControl)_viewportControl;
         ViewportHost.Content = _viewportControl;
         SubscribeFrameTick();
+        SubscribeGizmo();
 
         if (_lastPins != null)
         {
@@ -109,24 +116,28 @@ public partial class Viewport3DDockView : UserControl
 
         UpdateCampathPreview();
         UpdateCampathOverlay();
+        UpdateCampathGizmo();
     }
 
     private void ClearViewport()
     {
         ViewportHost.Content = null;
         UnsubscribeFrameTick();
+        UnsubscribeGizmo();
         _viewport = null;
         _viewportControl = null;
     }
 
     private void OnViewportPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        _viewport?.ForwardPointerPressed(e);
+        if (ShouldForwardPointer(e))
+            _viewport?.ForwardPointerPressed(e);
     }
 
     private void OnViewportPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        _viewport?.ForwardPointerReleased(e);
+        if (ShouldForwardPointer(e))
+            _viewport?.ForwardPointerReleased(e);
 
         if (_viewModel == null)
             return;
@@ -140,12 +151,31 @@ public partial class Viewport3DDockView : UserControl
 
     private void OnViewportPointerMoved(object? sender, PointerEventArgs e)
     {
-        _viewport?.ForwardPointerMoved(e);
+        if (ShouldForwardPointer(e))
+        {
+            _viewport?.ForwardPointerMoved(e);
+        }
     }
 
     private void OnViewportPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        _viewport?.ForwardPointerWheel(e);
+        if (ShouldForwardPointer(e))
+        {
+            _viewport?.ForwardPointerWheel(e);
+        }
+    }
+
+    private bool ShouldForwardPointer(PointerEventArgs e)
+    {
+        if (_viewportControl == null)
+            return false;
+
+        if (e.Pointer.Captured == _viewportControl)
+            return true;
+
+        var pos = e.GetPosition(_viewportControl);
+        var bounds = _viewportControl.Bounds;
+        return pos.X >= 0 && pos.Y >= 0 && pos.X <= bounds.Width && pos.Y <= bounds.Height;
     }
 
     private void OnPinsUpdated(IReadOnlyList<ViewportPin> pins)
@@ -169,6 +199,11 @@ public partial class Viewport3DDockView : UserControl
             e.PropertyName == nameof(CampathEditorViewModel.PlayheadTime))
         {
             UpdateCampathOverlay();
+        }
+
+        if (e.PropertyName == nameof(CampathEditorViewModel.SelectedKeyframe))
+        {
+            UpdateCampathGizmo();
         }
     }
 
@@ -196,6 +231,7 @@ public partial class Viewport3DDockView : UserControl
     private void OnCampathKeyframeChanged(object? sender, PropertyChangedEventArgs e)
     {
         UpdateCampathOverlay();
+        UpdateCampathGizmo();
     }
 
     private void AttachCampathEditor(CampathEditorViewModel editor)
@@ -268,6 +304,59 @@ public partial class Viewport3DDockView : UserControl
 
         var overlay = BuildCampathOverlay(_campathEditor, _campathEditor.PlayheadTime);
         _viewport.SetCampathOverlay(overlay);
+    }
+
+    private void UpdateCampathGizmo()
+    {
+        if (_viewport == null || _viewModel == null || _campathEditor == null)
+            return;
+
+        if (!_viewModel.Viewport3DSettings.ViewportCampathMode)
+        {
+            _viewport.SetCampathGizmo(null);
+            return;
+        }
+
+        var selected = _campathEditor.SelectedKeyframe;
+        if (selected == null)
+        {
+            _viewport.SetCampathGizmo(null);
+            return;
+        }
+
+        var state = new CampathGizmoState(
+            visible: true,
+            position: selected.Position,
+            rotation: selected.Rotation,
+            useLocalSpace: _viewModel.Viewport3DSettings.CampathGizmoLocalSpace);
+        _viewport.SetCampathGizmo(state);
+    }
+
+    private void SubscribeGizmo()
+    {
+        if (_viewport == null || _gizmoSubscribed)
+            return;
+
+        _viewport.CampathGizmoPoseChanged += OnCampathGizmoPoseChanged;
+        _gizmoSubscribed = true;
+    }
+
+    private void UnsubscribeGizmo()
+    {
+        if (_viewport == null || !_gizmoSubscribed)
+            return;
+
+        _viewport.CampathGizmoPoseChanged -= OnCampathGizmoPoseChanged;
+        _gizmoSubscribed = false;
+    }
+
+    private void OnCampathGizmoPoseChanged(Vector3 position, Quaternion rotation)
+    {
+        if (_campathEditor?.SelectedKeyframe == null)
+            return;
+
+        _campathEditor.SelectedKeyframe.Position = position;
+        _campathEditor.SelectedKeyframe.Rotation = rotation;
     }
 
     private static CampathOverlayData? BuildCampathOverlay(CampathEditorViewModel editor, double playheadTime)

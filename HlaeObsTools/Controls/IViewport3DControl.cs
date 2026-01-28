@@ -28,4 +28,7 @@ public interface IViewport3DControl
     void ClearFreecamPreview();
     void SetPins(IReadOnlyList<ViewportPin> pins);
     void SetCampathOverlay(CampathOverlayData? data);
+    void SetCampathGizmo(CampathGizmoState? state);
+
+    event Action<Vector3, Quaternion>? CampathGizmoPoseChanged;
 }

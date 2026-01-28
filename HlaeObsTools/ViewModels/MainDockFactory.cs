@@ -175,6 +175,7 @@ public class MainDockFactory : Factory, IDisposable
             ShowFps = _storedSettings.ViewportShowFps,
             ViewportCampathMode = _storedSettings.ViewportCampathMode,
             ViewportCampathOverlayEnabled = _storedSettings.ViewportCampathOverlayEnabled,
+            CampathGizmoLocalSpace = _storedSettings.CampathGizmoLocalSpace,
             ShadowTextureSize = _storedSettings.ViewportShadowTextureSize,
             MaxTextureSize = _storedSettings.ViewportMaxTextureSize,
             RenderMode = _storedSettings.ViewportRenderMode

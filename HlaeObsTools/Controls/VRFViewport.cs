@@ -23,6 +23,7 @@ using GLWindowState = OpenTK.Windowing.Common.WindowState;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
+using AvaloniaKeyModifiers = Avalonia.Input.KeyModifiers;
 using HlaeObsTools.Services.Input;
 using HlaeObsTools.Services.Campaths;
 using HlaeObsTools.Services.Viewport3D;
@@ -36,6 +37,7 @@ namespace HlaeObsTools.Controls;
 
 public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 {
+    public event Action<Vector3, Quaternion>? CampathGizmoPoseChanged;
     private const float MaxUncappedFps = 1000f;
     private static readonly string LogPath = GetLogPath();
     private static bool _logPathAnnounced;
@@ -128,6 +130,31 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
     private bool _campathOverlayDirty;
     private CampathOverlayData? _campathOverlayData;
     private readonly object _campathOverlayLock = new();
+
+    private int _gizmoVao;
+    private int _gizmoVbo;
+    private int _gizmoVertexCount;
+    private bool _gizmoDirty;
+    private bool _gizmoVisible;
+    private Vector3 _gizmoPosition;
+    private Quaternion _gizmoRotation = Quaternion.Identity;
+    private bool _gizmoUseLocalSpace;
+    private float _gizmoLastScale;
+    private Vector3 _gizmoLastPosition;
+    private Quaternion _gizmoLastRotation = Quaternion.Identity;
+    private bool _gizmoLastLocal;
+
+    private bool _gizmoDragging;
+    private GizmoMode _gizmoMode = GizmoMode.None;
+    private Vector3 _gizmoDragAxis;
+    private Vector3 _gizmoDragAxisLocal;
+    private Vector3 _gizmoDragPlaneNormal;
+    private Vector3 _gizmoDragStartPosition;
+    private Quaternion _gizmoDragStartRotation = Quaternion.Identity;
+    private Vector3 _gizmoDragStartVector;
+    private float _gizmoDragStartScalar;
+    private float _gizmoDragStartAxisT;
+    private GizmoMode _gizmoHover = GizmoMode.None;
     private readonly Vector3[] _pinConeUnit = CreateUnitCone();
     private readonly Vector3[] _pinConeNormals = CreateUnitConeNormals();
     private readonly Vector3[] _pinSphereUnit;
@@ -480,6 +507,14 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         _mouseButton4Down = point.Properties.IsXButton1Pressed;
         _mouseButton5Down = point.Properties.IsXButton2Pressed;
 
+        if (leftPressed && TryBeginGizmoDrag(point.Position, e.KeyModifiers))
+        {
+            Focus();
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            return;
+        }
+
         if (leftPressed && TryHandlePinClick(point.Position))
         {
             Focus();
@@ -518,6 +553,15 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         _mouseButton4Down = point.Properties.IsXButton1Pressed;
         _mouseButton5Down = point.Properties.IsXButton2Pressed;
 
+        if (_gizmoDragging)
+        {
+            _gizmoDragging = false;
+            _gizmoMode = GizmoMode.None;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            return;
+        }
+
         var rightReleased = updateKind == PointerUpdateKind.RightButtonReleased;
         if (_freecamActive && rightReleased)
         {
@@ -544,6 +588,15 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         var point = e.GetCurrentPoint(this);
         _mouseButton4Down = point.Properties.IsXButton1Pressed;
         _mouseButton5Down = point.Properties.IsXButton2Pressed;
+
+        if (_gizmoDragging)
+        {
+            UpdateGizmoDrag(point.Position, e.KeyModifiers);
+            e.Handled = true;
+            return;
+        }
+
+        UpdateGizmoHover(point.Position);
 
         if (_freecamActive && _freecamInputEnabled)
         {
@@ -673,16 +726,40 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         return (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     }
 
+    private static bool IsCtrlKeyDown()
+    {
+        const int VK_CONTROL = 0x11;
+        return (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    }
+
+    private static AvaloniaKeyModifiers BuildModifiers(bool shiftDown, bool ctrlDown)
+    {
+        var modifiers = AvaloniaKeyModifiers.None;
+        if (shiftDown)
+            modifiers |= AvaloniaKeyModifiers.Shift;
+        if (ctrlDown)
+            modifiers |= AvaloniaKeyModifiers.Control;
+        return modifiers;
+    }
+
     private void HandleNativePointerPressed(Point position, PointerUpdateKind updateKind, bool shiftDown)
     {
         var middlePressed = updateKind == PointerUpdateKind.MiddleButtonPressed;
         var rightPressed = updateKind == PointerUpdateKind.RightButtonPressed;
         var leftPressed = updateKind == PointerUpdateKind.LeftButtonPressed;
+        var ctrlDown = IsCtrlKeyDown();
+        var modifiers = BuildModifiers(shiftDown, ctrlDown);
 
         if (updateKind == PointerUpdateKind.XButton1Pressed)
             _mouseButton4Down = true;
         if (updateKind == PointerUpdateKind.XButton2Pressed)
             _mouseButton5Down = true;
+
+        if (leftPressed && TryBeginGizmoDrag(position, modifiers))
+        {
+            Focus();
+            return;
+        }
 
         if (leftPressed && TryHandlePinClick(position))
         {
@@ -716,6 +793,13 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
             _mouseButton4Down = false;
         if (updateKind == PointerUpdateKind.XButton2Released)
             _mouseButton5Down = false;
+
+        if (_gizmoDragging)
+        {
+            _gizmoDragging = false;
+            _gizmoMode = GizmoMode.None;
+            return;
+        }
 
         var rightReleased = updateKind == PointerUpdateKind.RightButtonReleased;
         if (_freecamActive && rightReleased)
@@ -756,6 +840,15 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
             RequestNextFrame();
             return;
         }
+
+        if (_gizmoDragging)
+        {
+            var modifiers = BuildModifiers(IsShiftKeyDown(), IsCtrlKeyDown());
+            UpdateGizmoDrag(position, modifiers);
+            return;
+        }
+
+        UpdateGizmoHover(position);
 
         if (!_dragging)
             return;
@@ -1485,6 +1578,404 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         return Vector3.Normalize(Vector3.Transform(-Vector3.UnitY, q));
     }
 
+    private bool TryBeginGizmoDrag(Point screenPos, AvaloniaKeyModifiers modifiers)
+    {
+        if (!_gizmoVisible || _renderer == null || _renderWidth <= 0 || _renderHeight <= 0)
+            return false;
+
+        if (!TryGetRay(screenPos, out var rayOrigin, out var rayDir))
+            return false;
+
+        var (axisX, axisY, axisZ) = GetGizmoAxes();
+        var scale = Math.Clamp(Vector3.Distance(_renderer.Camera.Location, _gizmoPosition) * 0.12f, 24f, 120f);
+        var axisLength = scale;
+        var axisThreshold = scale * 0.08f;
+        var ringRadius = scale * 0.75f;
+        var ringThreshold = scale * 0.08f;
+
+        GizmoMode bestMode = GizmoMode.None;
+        var bestDistance = float.MaxValue;
+        var debug = string.Empty;
+
+        if (TryPickTranslationScreen(screenPos, axisX, axisLength, 10f, out var dx) && dx < bestDistance)
+        {
+            bestDistance = dx;
+            bestMode = GizmoMode.TranslateX;
+        }
+        if (TryPickTranslationScreen(screenPos, axisY, axisLength, 10f, out var dy) && dy < bestDistance)
+        {
+            bestDistance = dy;
+            bestMode = GizmoMode.TranslateY;
+        }
+        if (TryPickTranslationScreen(screenPos, axisZ, axisLength, 10f, out var dz) && dz < bestDistance)
+        {
+            bestDistance = dz;
+            bestMode = GizmoMode.TranslateZ;
+        }
+
+        if (bestMode == GizmoMode.None)
+        {
+            if (TryPickRotationScreen(screenPos, axisX, ringRadius, 10f, out var rx) && rx < bestDistance)
+            {
+                bestDistance = rx;
+                bestMode = GizmoMode.RotateX;
+            }
+            if (TryPickRotationScreen(screenPos, axisY, ringRadius, 10f, out var ry) && ry < bestDistance)
+            {
+                bestDistance = ry;
+                bestMode = GizmoMode.RotateY;
+            }
+            if (TryPickRotationScreen(screenPos, axisZ, ringRadius, 10f, out var rz) && rz < bestDistance)
+            {
+                bestDistance = rz;
+                bestMode = GizmoMode.RotateZ;
+            }
+        }
+
+        if (bestMode == GizmoMode.None)
+            return false;
+
+        _gizmoDragging = true;
+        _gizmoMode = bestMode;
+        _gizmoDragStartPosition = _gizmoPosition;
+        _gizmoDragStartRotation = _gizmoRotation;
+
+        _gizmoDragAxis = bestMode switch
+        {
+            GizmoMode.TranslateX or GizmoMode.RotateX => axisX,
+            GizmoMode.TranslateY or GizmoMode.RotateY => axisY,
+            GizmoMode.TranslateZ or GizmoMode.RotateZ => axisZ,
+            _ => axisX
+        };
+
+        _gizmoDragAxisLocal = bestMode switch
+        {
+            GizmoMode.TranslateX or GizmoMode.RotateX => Vector3.UnitX,
+            GizmoMode.TranslateY or GizmoMode.RotateY => Vector3.UnitY,
+            GizmoMode.TranslateZ or GizmoMode.RotateZ => Vector3.UnitZ,
+            _ => Vector3.UnitX
+        };
+
+        if (bestMode is GizmoMode.TranslateX or GizmoMode.TranslateY or GizmoMode.TranslateZ)
+        {
+            if (ClosestPointsRayLine(rayOrigin, rayDir, _gizmoPosition, _gizmoDragAxis, out _, out var t))
+                _gizmoDragStartAxisT = t;
+            else
+                _gizmoDragStartAxisT = 0f;
+        }
+        else
+        {
+            _gizmoDragPlaneNormal = Vector3.Normalize(_gizmoDragAxis);
+            if (TryRayPlane(rayOrigin, rayDir, _gizmoPosition, _gizmoDragPlaneNormal, out var hit))
+            {
+                var dir = hit - _gizmoPosition;
+                if (dir.LengthSquared() < 1e-6f)
+                    dir = _renderer.Camera.Right;
+                _gizmoDragStartVector = Vector3.Normalize(dir);
+            }
+            else
+            {
+                _gizmoDragStartVector = _renderer.Camera.Right;
+            }
+        }
+
+        return true;
+    }
+
+    private void UpdateGizmoDrag(Point screenPos, AvaloniaKeyModifiers modifiers)
+    {
+        if (!_gizmoDragging || _renderer == null)
+            return;
+
+        if (!TryGetRay(screenPos, out var rayOrigin, out var rayDir))
+            return;
+
+        var snap = modifiers.HasFlag(AvaloniaKeyModifiers.Shift);
+
+        if (_gizmoMode is GizmoMode.TranslateX or GizmoMode.TranslateY or GizmoMode.TranslateZ)
+        {
+            if (!ClosestPointsRayLine(rayOrigin, rayDir, _gizmoDragStartPosition, _gizmoDragAxis, out _, out var t))
+                return;
+
+            var delta = t - _gizmoDragStartAxisT;
+            if (snap)
+            {
+                const float snapStep = 1.0f;
+                delta = MathF.Round(delta / snapStep) * snapStep;
+            }
+
+            var newPos = _gizmoDragStartPosition + _gizmoDragAxis * delta;
+            _gizmoPosition = newPos;
+            _gizmoDirty = true;
+            CampathGizmoPoseChanged?.Invoke(newPos, _gizmoRotation);
+            RequestNextFrame();
+            return;
+        }
+
+        if (!TryRayPlane(rayOrigin, rayDir, _gizmoDragStartPosition, _gizmoDragPlaneNormal, out var rotHit))
+            return;
+
+        var dirVec = rotHit - _gizmoDragStartPosition;
+        if (dirVec.LengthSquared() < 1e-6f)
+            return;
+        var currentVector = Vector3.Normalize(dirVec);
+        var angle = SignedAngleAroundAxis(_gizmoDragStartVector, currentVector, _gizmoDragAxis);
+        if (snap)
+        {
+            const float snapDeg = 15.0f;
+            angle = MathF.Round(angle / snapDeg) * snapDeg;
+        }
+
+        var rotAxis = _gizmoUseLocalSpace ? _gizmoDragAxisLocal : _gizmoDragAxis;
+        var deltaRot = Quaternion.CreateFromAxisAngle(rotAxis, DegToRad(angle));
+        var newRot = _gizmoUseLocalSpace
+            ? Quaternion.Normalize(_gizmoDragStartRotation * deltaRot)
+            : Quaternion.Normalize(deltaRot * _gizmoDragStartRotation);
+
+        _gizmoRotation = newRot;
+        _gizmoDirty = true;
+        CampathGizmoPoseChanged?.Invoke(_gizmoPosition, newRot);
+        RequestNextFrame();
+    }
+
+    private void UpdateGizmoHover(Point screenPos)
+    {
+        if (!_gizmoVisible || _renderer == null || _gizmoDragging)
+            return;
+
+        var (axisX, axisY, axisZ) = GetGizmoAxes();
+        var scale = Math.Clamp(Vector3.Distance(_renderer.Camera.Location, _gizmoPosition) * 0.12f, 24f, 120f);
+        var axisLength = scale;
+        var ringRadius = scale * 0.75f;
+
+        GizmoMode bestMode = GizmoMode.None;
+        var bestDistance = float.MaxValue;
+
+        if (TryPickTranslationScreen(screenPos, axisX, axisLength, 10f, out var dx) && dx < bestDistance)
+        {
+            bestDistance = dx;
+            bestMode = GizmoMode.TranslateX;
+        }
+        if (TryPickTranslationScreen(screenPos, axisY, axisLength, 10f, out var dy) && dy < bestDistance)
+        {
+            bestDistance = dy;
+            bestMode = GizmoMode.TranslateY;
+        }
+        if (TryPickTranslationScreen(screenPos, axisZ, axisLength, 10f, out var dz) && dz < bestDistance)
+        {
+            bestDistance = dz;
+            bestMode = GizmoMode.TranslateZ;
+        }
+
+        if (bestMode == GizmoMode.None)
+        {
+            if (TryPickRotationScreen(screenPos, axisX, ringRadius, 10f, out var rx) && rx < bestDistance)
+            {
+                bestDistance = rx;
+                bestMode = GizmoMode.RotateX;
+            }
+            if (TryPickRotationScreen(screenPos, axisY, ringRadius, 10f, out var ry) && ry < bestDistance)
+            {
+                bestDistance = ry;
+                bestMode = GizmoMode.RotateY;
+            }
+            if (TryPickRotationScreen(screenPos, axisZ, ringRadius, 10f, out var rz) && rz < bestDistance)
+            {
+                bestDistance = rz;
+                bestMode = GizmoMode.RotateZ;
+            }
+        }
+
+        if (bestMode != _gizmoHover)
+        {
+            _gizmoHover = bestMode;
+            _gizmoDirty = true;
+            RequestNextFrame();
+        }
+    }
+
+    private bool TryPickTranslationScreen(Point screenPos, Vector3 axis, float axisLength, float pixelThreshold, out float distance)
+    {
+        distance = float.MaxValue;
+        if (_renderer == null)
+            return false;
+
+        var origin = _gizmoPosition;
+        var tip = origin + axis * axisLength;
+        if (!TryProjectGizmoToScreenRaw(origin, _renderWidth, _renderHeight, out var a))
+            return false;
+        if (!TryProjectGizmoToScreenRaw(tip, _renderWidth, _renderHeight, out var b))
+            return false;
+
+        distance = DistancePointToSegment2D(screenPos, a, b);
+        return distance <= pixelThreshold;
+    }
+
+    private bool TryPickRotationScreen(Point screenPos, Vector3 axis, float radius, float pixelThreshold, out float distance)
+    {
+        distance = float.MaxValue;
+        if (_renderer == null)
+            return false;
+
+        var (u, v) = GetOrthonormalBasis(axis);
+        const int segments = 36;
+        Point? prev = null;
+        var min = float.MaxValue;
+        for (var i = 0; i <= segments; i++)
+        {
+            var t = i / (float)segments * MathF.PI * 2f;
+            var world = _gizmoPosition + (u * MathF.Cos(t) + v * MathF.Sin(t)) * radius;
+            if (!TryProjectGizmoToScreenRaw(world, _renderWidth, _renderHeight, out var p))
+            {
+                prev = null;
+                continue;
+            }
+
+            if (prev.HasValue)
+            {
+                var d = DistancePointToSegment2D(screenPos, prev.Value, p);
+                if (d < min)
+                    min = d;
+            }
+
+            prev = p;
+        }
+
+        distance = min;
+        return distance <= pixelThreshold;
+    }
+
+    private static float DistancePointToSegment2D(Point p, Point a, Point b)
+    {
+        var ab = b - a;
+        var ap = p - a;
+        var abLenSq = ab.X * ab.X + ab.Y * ab.Y;
+        if (abLenSq <= double.Epsilon)
+            return (float)Math.Sqrt(ap.X * ap.X + ap.Y * ap.Y);
+
+        var t = (ap.X * ab.X + ap.Y * ab.Y) / abLenSq;
+        t = Math.Clamp(t, 0.0, 1.0);
+        var closest = new Point(a.X + ab.X * t, a.Y + ab.Y * t);
+        var dx = p.X - closest.X;
+        var dy = p.Y - closest.Y;
+        return (float)Math.Sqrt(dx * dx + dy * dy);
+    }
+
+    private bool TryProjectGizmoToScreen(Vector3 world, int width, int height, out Point screen)
+    {
+        if (_renderer == null)
+        {
+            screen = default;
+            return false;
+        }
+
+        return TryProjectToScreen(world, _renderer.Camera, width, height, out screen);
+    }
+
+    private bool TryProjectGizmoToScreenRaw(Vector3 world, int width, int height, out Point screen)
+    {
+        screen = default;
+        if (_renderer == null)
+            return false;
+
+        var camera = _renderer.Camera;
+        var toWorld = world - camera.Location;
+        var z = Vector3.Dot(camera.Forward, toWorld);
+        if (z <= 0.001f)
+            return false;
+
+        var x = Vector3.Dot(camera.Right, toWorld);
+        var y = Vector3.Dot(camera.Up, toWorld);
+
+        var fovY = DegToRad(_rendererContext?.FieldOfView ?? 60f);
+        var tanY = MathF.Tan(fovY * 0.5f);
+        var tanX = tanY * camera.AspectRatio;
+        if (tanX <= 1e-6f || tanY <= 1e-6f)
+            return false;
+
+        var nx = x / (z * tanX);
+        var ny = y / (z * tanY);
+        var screenX = (nx * 0.5f + 0.5f) * width;
+        var screenY = (-ny * 0.5f + 0.5f) * height;
+        screen = new Point(screenX, screenY);
+        return true;
+    }
+
+    private static bool TryRayPlane(Vector3 rayOrigin, Vector3 rayDir, Vector3 planeOrigin, Vector3 planeNormal, out Vector3 hit)
+    {
+        var denom = Vector3.Dot(rayDir, planeNormal);
+        if (MathF.Abs(denom) < 1e-6f)
+        {
+            hit = default;
+            return false;
+        }
+
+        var t = Vector3.Dot(planeOrigin - rayOrigin, planeNormal) / denom;
+        if (t < 0f)
+        {
+            hit = default;
+            return false;
+        }
+
+        hit = rayOrigin + rayDir * t;
+        return true;
+    }
+
+    private static bool ClosestPointsRayLine(Vector3 rayOrigin, Vector3 rayDir, Vector3 lineOrigin, Vector3 lineDir, out float s, out float t)
+    {
+        var r = rayOrigin - lineOrigin;
+        var a = Vector3.Dot(rayDir, rayDir);
+        var e = Vector3.Dot(lineDir, lineDir);
+        var f = Vector3.Dot(lineDir, r);
+        var c = Vector3.Dot(rayDir, r);
+        var b = Vector3.Dot(rayDir, lineDir);
+        var denom = a * e - b * b;
+        if (MathF.Abs(denom) < 1e-6f)
+        {
+            s = 0f;
+            t = 0f;
+            return false;
+        }
+
+        s = (b * f - c * e) / denom;
+        t = (a * f - b * c) / denom;
+        if (s < 0f)
+            s = 0f;
+        return true;
+    }
+
+    private bool TryGetRay(Point screenPos, out Vector3 origin, out Vector3 dir)
+    {
+        origin = default;
+        dir = default;
+        if (_renderer == null || _rendererContext == null || _renderWidth <= 0 || _renderHeight <= 0)
+            return false;
+
+        var camera = _renderer.Camera;
+        var nx = (float)(screenPos.X / _renderWidth * 2.0 - 1.0);
+        var ny = (float)(1.0 - screenPos.Y / _renderHeight * 2.0);
+
+        var fovY = DegToRad(_rendererContext.FieldOfView);
+        var tanY = MathF.Tan(fovY * 0.5f);
+        var tanX = tanY * camera.AspectRatio;
+
+        var direction = camera.Forward
+            + camera.Right * (nx * tanX)
+            + camera.Up * (ny * tanY);
+
+        origin = camera.Location;
+        dir = Vector3.Normalize(direction);
+        return true;
+    }
+
+    private static float SignedAngleAroundAxis(Vector3 from, Vector3 to, Vector3 axis)
+    {
+        var cross = Vector3.Cross(from, to);
+        var dot = Math.Clamp(Vector3.Dot(from, to), -1f, 1f);
+        var angle = MathF.Atan2(Vector3.Dot(axis, cross), dot);
+        return RadToDeg(angle);
+    }
+
     private static Quaternion IntegrateQuat(Quaternion q, Vector3 angularVelocity, float deltaTime)
     {
         var speed = angularVelocity.Length();
@@ -1834,6 +2325,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
                     _nativeWindow.Context.MakeCurrent();
                     DisposePinResources();
                     DisposeCampathOverlayResources();
+                    DisposeGizmoResources();
                 }
                 catch (Exception ex)
                 {
@@ -2015,6 +2507,27 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         RequestNextFrame();
     }
 
+    public void SetCampathGizmo(CampathGizmoState? state)
+    {
+        if (state == null || !state.Value.Visible)
+        {
+            if (_gizmoVisible)
+            {
+                _gizmoVisible = false;
+                _gizmoDirty = true;
+                RequestNextFrame();
+            }
+            return;
+        }
+
+        _gizmoVisible = true;
+        _gizmoPosition = state.Value.Position;
+        _gizmoRotation = Quaternion.Normalize(state.Value.Rotation);
+        _gizmoUseLocalSpace = state.Value.UseLocalSpace;
+        _gizmoDirty = true;
+        RequestNextFrame();
+    }
+
     private void UpdatePinsFromSource()
     {
         lock (_pinLock)
@@ -2139,7 +2652,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         if (width <= 0 || height <= 0 || _renderer == null)
             return false;
 
-        var viewProjection = _renderer.Camera.ViewProjectionMatrix;
+        var camera = _renderer.Camera;
         const double hitRadius = 12.0;
         var hitRadiusSq = hitRadius * hitRadius;
         var bestDistSq = double.MaxValue;
@@ -2149,7 +2662,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         {
             foreach (var candidate in _pins)
             {
-                if (!TryProjectToScreen(candidate.Position, viewProjection, width, height, out var screen))
+                if (!TryProjectToScreen(candidate.Position, camera, width, height, out var screen))
                     continue;
 
                 var dx = position.X - screen.X;
@@ -2916,7 +3429,8 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
     {
         if (_campathOverlayVertexCount <= 0 || _campathOverlayShaderProgram == 0 || _renderer == null || _mainFramebuffer == null)
         {
-            return;
+            if (!_gizmoVisible)
+                return;
         }
 
         if (!EnsureCampathOverlayResources())
@@ -2934,12 +3448,30 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
             GL.UniformMatrix4(_campathOverlayMvpLocation, false, ref mvp);
         }
 
-        GL.BindVertexArray(_campathOverlayVao);
-        GL.LineWidth(2.5f);
-        GL.DrawArrays(PrimitiveType.Lines, 0, _campathOverlayVertexCount);
-        GL.LineWidth(1f);
-        GL.BindVertexArray(0);
+        if (_campathOverlayVertexCount > 0)
+        {
+            GL.BindVertexArray(_campathOverlayVao);
+            GL.LineWidth(2.5f);
+            GL.DrawArrays(PrimitiveType.Lines, 0, _campathOverlayVertexCount);
+            GL.LineWidth(1f);
+            GL.BindVertexArray(0);
+        }
+
+        if (_gizmoVisible)
+        {
+            if (EnsureGizmoResources())
+            {
+                UpdateGizmoVertices();
+                if (_gizmoVertexCount > 0)
+                {
+                    GL.BindVertexArray(_gizmoVao);
+                    GL.DrawArrays(PrimitiveType.Triangles, 0, _gizmoVertexCount);
+                    GL.BindVertexArray(0);
+                }
+            }
+        }
         GL.UseProgram(0);
+
     }
 
     private void AddPinLabels(int width, int height)
@@ -2955,7 +3487,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 
         const float labelScale = 16f;
         var projected = new List<PinLabel>(_pinLabels.Count);
-        var viewProjection = _renderer.Camera.ViewProjectionMatrix;
+        var camera = _renderer.Camera;
         lock (_pinLock)
         {
             foreach (var label in _pinLabels)
@@ -2965,7 +3497,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
                     continue;
                 }
 
-                if (TryProjectToScreen(label.World, viewProjection, width, height, out var screen))
+                if (TryProjectToScreen(label.World, camera, width, height, out var screen))
                 {
                     label.ScreenX = screen.X;
                     label.ScreenY = screen.Y;
@@ -3063,6 +3595,272 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
             _campathOverlayShaderProgram = 0;
         }
         _campathOverlayVertexCount = 0;
+    }
+
+    private bool EnsureGizmoResources()
+    {
+        if (_campathOverlayShaderProgram == 0)
+        {
+            if (!EnsureCampathOverlayResources())
+                return false;
+        }
+
+        return true;
+    }
+
+    private void DisposeGizmoResources()
+    {
+        if (_gizmoVao != 0)
+        {
+            GL.DeleteVertexArray(_gizmoVao);
+            _gizmoVao = 0;
+        }
+        if (_gizmoVbo != 0)
+        {
+            GL.DeleteBuffer(_gizmoVbo);
+            _gizmoVbo = 0;
+        }
+        _gizmoVertexCount = 0;
+    }
+
+    private void UpdateGizmoVertices()
+    {
+        if (_renderer == null || !_gizmoVisible)
+            return;
+
+        var camera = _renderer.Camera;
+        var distance = Vector3.Distance(camera.Location, _gizmoPosition);
+        var scale = Math.Clamp(distance * 0.12f, 24f, 120f);
+
+        if (_gizmoDirty ||
+            MathF.Abs(scale - _gizmoLastScale) > 0.01f ||
+            Vector3.DistanceSquared(_gizmoPosition, _gizmoLastPosition) > 0.01f ||
+            Quaternion.Dot(_gizmoRotation, _gizmoLastRotation) < 0.999f ||
+            _gizmoUseLocalSpace != _gizmoLastLocal)
+        {
+            _gizmoDirty = false;
+            _gizmoLastScale = scale;
+            _gizmoLastPosition = _gizmoPosition;
+            _gizmoLastRotation = _gizmoRotation;
+            _gizmoLastLocal = _gizmoUseLocalSpace;
+
+            var verts = BuildGizmoVertices(scale);
+            UploadGizmoVertices(verts);
+        }
+    }
+
+    private List<CampathOverlayVertex> BuildGizmoVertices(float scale)
+    {
+        var vertices = new List<CampathOverlayVertex>();
+        var axisLength = scale;
+        var shaftLength = axisLength * 0.75f;
+        var coneLength = axisLength * 0.25f;
+        var shaftRadius = scale * 0.04f;
+        var coneRadius = scale * 0.08f;
+        var ringRadius = scale * 0.75f;
+        var ringThickness = scale * 0.03f;
+
+        var (axisX, axisY, axisZ) = GetGizmoAxes();
+        AppendAxis(vertices, axisX, new Vector3(0.95f, 0.2f, 0.2f), shaftLength, coneLength, shaftRadius, coneRadius,
+            _gizmoHover is GizmoMode.TranslateX);
+        AppendAxis(vertices, axisY, new Vector3(0.2f, 0.95f, 0.2f), shaftLength, coneLength, shaftRadius, coneRadius,
+            _gizmoHover is GizmoMode.TranslateY);
+        AppendAxis(vertices, axisZ, new Vector3(0.2f, 0.5f, 0.95f), shaftLength, coneLength, shaftRadius, coneRadius,
+            _gizmoHover is GizmoMode.TranslateZ);
+
+        AppendRing(vertices, axisX, new Vector3(0.9f, 0.4f, 0.4f), ringRadius, ringThickness,
+            _gizmoHover is GizmoMode.RotateX);
+        AppendRing(vertices, axisY, new Vector3(0.4f, 0.9f, 0.4f), ringRadius, ringThickness,
+            _gizmoHover is GizmoMode.RotateY);
+        AppendRing(vertices, axisZ, new Vector3(0.4f, 0.6f, 0.95f), ringRadius, ringThickness,
+            _gizmoHover is GizmoMode.RotateZ);
+
+        return vertices;
+    }
+
+    private void UploadGizmoVertices(List<CampathOverlayVertex> vertices)
+    {
+        if (vertices.Count == 0)
+        {
+            _gizmoVertexCount = 0;
+            return;
+        }
+
+        var data = new float[vertices.Count * 6];
+        var idx = 0;
+        foreach (var vertex in vertices)
+        {
+            data[idx++] = vertex.Position.X;
+            data[idx++] = vertex.Position.Y;
+            data[idx++] = vertex.Position.Z;
+            data[idx++] = vertex.Color.X;
+            data[idx++] = vertex.Color.Y;
+            data[idx++] = vertex.Color.Z;
+        }
+
+        if (_gizmoVao != 0)
+            GL.DeleteVertexArray(_gizmoVao);
+        if (_gizmoVbo != 0)
+            GL.DeleteBuffer(_gizmoVbo);
+
+        _gizmoVao = GL.GenVertexArray();
+        _gizmoVbo = GL.GenBuffer();
+
+        GL.BindVertexArray(_gizmoVao);
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _gizmoVbo);
+        GL.BufferData(BufferTarget.ArrayBuffer, data.Length * sizeof(float), data, BufferUsageHint.DynamicDraw);
+
+        GL.EnableVertexAttribArray(0);
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
+        GL.EnableVertexAttribArray(1);
+        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
+
+        GL.BindVertexArray(0);
+        _gizmoVertexCount = vertices.Count;
+    }
+
+
+    private (Vector3 x, Vector3 y, Vector3 z) GetGizmoAxes()
+    {
+        if (_gizmoUseLocalSpace)
+        {
+            var rot = _gizmoRotation;
+            return (
+                Vector3.Normalize(Vector3.Transform(Vector3.UnitX, rot)),
+                Vector3.Normalize(Vector3.Transform(Vector3.UnitY, rot)),
+                Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, rot))
+            );
+        }
+
+        return (Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ);
+    }
+
+    private void AppendAxis(List<CampathOverlayVertex> vertices, Vector3 axis, Vector3 color, float shaftLength, float coneLength, float shaftRadius, float coneRadius, bool highlight)
+    {
+        if (highlight)
+            color = Vector3.Clamp(color * 1.4f, Vector3.Zero, Vector3.One);
+
+        var origin = _gizmoPosition;
+        axis = Vector3.Normalize(axis);
+        var (u, v) = GetOrthonormalBasis(axis);
+        var shaftEnd = origin + axis * shaftLength;
+        var tip = shaftEnd + axis * coneLength;
+
+        AppendCylinder(vertices, origin, shaftEnd, axis, u, v, shaftRadius, color);
+        AppendCone(vertices, shaftEnd, tip, axis, u, v, coneRadius, color);
+    }
+
+    private void AppendRing(List<CampathOverlayVertex> vertices, Vector3 axis, Vector3 color, float radius, float thickness, bool highlight)
+    {
+        if (highlight)
+            color = Vector3.Clamp(color * 1.4f, Vector3.Zero, Vector3.One);
+
+        axis = Vector3.Normalize(axis);
+        var (u, v) = GetOrthonormalBasis(axis);
+        AppendTorus(vertices, _gizmoPosition, axis, u, v, radius, thickness, color);
+    }
+
+    private static void AppendCylinder(List<CampathOverlayVertex> vertices, Vector3 start, Vector3 end, Vector3 axis, Vector3 u, Vector3 v, float radius, Vector3 color)
+    {
+        const int segments = 16;
+        for (var i = 0; i < segments; i++)
+        {
+            var t0 = i / (float)segments * MathF.PI * 2f;
+            var t1 = (i + 1) / (float)segments * MathF.PI * 2f;
+            var r0 = u * MathF.Cos(t0) * radius + v * MathF.Sin(t0) * radius;
+            var r1 = u * MathF.Cos(t1) * radius + v * MathF.Sin(t1) * radius;
+
+            var p0 = start + r0;
+            var p1 = start + r1;
+            var p2 = end + r1;
+            var p3 = end + r0;
+
+            vertices.Add(new CampathOverlayVertex(p0, color));
+            vertices.Add(new CampathOverlayVertex(p1, color));
+            vertices.Add(new CampathOverlayVertex(p2, color));
+
+            vertices.Add(new CampathOverlayVertex(p0, color));
+            vertices.Add(new CampathOverlayVertex(p2, color));
+            vertices.Add(new CampathOverlayVertex(p3, color));
+        }
+    }
+
+    private static void AppendCone(List<CampathOverlayVertex> vertices, Vector3 baseCenter, Vector3 tip, Vector3 axis, Vector3 u, Vector3 v, float radius, Vector3 color)
+    {
+        const int segments = 16;
+        for (var i = 0; i < segments; i++)
+        {
+            var t0 = i / (float)segments * MathF.PI * 2f;
+            var t1 = (i + 1) / (float)segments * MathF.PI * 2f;
+            var r0 = u * MathF.Cos(t0) * radius + v * MathF.Sin(t0) * radius;
+            var r1 = u * MathF.Cos(t1) * radius + v * MathF.Sin(t1) * radius;
+
+            var p0 = baseCenter + r0;
+            var p1 = baseCenter + r1;
+
+            vertices.Add(new CampathOverlayVertex(p0, color));
+            vertices.Add(new CampathOverlayVertex(p1, color));
+            vertices.Add(new CampathOverlayVertex(tip, color));
+        }
+    }
+
+    private static void AppendTorus(List<CampathOverlayVertex> vertices, Vector3 center, Vector3 axis, Vector3 u, Vector3 v, float radius, float thickness, Vector3 color)
+    {
+        const int majorSegments = 32;
+        const int minorSegments = 12;
+
+        for (var i = 0; i < majorSegments; i++)
+        {
+            var a0 = i / (float)majorSegments * MathF.PI * 2f;
+            var a1 = (i + 1) / (float)majorSegments * MathF.PI * 2f;
+
+            var cos0 = MathF.Cos(a0);
+            var sin0 = MathF.Sin(a0);
+            var cos1 = MathF.Cos(a1);
+            var sin1 = MathF.Sin(a1);
+
+            var ringCenter0 = center + (u * cos0 + v * sin0) * radius;
+            var ringCenter1 = center + (u * cos1 + v * sin1) * radius;
+            var ringDir0 = Vector3.Normalize(u * cos0 + v * sin0);
+            var ringDir1 = Vector3.Normalize(u * cos1 + v * sin1);
+
+            var ringU0 = Vector3.Normalize(Vector3.Cross(axis, ringDir0));
+            var ringU1 = Vector3.Normalize(Vector3.Cross(axis, ringDir1));
+            var ringV0 = Vector3.Normalize(Vector3.Cross(ringDir0, ringU0));
+            var ringV1 = Vector3.Normalize(Vector3.Cross(ringDir1, ringU1));
+
+            for (var j = 0; j < minorSegments; j++)
+            {
+                var b0 = j / (float)minorSegments * MathF.PI * 2f;
+                var b1 = (j + 1) / (float)minorSegments * MathF.PI * 2f;
+
+                var minor0 = ringU0 * MathF.Cos(b0) * thickness + ringV0 * MathF.Sin(b0) * thickness;
+                var minor1 = ringU0 * MathF.Cos(b1) * thickness + ringV0 * MathF.Sin(b1) * thickness;
+                var minor2 = ringU1 * MathF.Cos(b1) * thickness + ringV1 * MathF.Sin(b1) * thickness;
+                var minor3 = ringU1 * MathF.Cos(b0) * thickness + ringV1 * MathF.Sin(b0) * thickness;
+
+                var p0 = ringCenter0 + minor0;
+                var p1 = ringCenter0 + minor1;
+                var p2 = ringCenter1 + minor2;
+                var p3 = ringCenter1 + minor3;
+
+                vertices.Add(new CampathOverlayVertex(p0, color));
+                vertices.Add(new CampathOverlayVertex(p1, color));
+                vertices.Add(new CampathOverlayVertex(p2, color));
+
+                vertices.Add(new CampathOverlayVertex(p0, color));
+                vertices.Add(new CampathOverlayVertex(p2, color));
+                vertices.Add(new CampathOverlayVertex(p3, color));
+            }
+        }
+    }
+
+    private static (Vector3 u, Vector3 v) GetOrthonormalBasis(Vector3 axis)
+    {
+        var up = MathF.Abs(Vector3.Dot(axis, Vector3.UnitZ)) > 0.9f ? Vector3.UnitY : Vector3.UnitZ;
+        var u = Vector3.Normalize(Vector3.Cross(axis, up));
+        var v = Vector3.Normalize(Vector3.Cross(axis, u));
+        return (u, v);
     }
 
     private void RebuildCampathOverlay()
@@ -3622,27 +4420,28 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
             matrix.M41, matrix.M42, matrix.M43, matrix.M44);
     }
 
-    private static bool TryProjectToScreen(Vector3 world, Matrix4x4 viewProjection, int width, int height, out Point screen)
+private static bool TryProjectToScreen(Vector3 world, ValveResourceFormat.Renderer.Camera camera, int width, int height, out Point screen)
+{
+    var toWorld = world - camera.Location;
+    if (Vector3.Dot(camera.Forward, toWorld) <= 0.001f)
     {
-        var clip = Vector4.Transform(new Vector4(world, 1f), viewProjection);
-        if (Math.Abs(clip.W) < 1e-5f)
-        {
-            screen = default;
-            return false;
-        }
-
-        var ndc = clip / clip.W;
-        if (ndc.Z < -1f || ndc.Z > 1f)
-        {
-            screen = default;
-            return false;
-        }
-
-        var x = (ndc.X * 0.5f + 0.5f) * width;
-        var y = (-ndc.Y * 0.5f + 0.5f) * height;
-        screen = new Point(x, y);
-        return true;
+        screen = default;
+        return false;
     }
+
+    var clip = Vector4.Transform(new Vector4(world, 1f), camera.ViewProjectionMatrix);
+    if (Math.Abs(clip.W) < 1e-5f)
+    {
+        screen = default;
+        return false;
+    }
+
+    var ndc = clip / clip.W;
+    var x = (ndc.X * 0.5f + 0.5f) * width;
+    var y = (-ndc.Y * 0.5f + 0.5f) * height;
+    screen = new Point(x, y);
+    return true;
+}
 
     private sealed class PinRenderData
     {
@@ -3666,6 +4465,17 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         public required Color32 Color { get; init; }
         public double ScreenX { get; set; }
         public double ScreenY { get; set; }
+    }
+
+    private enum GizmoMode
+    {
+        None,
+        TranslateX,
+        TranslateY,
+        TranslateZ,
+        RotateX,
+        RotateY,
+        RotateZ
     }
 
     private readonly record struct ShaderVariant(string Name, string VertexSource, string FragmentSource, bool BindAttribLocation);

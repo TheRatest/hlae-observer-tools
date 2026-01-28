@@ -31,6 +31,7 @@ public sealed class Viewport3DSettings : ViewModelBase
     private bool _showFps;
     private bool _viewportCampathMode;
     private bool _viewportCampathOverlayEnabled = true;
+    private bool _campathGizmoLocalSpace = true;
     private int _shadowTextureSize = 1024;
     private int _maxTextureSize = 1024;
     private string _renderMode = "Default";
@@ -260,6 +261,15 @@ public sealed class Viewport3DSettings : ViewModelBase
     {
         get => _viewportCampathOverlayEnabled;
         set => SetProperty(ref _viewportCampathOverlayEnabled, value);
+    }
+
+    /// <summary>
+    /// Use local-space axes for the campath gizmo.
+    /// </summary>
+    public bool CampathGizmoLocalSpace
+    {
+        get => _campathGizmoLocalSpace;
+        set => SetProperty(ref _campathGizmoLocalSpace, value);
     }
 
     /// <summary>

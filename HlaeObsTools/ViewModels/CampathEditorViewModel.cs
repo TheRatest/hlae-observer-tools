@@ -210,6 +210,7 @@ public sealed class CampathEditorViewModel : ViewModelBase
             });
         }
         _suppressCollectionEvents = false;
+        HookKeyframeHandlers();
 
         UseCubic = data.UseCubic;
         Hold = data.Hold;
@@ -352,6 +353,7 @@ public sealed class CampathEditorViewModel : ViewModelBase
         RebuildCurve();
     }
 
+
     private void OnKeyframePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_suppressCollectionEvents)
@@ -361,6 +363,12 @@ public sealed class CampathEditorViewModel : ViewModelBase
             Dispatcher.UIThread.Post(SortByTimeDeferred);
 
         RebuildCurve();
+    }
+
+    private void HookKeyframeHandlers()
+    {
+        foreach (var key in Keyframes)
+            key.PropertyChanged += OnKeyframePropertyChanged;
     }
 
     private void SortByTimeDeferred()
