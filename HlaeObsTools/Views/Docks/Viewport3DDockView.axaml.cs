@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Numerics;
 using Avalonia.Controls;
@@ -8,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using HlaeObsTools.Controls;
+using HlaeObsTools.Services.Campaths;
 using HlaeObsTools.Services.Viewport3D;
 using HlaeObsTools.ViewModels;
 using HlaeObsTools.ViewModels.Docks;
@@ -41,7 +43,9 @@ public partial class Viewport3DDockView : UserControl
             _viewModel.PinsUpdated -= OnPinsUpdated;
             _viewModel.Viewport3DSettings.PropertyChanged -= OnViewportSettingsChanged;
             if (_campathEditor != null)
-                _campathEditor.PropertyChanged -= OnCampathEditorChanged;
+            {
+                DetachCampathEditor(_campathEditor);
+            }
             _viewModel.CampathStateProvider = null;
             _viewModel.PreviewFreecamPose -= OnPreviewFreecamPose;
             _viewModel.PreviewFreecamEnded -= OnPreviewFreecamEnded;
@@ -54,7 +58,7 @@ public partial class Viewport3DDockView : UserControl
             _viewModel.PinsUpdated += OnPinsUpdated;
             _viewModel.Viewport3DSettings.PropertyChanged += OnViewportSettingsChanged;
             _campathEditor = _viewModel.CampathEditor;
-            _campathEditor.PropertyChanged += OnCampathEditorChanged;
+            AttachCampathEditor(_campathEditor);
             _viewModel.CampathStateProvider = CaptureFreecamState;
             _viewModel.PreviewFreecamPose += OnPreviewFreecamPose;
             _viewModel.PreviewFreecamEnded += OnPreviewFreecamEnded;
@@ -69,9 +73,11 @@ public partial class Viewport3DDockView : UserControl
         {
             EnsureViewport();
         }
-        else if (e.PropertyName == nameof(Viewport3DSettings.ViewportCampathMode))
+        else if (e.PropertyName == nameof(Viewport3DSettings.ViewportCampathMode) ||
+                 e.PropertyName == nameof(Viewport3DSettings.ViewportCampathOverlayEnabled))
         {
             UpdateCampathPreview();
+            UpdateCampathOverlay();
         }
     }
 
@@ -102,6 +108,7 @@ public partial class Viewport3DDockView : UserControl
         }
 
         UpdateCampathPreview();
+        UpdateCampathOverlay();
     }
 
     private void ClearViewport()
@@ -156,6 +163,59 @@ public partial class Viewport3DDockView : UserControl
         {
             UpdateCampathPreview();
         }
+
+        if (e.PropertyName == nameof(CampathEditorViewModel.UseCubic) ||
+            e.PropertyName == nameof(CampathEditorViewModel.Duration) ||
+            e.PropertyName == nameof(CampathEditorViewModel.PlayheadTime))
+        {
+            UpdateCampathOverlay();
+        }
+    }
+
+    private void OnCampathKeyframesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+        {
+            foreach (CampathKeyframeViewModel keyframe in e.OldItems)
+            {
+                keyframe.PropertyChanged -= OnCampathKeyframeChanged;
+            }
+        }
+
+        if (e.NewItems != null)
+        {
+            foreach (CampathKeyframeViewModel keyframe in e.NewItems)
+            {
+                keyframe.PropertyChanged += OnCampathKeyframeChanged;
+            }
+        }
+
+        UpdateCampathOverlay();
+    }
+
+    private void OnCampathKeyframeChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        UpdateCampathOverlay();
+    }
+
+    private void AttachCampathEditor(CampathEditorViewModel editor)
+    {
+        editor.PropertyChanged += OnCampathEditorChanged;
+        editor.Keyframes.CollectionChanged += OnCampathKeyframesChanged;
+        foreach (var keyframe in editor.Keyframes)
+        {
+            keyframe.PropertyChanged += OnCampathKeyframeChanged;
+        }
+    }
+
+    private void DetachCampathEditor(CampathEditorViewModel editor)
+    {
+        editor.PropertyChanged -= OnCampathEditorChanged;
+        editor.Keyframes.CollectionChanged -= OnCampathKeyframesChanged;
+        foreach (var keyframe in editor.Keyframes)
+        {
+            keyframe.PropertyChanged -= OnCampathKeyframeChanged;
+        }
     }
 
     private ViewportFreecamState? CaptureFreecamState()
@@ -192,6 +252,129 @@ public partial class Viewport3DDockView : UserControl
         }
 
         _viewport.SetExternalCamera(sample.Value.Position, sample.Value.Rotation, (float)sample.Value.Fov);
+    }
+
+    private void UpdateCampathOverlay()
+    {
+        if (_viewport == null || _viewModel == null || _campathEditor == null)
+            return;
+
+        if (!_viewModel.Viewport3DSettings.ViewportCampathMode ||
+            !_viewModel.Viewport3DSettings.ViewportCampathOverlayEnabled)
+        {
+            _viewport.SetCampathOverlay(null);
+            return;
+        }
+
+        var overlay = BuildCampathOverlay(_campathEditor, _campathEditor.PlayheadTime);
+        _viewport.SetCampathOverlay(overlay);
+    }
+
+    private static CampathOverlayData? BuildCampathOverlay(CampathEditorViewModel editor, double playheadTime)
+    {
+        if (editor.Keyframes.Count == 0)
+            return null;
+
+        var vertices = new List<CampathOverlayVertex>();
+        var duration = Math.Max(editor.Duration, 0.001);
+        var playheadNorm = (float)Math.Clamp(playheadTime / duration, 0.0, 1.0);
+
+        if (editor.Curve.CanEvaluate() && editor.Keyframes.Count > 1)
+        {
+            var sampleCount = Math.Clamp((int)Math.Ceiling(duration * 30.0), 32, 512);
+            var prevSample = editor.Curve.Evaluate(0.0);
+            var prevPos = prevSample.Position;
+
+            for (var i = 1; i <= sampleCount; i++)
+            {
+                var t = duration * i / sampleCount;
+                var sample = editor.Curve.Evaluate(t);
+                var color = GetPlayheadGradientColor((float)Math.Clamp(t / duration, 0.0, 1.0), playheadNorm);
+                AddLine(vertices, prevPos, sample.Position, color);
+                prevPos = sample.Position;
+            }
+        }
+
+        if (editor.Curve.CanEvaluate())
+        {
+            var sample = editor.Curve.Evaluate(playheadTime);
+            var color = new Vector3(0.9f, 0.95f, 1.0f);
+            AddCameraFrustum(vertices, sample.Position, sample.Rotation, (float)sample.Fov, color);
+        }
+
+        foreach (var keyframe in editor.Keyframes)
+        {
+            var tNorm = duration > 0.0 ? keyframe.Time / duration : 0.0;
+            var color = keyframe.Selected
+                ? new Vector3(1.0f, 1.0f, 0.2f)
+                : GetPlayheadGradientColor((float)Math.Clamp(tNorm, 0.0, 1.0), playheadNorm);
+            AddCameraFrustum(vertices, keyframe.Position, keyframe.Rotation, (float)keyframe.Fov, color);
+        }
+
+        return vertices.Count > 0 ? new CampathOverlayData(vertices) : null;
+    }
+
+    private static void AddLine(List<CampathOverlayVertex> vertices, Vector3 start, Vector3 end, Vector3 color)
+    {
+        vertices.Add(new CampathOverlayVertex(start, color));
+        vertices.Add(new CampathOverlayVertex(end, color));
+    }
+
+    private static void AddCameraFrustum(List<CampathOverlayVertex> vertices, Vector3 position, Quaternion rotation, float fov, Vector3 color)
+    {
+        const float frustumLength = 32f;
+        const float aspect = 16f / 9f;
+
+        var forward = Vector3.Normalize(Vector3.Transform(Vector3.UnitX, rotation));
+        var up = Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, rotation));
+        var right = Vector3.Normalize(Vector3.Transform(-Vector3.UnitY, rotation));
+
+        var halfHeight = MathF.Tan(MathF.PI / 180f * fov * 0.5f) * frustumLength;
+        var halfWidth = halfHeight * aspect;
+
+        var center = position + forward * frustumLength;
+        var upScaled = up * halfHeight;
+        var rightScaled = right * halfWidth;
+
+        var c1 = center + upScaled + rightScaled;
+        var c2 = center + upScaled - rightScaled;
+        var c3 = center - upScaled - rightScaled;
+        var c4 = center - upScaled + rightScaled;
+
+        AddLine(vertices, position, c1, color);
+        AddLine(vertices, position, c2, color);
+        AddLine(vertices, position, c3, color);
+        AddLine(vertices, position, c4, color);
+
+        AddLine(vertices, c1, c2, color);
+        AddLine(vertices, c2, c3, color);
+        AddLine(vertices, c3, c4, color);
+        AddLine(vertices, c4, c1, color);
+    }
+
+    private static Vector3 GetPlayheadGradientColor(float t, float playheadT)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        playheadT = Math.Clamp(playheadT, 0f, 1f);
+
+        var pastStart = new Vector3(0.15f, 0.75f, 1.0f);
+        var pastEnd = new Vector3(0.35f, 1.0f, 0.35f);
+        var futureStart = new Vector3(1.0f, 0.75f, 0.2f);
+        var futureEnd = new Vector3(1.0f, 0.2f, 0.2f);
+
+        if (t <= playheadT)
+        {
+            var denom = Math.Max(playheadT, 0.0001f);
+            return Lerp(pastStart, pastEnd, t / denom);
+        }
+
+        var futureDenom = Math.Max(1f - playheadT, 0.0001f);
+        return Lerp(futureStart, futureEnd, (t - playheadT) / futureDenom);
+    }
+
+    private static Vector3 Lerp(Vector3 a, Vector3 b, float t)
+    {
+        return a + (b - a) * t;
     }
 
     private void OnPreviewFreecamPose(Vector3 position, Quaternion rotation, float fov)

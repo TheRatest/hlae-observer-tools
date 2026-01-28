@@ -34,6 +34,7 @@ public sealed class CampathTimelineControl : Control
     private bool _itemsHooked;
     private bool _freecamPreviewActive;
     private bool _keyframesHooked;
+    private Point _pressPoint;
 
     public CampathTimelineControl()
     {
@@ -99,11 +100,18 @@ public sealed class CampathTimelineControl : Control
             var keyframe = HitTestKeyframe(pt);
             if (keyframe != null)
             {
+                _pressPoint = pt;
                 SelectedItem = keyframe;
                 _draggingKeyframe = keyframe;
                 e.Pointer.Capture(this);
                 e.Handled = true;
                 return;
+            }
+
+            if (SelectedItem != null)
+            {
+                SelectedItem = null;
+                e.Handled = true;
             }
         }
     }
@@ -142,6 +150,10 @@ public sealed class CampathTimelineControl : Control
         if (_draggingKeyframe != null)
         {
             var pt = e.GetPosition(this);
+            var delta = pt - _pressPoint;
+            if (Math.Abs(delta.X) + Math.Abs(delta.Y) > 3.0)
+            {
+            }
             _draggingKeyframe.Time = XToTime(pt.X);
             e.Handled = true;
         }

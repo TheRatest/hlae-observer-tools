@@ -93,6 +93,7 @@ public class AppSettingsData
     public bool ViewportSkipTranslucentEnabled { get; set; }
     public bool ViewportShowFps { get; set; }
     public bool ViewportCampathMode { get; set; }
+    public bool ViewportCampathOverlayEnabled { get; set; } = true;
     public int ViewportShadowTextureSize { get; set; } = 1024;
     public int ViewportMaxTextureSize { get; set; } = 1024;
     public string ViewportRenderMode { get; set; } = "Default";

@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using System.Numerics;
 using Rect = Avalonia.Rect;
+using HlaeObsTools.Services.Campaths;
 using HlaeObsTools.Services.Viewport3D;
 using HlaeObsTools.Services.Input;
 using System.Collections.ObjectModel;
@@ -1205,6 +1206,11 @@ public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
         _pins = list;
         _pinsDirty = true;
         RequestNextFrame();
+    }
+
+    public void SetCampathOverlay(CampathOverlayData? data)
+    {
+        // Not supported in the legacy D3D11 viewport yet.
     }
 
     private static Vector3 GetTeamColor(string team)

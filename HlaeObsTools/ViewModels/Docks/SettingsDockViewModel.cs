@@ -493,6 +493,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 ViewportSkipTranslucentEnabled = _viewport3DSettings.SkipTranslucentEnabled,
                 ViewportShowFps = _viewport3DSettings.ShowFps,
                 ViewportCampathMode = _viewport3DSettings.ViewportCampathMode,
+                ViewportCampathOverlayEnabled = _viewport3DSettings.ViewportCampathOverlayEnabled,
                 ViewportShadowTextureSize = _viewport3DSettings.ShadowTextureSize,
                 ViewportMaxTextureSize = _viewport3DSettings.MaxTextureSize,
                 ViewportRenderMode = _viewport3DSettings.RenderMode,

@@ -47,6 +47,7 @@ public readonly struct CampathSample
 public sealed class CampathCurve
 {
     private readonly List<CampathKeyframe> _keyframes = new();
+    private IReadOnlyList<CampathKeyframe> _splineKeyframes = Array.Empty<CampathKeyframe>();
     private readonly CampathDoubleSpline _xSpline = new();
     private readonly CampathDoubleSpline _ySpline = new();
     private readonly CampathDoubleSpline _zSpline = new();
@@ -83,13 +84,14 @@ public sealed class CampathCurve
 
     public bool CanEvaluate()
     {
+        var points = BuildSplineKeyframes();
         var posMode = EffectivePositionInterp;
         var rotMode = EffectiveRotationInterp;
         var fovMode = EffectiveFovInterp;
-        return CampathDoubleSpline.CanEval(_keyframes.Count, posMode)
-               && CampathDoubleSpline.CanEval(_keyframes.Count, fovMode)
-               && CampathQuaternionSpline.CanEval(_keyframes.Count, rotMode)
-               && CampathBoolAndSpline.CanEval(_keyframes.Count);
+        return CampathDoubleSpline.CanEval(points.Count, posMode)
+               && CampathDoubleSpline.CanEval(points.Count, fovMode)
+               && CampathQuaternionSpline.CanEval(points.Count, rotMode)
+               && CampathBoolAndSpline.CanEval(points.Count);
     }
 
     public CampathSample Evaluate(double time)
@@ -97,10 +99,10 @@ public sealed class CampathCurve
         if (_dirty)
             Rebuild();
 
-        if (_keyframes.Count > 0)
+        if (_splineKeyframes.Count > 0)
         {
-            var minTime = _keyframes[0].Time;
-            var maxTime = _keyframes[_keyframes.Count - 1].Time;
+            var minTime = _splineKeyframes[0].Time;
+            var maxTime = _splineKeyframes[_splineKeyframes.Count - 1].Time;
             time = Math.Clamp(time, minTime, maxTime);
         }
 
@@ -126,12 +128,45 @@ public sealed class CampathCurve
     {
         _dirty = false;
 
-        _xSpline.SetPoints(_keyframes, k => k.Position.X, EffectivePositionInterp);
-        _ySpline.SetPoints(_keyframes, k => k.Position.Y, EffectivePositionInterp);
-        _zSpline.SetPoints(_keyframes, k => k.Position.Z, EffectivePositionInterp);
-        _fovSpline.SetPoints(_keyframes, k => k.Fov, EffectiveFovInterp);
-        _rotSpline.SetPoints(_keyframes, k => k.Rotation, EffectiveRotationInterp);
-        _selectedSpline.SetPoints(_keyframes, k => k.Selected);
+        _splineKeyframes = BuildSplineKeyframes();
+        _xSpline.SetPoints(_splineKeyframes, k => k.Position.X, EffectivePositionInterp);
+        _ySpline.SetPoints(_splineKeyframes, k => k.Position.Y, EffectivePositionInterp);
+        _zSpline.SetPoints(_splineKeyframes, k => k.Position.Z, EffectivePositionInterp);
+        _fovSpline.SetPoints(_splineKeyframes, k => k.Fov, EffectiveFovInterp);
+        _rotSpline.SetPoints(_splineKeyframes, k => k.Rotation, EffectiveRotationInterp);
+        _selectedSpline.SetPoints(_splineKeyframes, k => k.Selected);
+    }
+
+    private IReadOnlyList<CampathKeyframe> BuildSplineKeyframes()
+    {
+        if (_keyframes.Count <= 1)
+            return _keyframes;
+
+        const double timeEpsilon = 1e-6;
+        var ordered = _keyframes.OrderBy(k => k.Time).ToList();
+        var result = new List<CampathKeyframe>(ordered.Count);
+        foreach (var key in ordered)
+        {
+            if (result.Count == 0)
+            {
+                result.Add(key);
+                continue;
+            }
+
+            var last = result[result.Count - 1];
+            if (Math.Abs(key.Time - last.Time) <= timeEpsilon)
+            {
+                result[result.Count - 1] = key;
+                continue;
+            }
+
+            if (key.Time > last.Time)
+            {
+                result.Add(key);
+            }
+        }
+
+        return result;
     }
 }
 

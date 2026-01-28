@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Avalonia.Input;
+using HlaeObsTools.Services.Campaths;
 using HlaeObsTools.Services.Viewport3D;
 using HlaeObsTools.ViewModels;
 
@@ -26,4 +27,5 @@ public interface IViewport3DControl
     void SetFreecamPose(Vector3 position, Quaternion rotation, float fov);
     void ClearFreecamPreview();
     void SetPins(IReadOnlyList<ViewportPin> pins);
+    void SetCampathOverlay(CampathOverlayData? data);
 }

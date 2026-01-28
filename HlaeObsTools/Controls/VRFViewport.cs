@@ -24,6 +24,7 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using HlaeObsTools.Services.Input;
+using HlaeObsTools.Services.Campaths;
 using HlaeObsTools.Services.Viewport3D;
 using HlaeObsTools.ViewModels;
 using SteamDatabase.ValvePak;
@@ -118,6 +119,15 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
     private readonly object _pinLock = new();
     private List<PinLabel> _labelHitCache = new();
     private readonly object _labelLock = new();
+
+    private int _campathOverlayShaderProgram;
+    private int _campathOverlayMvpLocation = -1;
+    private int _campathOverlayVao;
+    private int _campathOverlayVbo;
+    private int _campathOverlayVertexCount;
+    private bool _campathOverlayDirty;
+    private CampathOverlayData? _campathOverlayData;
+    private readonly object _campathOverlayLock = new();
     private readonly Vector3[] _pinConeUnit = CreateUnitCone();
     private readonly Vector3[] _pinConeNormals = CreateUnitConeNormals();
     private readonly Vector3[] _pinSphereUnit;
@@ -1823,6 +1833,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
                 {
                     _nativeWindow.Context.MakeCurrent();
                     DisposePinResources();
+                    DisposeCampathOverlayResources();
                 }
                 catch (Exception ex)
                 {
@@ -1992,6 +2003,16 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 
         _pinSource = pins;
         UpdatePinsFromSource();
+    }
+
+    public void SetCampathOverlay(CampathOverlayData? data)
+    {
+        lock (_campathOverlayLock)
+        {
+            _campathOverlayData = data;
+            _campathOverlayDirty = true;
+        }
+        RequestNextFrame();
     }
 
     private void UpdatePinsFromSource()
@@ -2476,6 +2497,11 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
                 RebuildPins();
             }
             DrawPins(width, height);
+            if (_campathOverlayDirty)
+            {
+                RebuildCampathOverlay();
+            }
+            DrawCampathOverlay(width, height);
             if (_mainFramebuffer != _defaultFramebuffer)
             {
                 _renderer.PostprocessRender(_mainFramebuffer, _defaultFramebuffer);
@@ -2886,6 +2912,36 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         GL.UseProgram(0);
     }
 
+    private void DrawCampathOverlay(int width, int height)
+    {
+        if (_campathOverlayVertexCount <= 0 || _campathOverlayShaderProgram == 0 || _renderer == null || _mainFramebuffer == null)
+        {
+            return;
+        }
+
+        if (!EnsureCampathOverlayResources())
+        {
+            return;
+        }
+
+        _mainFramebuffer.Bind(FramebufferTarget.Framebuffer);
+        GL.Viewport(0, 0, width, height);
+
+        var mvp = ToMatrix4(_renderer.Camera.ViewProjectionMatrix);
+        GL.UseProgram(_campathOverlayShaderProgram);
+        if (_campathOverlayMvpLocation >= 0)
+        {
+            GL.UniformMatrix4(_campathOverlayMvpLocation, false, ref mvp);
+        }
+
+        GL.BindVertexArray(_campathOverlayVao);
+        GL.LineWidth(2.5f);
+        GL.DrawArrays(PrimitiveType.Lines, 0, _campathOverlayVertexCount);
+        GL.LineWidth(1f);
+        GL.BindVertexArray(0);
+        GL.UseProgram(0);
+    }
+
     private void AddPinLabels(int width, int height)
     {
         if (_textRenderer == null || _renderer == null || _pinLabels.Count == 0)
@@ -2971,6 +3027,111 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         }
         _pinVertexCount = 0;
         _pinDraws.Clear();
+    }
+
+    private bool EnsureCampathOverlayResources()
+    {
+        if (_campathOverlayShaderProgram == 0)
+        {
+            _campathOverlayShaderProgram = CreateCampathOverlayShaderProgram();
+            if (_campathOverlayShaderProgram == 0)
+            {
+                return false;
+            }
+
+            _campathOverlayMvpLocation = GL.GetUniformLocation(_campathOverlayShaderProgram, "uMvp");
+        }
+
+        return true;
+    }
+
+    private void DisposeCampathOverlayResources()
+    {
+        if (_campathOverlayVao != 0)
+        {
+            GL.DeleteVertexArray(_campathOverlayVao);
+            _campathOverlayVao = 0;
+        }
+        if (_campathOverlayVbo != 0)
+        {
+            GL.DeleteBuffer(_campathOverlayVbo);
+            _campathOverlayVbo = 0;
+        }
+        if (_campathOverlayShaderProgram != 0)
+        {
+            GL.DeleteProgram(_campathOverlayShaderProgram);
+            _campathOverlayShaderProgram = 0;
+        }
+        _campathOverlayVertexCount = 0;
+    }
+
+    private void RebuildCampathOverlay()
+    {
+        _campathOverlayDirty = false;
+
+        CampathOverlayData? data;
+        lock (_campathOverlayLock)
+        {
+            data = _campathOverlayData;
+        }
+
+        if (data == null || data.Vertices.Count == 0)
+        {
+            _campathOverlayVertexCount = 0;
+            if (_campathOverlayVao != 0)
+            {
+                GL.DeleteVertexArray(_campathOverlayVao);
+                _campathOverlayVao = 0;
+            }
+            if (_campathOverlayVbo != 0)
+            {
+                GL.DeleteBuffer(_campathOverlayVbo);
+                _campathOverlayVbo = 0;
+            }
+            return;
+        }
+
+        if (!EnsureCampathOverlayResources())
+        {
+            return;
+        }
+
+        var vertexData = new float[data.Vertices.Count * 6];
+        var idx = 0;
+        foreach (var vertex in data.Vertices)
+        {
+            vertexData[idx++] = vertex.Position.X;
+            vertexData[idx++] = vertex.Position.Y;
+            vertexData[idx++] = vertex.Position.Z;
+            vertexData[idx++] = vertex.Color.X;
+            vertexData[idx++] = vertex.Color.Y;
+            vertexData[idx++] = vertex.Color.Z;
+        }
+
+        if (_campathOverlayVao != 0)
+        {
+            GL.DeleteVertexArray(_campathOverlayVao);
+        }
+        if (_campathOverlayVbo != 0)
+        {
+            GL.DeleteBuffer(_campathOverlayVbo);
+        }
+
+        _campathOverlayVao = GL.GenVertexArray();
+        _campathOverlayVbo = GL.GenBuffer();
+        GL.BindVertexArray(_campathOverlayVao);
+
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _campathOverlayVbo);
+        GL.BufferData(BufferTarget.ArrayBuffer, vertexData.Length * sizeof(float), vertexData, BufferUsageHint.DynamicDraw);
+
+        GL.EnableVertexAttribArray(0);
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 0);
+        GL.EnableVertexAttribArray(1);
+        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 6 * sizeof(float), 3 * sizeof(float));
+
+        GL.BindVertexArray(0);
+
+        _campathOverlayVertexCount = data.Vertices.Count;
     }
 
     private void RebuildPins()
@@ -3336,6 +3497,122 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         return shader;
     }
 
+    private int CreateCampathOverlayShaderProgram()
+    {
+        var version = GL.GetString(StringName.Version) ?? "unknown";
+        var glsl = GL.GetString(StringName.ShadingLanguageVersion) ?? "unknown";
+        var isEs = version.Contains("OpenGL ES", StringComparison.OrdinalIgnoreCase);
+        var errors = new List<string>();
+
+        var esVariants = new[]
+        {
+            new ShaderVariant("es300", LineVertexEs300, LineFragmentEs300, BindAttribLocation: false),
+            new ShaderVariant("es100", LineVertexEs100, LineFragmentEs100, BindAttribLocation: true)
+        };
+        var desktopVariants = new[]
+        {
+            new ShaderVariant("gl330", LineVertex330, LineFragment330, BindAttribLocation: false),
+            new ShaderVariant("gl150", LineVertex150, LineFragment150, BindAttribLocation: false),
+            new ShaderVariant("gl120", LineVertex120, LineFragment120, BindAttribLocation: true)
+        };
+
+        var variants = new List<ShaderVariant>();
+        if (isEs)
+        {
+            variants.AddRange(esVariants);
+            variants.AddRange(desktopVariants);
+        }
+        else
+        {
+            variants.AddRange(desktopVariants);
+            variants.AddRange(esVariants);
+        }
+
+        foreach (var variant in variants)
+        {
+            var vertexShader = CompileOverlayShader(ShaderType.VertexShader, variant.VertexSource, out var vertexError);
+            if (vertexShader == 0)
+            {
+                if (!string.IsNullOrWhiteSpace(vertexError))
+                    errors.Add($"Vertex {variant.Name}: {vertexError}");
+                continue;
+            }
+
+            var fragmentShader = CompileOverlayShader(ShaderType.FragmentShader, variant.FragmentSource, out var fragmentError);
+            if (fragmentShader == 0)
+            {
+                if (!string.IsNullOrWhiteSpace(fragmentError))
+                    errors.Add($"Fragment {variant.Name}: {fragmentError}");
+                GL.DeleteShader(vertexShader);
+                continue;
+            }
+
+            var program = GL.CreateProgram();
+            GL.AttachShader(program, vertexShader);
+            GL.AttachShader(program, fragmentShader);
+            if (variant.BindAttribLocation)
+            {
+                GL.BindAttribLocation(program, 0, "aPos");
+                GL.BindAttribLocation(program, 1, "aColor");
+            }
+
+            GL.LinkProgram(program);
+
+            GL.GetProgram(program, GetProgramParameterName.LinkStatus, out var linked);
+            if (linked == 0)
+            {
+                var info = GL.GetProgramInfoLog(program);
+                if (!string.IsNullOrWhiteSpace(info))
+                    errors.Add($"Link {variant.Name}: {info}");
+                GL.DeleteProgram(program);
+                program = 0;
+            }
+
+            if (program != 0)
+            {
+                GL.DetachShader(program, vertexShader);
+                GL.DetachShader(program, fragmentShader);
+            }
+            GL.DeleteShader(vertexShader);
+            GL.DeleteShader(fragmentShader);
+
+            if (program != 0)
+            {
+                LogMessage($"Campath overlay shader: {variant.Name} (GL {version} | GLSL {glsl})");
+                return program;
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            LogMessage($"Campath overlay shader compile failed ({version}): {string.Join(" | ", errors)}");
+        }
+        else
+        {
+            LogMessage($"Campath overlay shader compile failed ({version}).");
+        }
+
+        return 0;
+    }
+
+    private static int CompileOverlayShader(ShaderType type, string source, out string? error)
+    {
+        error = null;
+        var shader = GL.CreateShader(type);
+        GL.ShaderSource(shader, source);
+        GL.CompileShader(shader);
+
+        GL.GetShader(shader, ShaderParameter.CompileStatus, out var status);
+        if (status == 0)
+        {
+            error = GL.GetShaderInfoLog(shader);
+            GL.DeleteShader(shader);
+            return 0;
+        }
+
+        return shader;
+    }
+
     private static OpenTK.Mathematics.Matrix4 ToMatrix4(Matrix4x4 matrix)
     {
         return new OpenTK.Mathematics.Matrix4(
@@ -3529,6 +3806,120 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
             float ndl = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
             vec3 lit = uColor * (uAmbient + (1.0 - uAmbient) * ndl);
             gl_FragColor = vec4(lit, 1.0);
+        }
+        """;
+
+    private const string LineVertex330 = """
+        #version 330 core
+        layout(location = 0) in vec3 aPos;
+        layout(location = 1) in vec3 aColor;
+        uniform mat4 uMvp;
+        out vec3 vColor;
+        void main()
+        {
+            vColor = aColor;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string LineFragment330 = """
+        #version 330 core
+        in vec3 vColor;
+        out vec4 FragColor;
+        void main()
+        {
+            FragColor = vec4(vColor, 1.0);
+        }
+        """;
+
+    private const string LineVertex150 = """
+        #version 150
+        in vec3 aPos;
+        in vec3 aColor;
+        uniform mat4 uMvp;
+        out vec3 vColor;
+        void main()
+        {
+            vColor = aColor;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string LineFragment150 = """
+        #version 150
+        in vec3 vColor;
+        out vec4 FragColor;
+        void main()
+        {
+            FragColor = vec4(vColor, 1.0);
+        }
+        """;
+
+    private const string LineVertex120 = """
+        #version 120
+        attribute vec3 aPos;
+        attribute vec3 aColor;
+        uniform mat4 uMvp;
+        varying vec3 vColor;
+        void main()
+        {
+            vColor = aColor;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string LineFragment120 = """
+        #version 120
+        varying vec3 vColor;
+        void main()
+        {
+            gl_FragColor = vec4(vColor, 1.0);
+        }
+        """;
+
+    private const string LineVertexEs300 = """
+        #version 300 es
+        precision mediump float;
+        layout(location = 0) in vec3 aPos;
+        layout(location = 1) in vec3 aColor;
+        uniform mat4 uMvp;
+        out vec3 vColor;
+        void main()
+        {
+            vColor = aColor;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string LineFragmentEs300 = """
+        #version 300 es
+        precision mediump float;
+        in vec3 vColor;
+        out vec4 FragColor;
+        void main()
+        {
+            FragColor = vec4(vColor, 1.0);
+        }
+        """;
+
+    private const string LineVertexEs100 = """
+        attribute vec3 aPos;
+        attribute vec3 aColor;
+        uniform mat4 uMvp;
+        varying vec3 vColor;
+        void main()
+        {
+            vColor = aColor;
+            gl_Position = uMvp * vec4(aPos, 1.0);
+        }
+        """;
+
+    private const string LineFragmentEs100 = """
+        precision mediump float;
+        varying vec3 vColor;
+        void main()
+        {
+            gl_FragColor = vec4(vColor, 1.0);
         }
         """;
 

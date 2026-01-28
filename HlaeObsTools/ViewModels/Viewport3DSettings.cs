@@ -30,6 +30,7 @@ public sealed class Viewport3DSettings : ViewModelBase
     private bool _skipTranslucentEnabled;
     private bool _showFps;
     private bool _viewportCampathMode;
+    private bool _viewportCampathOverlayEnabled = true;
     private int _shadowTextureSize = 1024;
     private int _maxTextureSize = 1024;
     private string _renderMode = "Default";
@@ -250,6 +251,15 @@ public sealed class Viewport3DSettings : ViewModelBase
     {
         get => _viewportCampathMode;
         set => SetProperty(ref _viewportCampathMode, value);
+    }
+
+    /// <summary>
+    /// Draw campath overlay in the viewport.
+    /// </summary>
+    public bool ViewportCampathOverlayEnabled
+    {
+        get => _viewportCampathOverlayEnabled;
+        set => SetProperty(ref _viewportCampathOverlayEnabled, value);
     }
 
     /// <summary>
