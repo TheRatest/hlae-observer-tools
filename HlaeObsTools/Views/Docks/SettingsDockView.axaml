@@ -171,17 +171,31 @@
                                 <ToggleSwitch IsChecked="{Binding CampathEditor.UseCubic, Mode=TwoWay}"
                                               Content="Cubic Interp"
                                               Foreground="#E6E6E6"/>
+                                <ToggleSwitch IsChecked="{Binding CampathEditor.Hold, Mode=TwoWay}"
+                                              Content="Hold"
+                                              Foreground="#E6E6E6"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                 <TextBlock Text="Duration" Foreground="#AAAAAA"/>
                                 <TextBox Width="90"
                                          Text="{Binding CampathEditor.Duration, Mode=TwoWay, StringFormat={}{0:F2}}"/>
+                                <TextBlock Text="Time Offset" Foreground="#AAAAAA" Margin="8,0,0,0"/>
+                                <TextBox Width="90"
+                                         Text="{Binding CampathEditor.TimeOffset, Mode=TwoWay, StringFormat={}{0:F2}}"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Content="Load"
+                                        Command="{Binding LoadViewportCampathCommand}"/>
+                                <Button Content="Save"
+                                        Command="{Binding SaveViewportCampathCommand}"/>
+                                <Button Content="Clear"
+                                        Command="{Binding CampathEditor.ClearCommand}"/>
                             </StackPanel>
                             <TextBlock Text="Keyframes"
                                        Foreground="#AAAAAA"/>
                             <ListBox ItemsSource="{Binding CampathEditor.Keyframes}"
                                      SelectedItem="{Binding CampathEditor.SelectedKeyframe, Mode=TwoWay}"
-                                     Height="140">
+                                     Height="180">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="6">

@@ -14,7 +14,7 @@ public sealed class CampathEditorViewModel : ViewModelBase
 {
     private readonly CampathCurve _curve = new();
     private double _playheadTime;
-    private double _duration = 5.0;
+    private double _duration = 20.0;
     private bool _useCubic = true;
     private CampathKeyframeViewModel? _selectedKeyframe;
     private bool _suppressCollectionEvents;
@@ -24,6 +24,8 @@ public sealed class CampathEditorViewModel : ViewModelBase
     private readonly DispatcherTimer _playTimer;
     private DateTime _lastPlayTick;
     private bool _useExternalPlaybackTicks;
+    private bool _hold = true;
+    private double _timeOffset;
 
     public CampathEditorViewModel()
     {
@@ -34,6 +36,7 @@ public sealed class CampathEditorViewModel : ViewModelBase
         };
         _playTimer.Tick += OnPlayTick;
         TogglePlayCommand = new RelayCommand(_ => TogglePlay());
+        ClearCommand = new RelayCommand(_ => Clear());
     }
 
     public ObservableCollection<CampathKeyframeViewModel> Keyframes { get; } = new();
@@ -113,6 +116,18 @@ public sealed class CampathEditorViewModel : ViewModelBase
         set => SetProperty(ref _useExternalPlaybackTicks, value);
     }
 
+    public bool Hold
+    {
+        get => _hold;
+        set => SetProperty(ref _hold, value);
+    }
+
+    public double TimeOffset
+    {
+        get => _timeOffset;
+        set => SetProperty(ref _timeOffset, value);
+    }
+
     public CampathKeyframeViewModel? SelectedKeyframe
     {
         get => _selectedKeyframe;
@@ -137,6 +152,7 @@ public sealed class CampathEditorViewModel : ViewModelBase
     }
 
     public ICommand TogglePlayCommand { get; }
+    public ICommand ClearCommand { get; }
 
     public void AddKeyframe(double time, Vector3 position, Quaternion rotation, double fov)
     {
@@ -175,6 +191,33 @@ public sealed class CampathEditorViewModel : ViewModelBase
     {
         Keyframes.Clear();
         SelectedKeyframe = null;
+        RebuildCurve();
+    }
+
+    public void LoadFromData(CampathFileIo.CampathFileData data)
+    {
+        _suppressCollectionEvents = true;
+        Keyframes.Clear();
+        foreach (var key in data.Keyframes.OrderBy(k => k.Time))
+        {
+            Keyframes.Add(new CampathKeyframeViewModel
+            {
+                Time = key.Time,
+                Position = key.Position,
+                Rotation = key.Rotation,
+                Fov = key.Fov,
+                Selected = key.Selected
+            });
+        }
+        _suppressCollectionEvents = false;
+
+        UseCubic = data.UseCubic;
+        Hold = data.Hold;
+        TimeOffset = data.TimeOffset;
+
+        SelectedKeyframe = Keyframes.FirstOrDefault(k => k.Selected) ?? Keyframes.FirstOrDefault();
+        Duration = GetKeyframeDuration();
+        PlayheadTime = SelectedKeyframe?.Time ?? 0.0;
         RebuildCurve();
     }
 
@@ -282,7 +325,8 @@ public sealed class CampathEditorViewModel : ViewModelBase
         if (PlayheadTime >= Duration)
         {
             PlayheadTime = Duration;
-            StopPlayback();
+            if (!Hold)
+                StopPlayback();
         }
     }
 

@@ -13,6 +13,7 @@ using Dock.Model.Mvvm.Controls;
 using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.ViewModels;
 using HlaeObsTools.Services.Settings;
+using HlaeObsTools.Services.Campaths;
 
 
 namespace HlaeObsTools.ViewModels.Docks
@@ -637,6 +638,28 @@ namespace HlaeObsTools.ViewModels.Docks
 
             var cmd = $"mirv_campath save \"{path}\"";
             await _ws.SendExecCommandAsync(cmd);
+        });
+
+        public ICommand LoadViewportCampathCommand => new AsyncRelay(async () =>
+        {
+            var path = await PickCampathFileToLoadAsync();
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            var data = CampathFileIo.Load(path);
+            if (data == null)
+                return;
+
+            _campathEditor.LoadFromData(data);
+        });
+
+        public ICommand SaveViewportCampathCommand => new AsyncRelay(async () =>
+        {
+            var path = await PickCampathFileToSaveAsync();
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            CampathFileIo.Save(path, _campathEditor);
         });
 
 
