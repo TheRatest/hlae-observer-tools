@@ -173,6 +173,12 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
     private FreecamTransform _freecamSmoothed;
     private FreecamConfig _freecamConfig = FreecamConfig.Default;
     private FreecamSettings? _freecamSettings;
+    private bool _freecamPreviewRollOverrideActive;
+    private float _freecamPreviewRollOverride;
+    private bool _externalCameraActive;
+    private Vector3 _externalCameraPosition;
+    private Quaternion _externalCameraRotation = Quaternion.Identity;
+    private float _externalCameraFov = 90f;
     private HlaeInputSender? _inputSender;
 
     private float _viewportFpsCapCached;
@@ -330,6 +336,8 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 
     public bool IsFreecamActive => _freecamActive;
     public bool IsFreecamInputEnabled => _freecamInputEnabled;
+
+    public event Action<double>? FrameTick;
 
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
@@ -822,6 +830,53 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         EndFreecamInput();
     }
 
+    public void SetExternalCamera(Vector3 position, Quaternion rotation, float fov)
+    {
+        _externalCameraPosition = position;
+        _externalCameraRotation = Quaternion.Normalize(rotation);
+        _externalCameraFov = fov;
+        _externalCameraActive = true;
+        RequestNextFrame();
+    }
+
+    public void ClearExternalCamera()
+    {
+        if (!_externalCameraActive)
+            return;
+
+        _externalCameraActive = false;
+        RequestNextFrame();
+    }
+
+    public void SetFreecamPose(Vector3 position, Quaternion rotation, float fov)
+    {
+        var wasActive = _freecamActive;
+        if (!_freecamActive)
+            BeginFreecam(new Point(Bounds.Width * 0.5, Bounds.Height * 0.5));
+
+        _freecamTransform.Position = position;
+        _freecamTransform.Orientation = Quaternion.Normalize(rotation);
+        UpdateAnglesFromQuat(_freecamTransform.Orientation, ref _freecamTransform);
+        _freecamTransform.Fov = fov;
+        _freecamPreviewRollOverride = _freecamTransform.Roll;
+        _freecamPreviewRollOverrideActive = true;
+        _freecamCurrentRoll = _freecamTransform.Roll;
+        _freecamTargetRoll = _freecamTransform.Roll;
+        _freecamRollVelocity = 0.0f;
+
+        _freecamSmoothed = _freecamTransform;
+        _freecamSmoothedQuat = _freecamSmoothed.Orientation;
+        ResetFreecamState();
+        if (!wasActive)
+            EndFreecamInput();
+        RequestNextFrame();
+    }
+
+    public void ClearFreecamPreview()
+    {
+        _freecamPreviewRollOverrideActive = false;
+    }
+
     private void Orbit(float deltaX, float deltaY)
     {
         const float rotateSpeed = 0.01f;
@@ -992,7 +1047,16 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
             return;
         }
 
-        if (_freecamActive)
+        if (_externalCameraActive)
+        {
+            var fovRad = GetSourceVerticalFovRadians(_externalCameraFov);
+            _rendererContext.FieldOfView = RadToDeg(fovRad);
+            _renderer.Camera.SetViewportSize(width, height);
+            var forward = GetForwardFromQuat(_externalCameraRotation);
+            var up = GetUpFromQuat(_externalCameraRotation);
+            _renderer.Camera.SetLocationForwardUp(_externalCameraPosition, forward, up);
+        }
+        else if (_freecamActive)
         {
             var fovRad = GetSourceVerticalFovRadians(_freecamSmoothed.Fov);
             _rendererContext.FieldOfView = RadToDeg(fovRad);
@@ -1159,11 +1223,20 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 
     private void UpdateFreecamRoll(float deltaTime)
     {
+        if (_freecamPreviewRollOverrideActive)
+        {
+            _freecamTargetRoll = _freecamPreviewRollOverride;
+            _freecamCurrentRoll = _freecamPreviewRollOverride;
+            _freecamRollVelocity = 0.0f;
+            _freecamTransform.Roll = _freecamPreviewRollOverride;
+            return;
+        }
+
         if (!_freecamConfig.SmoothEnabled)
         {
-            if (IsKeyDown(Key.Q))
-                _freecamTargetRoll += _freecamConfig.RollSpeed * deltaTime;
             if (IsKeyDown(Key.E))
+                _freecamTargetRoll += _freecamConfig.RollSpeed * deltaTime;
+            if (IsKeyDown(Key.Q))
                 _freecamTargetRoll -= _freecamConfig.RollSpeed * deltaTime;
         }
         else
@@ -2368,6 +2441,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
             _lastFrameTimestamp = now;
 
             UpdateFps(delta);
+            RaiseFrameTick(delta);
 
             var width = Math.Max(1, _renderWidth);
             var height = Math.Max(1, _renderHeight);
@@ -2422,6 +2496,17 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         {
             nativeWindow.Context.MakeNoneCurrent();
         }
+    }
+
+    private void RaiseFrameTick(float delta)
+    {
+        if (delta <= 0f)
+            return;
+
+        if (FrameTick == null)
+            return;
+
+        FrameTick(delta);
     }
 
     private void LoadMap(string mapPath)

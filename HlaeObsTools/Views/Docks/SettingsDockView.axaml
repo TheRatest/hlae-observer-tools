@@ -115,6 +115,12 @@
                     <ScrollViewer>
                     <StackPanel Margin="10" Spacing="8">
 
+                        <ToggleSwitch IsChecked="{Binding Viewport3DSettings.ViewportCampathMode, Mode=TwoWay}"
+                                      Content="Viewport-Mode"
+                                      Foreground="#E6E6E6"
+                                      Margin="0,8,0,0"/>
+
+                        <StackPanel IsVisible="{Binding !Viewport3DSettings.ViewportCampathMode}">
                         <StackPanel Orientation="Horizontal"
                                     Spacing="6"
                                     Margin="0,8,0,0"
@@ -151,6 +157,44 @@
                                     Command="{Binding LoadCampathCommand}"/>
                             <Button Content="Save Campath"
                                     Command="{Binding SaveCampathCommand}"/>
+                        </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel IsVisible="{Binding Viewport3DSettings.ViewportCampathMode}" Spacing="6" Margin="0,8,0,0">
+                            <TextBlock Text="Viewport campath editor"
+                                       Foreground="#CCCCCC"
+                                       FontWeight="SemiBold"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ToggleSwitch IsChecked="{Binding CampathEditor.IsPreviewEnabled, Mode=TwoWay}"
+                                              Content="Preview"
+                                              Foreground="#E6E6E6"/>
+                                <ToggleSwitch IsChecked="{Binding CampathEditor.UseCubic, Mode=TwoWay}"
+                                              Content="Cubic Interp"
+                                              Foreground="#E6E6E6"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Text="Duration" Foreground="#AAAAAA"/>
+                                <TextBox Width="90"
+                                         Text="{Binding CampathEditor.Duration, Mode=TwoWay, StringFormat={}{0:F2}}"/>
+                            </StackPanel>
+                            <TextBlock Text="Keyframes"
+                                       Foreground="#AAAAAA"/>
+                            <ListBox ItemsSource="{Binding CampathEditor.Keyframes}"
+                                     SelectedItem="{Binding CampathEditor.SelectedKeyframe, Mode=TwoWay}"
+                                     Height="140">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="t" Foreground="#888888"/>
+                                            <TextBox Width="70"
+                                                     Text="{Binding Time, Mode=TwoWay, StringFormat={}{0:F2}}"/>
+                                            <TextBlock Text="fov" Foreground="#888888"/>
+                                            <TextBox Width="60"
+                                                     Text="{Binding Fov, Mode=TwoWay, StringFormat={}{0:F1}}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
                         </StackPanel>
 
                     </StackPanel>

@@ -149,6 +149,7 @@ public class MainDockFactory : Factory, IDisposable
             freecamSettings.Apply(_storedSettings.FreecamSettings);
         }
         _freecamSettings = freecamSettings;
+        var campathEditor = new CampathEditorViewModel();
         var viewport3DSettings = new Viewport3DSettings
         {
             MapObjPath = _storedSettings.MapObjPath ?? string.Empty,
@@ -172,6 +173,7 @@ public class MainDockFactory : Factory, IDisposable
             SkipWaterEnabled = _storedSettings.ViewportSkipWaterEnabled,
             SkipTranslucentEnabled = _storedSettings.ViewportSkipTranslucentEnabled,
             ShowFps = _storedSettings.ViewportShowFps,
+            ViewportCampathMode = _storedSettings.ViewportCampathMode,
             ShadowTextureSize = _storedSettings.ViewportShadowTextureSize,
             MaxTextureSize = _storedSettings.ViewportMaxTextureSize,
             RenderMode = _storedSettings.ViewportRenderMode
@@ -192,9 +194,10 @@ public class MainDockFactory : Factory, IDisposable
             ApplyNetworkSettingsAsync,
             _storedSettings,
             _vmixReplaySettings,
-            setFocusInputGateDisabled: disable => _rawInputHandler.CaptureOnlyWhenAppFocused = !disable)
+            setFocusInputGateDisabled: disable => _rawInputHandler.CaptureOnlyWhenAppFocused = !disable,
+            campathEditor: campathEditor)
         { Id = "BottomLeft", Title = "Settings" };
-        var bottomCenter = new Viewport3DDockViewModel(viewport3DSettings, freecamSettings, _webSocketClient, _videoDisplayVm, _gsiServer) { Id = "BottomCenter", Title = "3D Viewport" };
+        var bottomCenter = new Viewport3DDockViewModel(viewport3DSettings, freecamSettings, campathEditor, _webSocketClient, _videoDisplayVm, _gsiServer) { Id = "BottomCenter", Title = "3D Viewport" };
         bottomCenter.SetInputSender(_inputSender);
 
         // Inject WebSocket and UDP services into video display

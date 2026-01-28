@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Numerics;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using HlaeObsTools.Controls;
+using HlaeObsTools.Services.Viewport3D;
 using HlaeObsTools.ViewModels;
 using HlaeObsTools.ViewModels.Docks;
 namespace HlaeObsTools.Views.Docks;
@@ -16,6 +19,8 @@ public partial class Viewport3DDockView : UserControl
     private IViewport3DControl? _viewport;
     private Control? _viewportControl;
     private IReadOnlyList<ViewportPin>? _lastPins;
+    private CampathEditorViewModel? _campathEditor;
+    private bool _frameTickSubscribed;
 
     public Viewport3DDockView()
     {
@@ -35,6 +40,12 @@ public partial class Viewport3DDockView : UserControl
         {
             _viewModel.PinsUpdated -= OnPinsUpdated;
             _viewModel.Viewport3DSettings.PropertyChanged -= OnViewportSettingsChanged;
+            if (_campathEditor != null)
+                _campathEditor.PropertyChanged -= OnCampathEditorChanged;
+            _viewModel.CampathStateProvider = null;
+            _viewModel.PreviewFreecamPose -= OnPreviewFreecamPose;
+            _viewModel.PreviewFreecamEnded -= OnPreviewFreecamEnded;
+            UnsubscribeFrameTick();
         }
 
         _viewModel = DataContext as Viewport3DDockViewModel;
@@ -42,6 +53,11 @@ public partial class Viewport3DDockView : UserControl
         {
             _viewModel.PinsUpdated += OnPinsUpdated;
             _viewModel.Viewport3DSettings.PropertyChanged += OnViewportSettingsChanged;
+            _campathEditor = _viewModel.CampathEditor;
+            _campathEditor.PropertyChanged += OnCampathEditorChanged;
+            _viewModel.CampathStateProvider = CaptureFreecamState;
+            _viewModel.PreviewFreecamPose += OnPreviewFreecamPose;
+            _viewModel.PreviewFreecamEnded += OnPreviewFreecamEnded;
         }
 
         EnsureViewport();
@@ -52,6 +68,10 @@ public partial class Viewport3DDockView : UserControl
         if (e.PropertyName == nameof(Viewport3DSettings.UseLegacyD3D11Viewport))
         {
             EnsureViewport();
+        }
+        else if (e.PropertyName == nameof(Viewport3DSettings.ViewportCampathMode))
+        {
+            UpdateCampathPreview();
         }
     }
 
@@ -74,16 +94,20 @@ public partial class Viewport3DDockView : UserControl
         _viewportControl = useLegacy ? CreateD3D11Viewport() : CreateVrfViewport();
         _viewport = (IViewport3DControl)_viewportControl;
         ViewportHost.Content = _viewportControl;
+        SubscribeFrameTick();
 
         if (_lastPins != null)
         {
             _viewport.SetPins(_lastPins);
         }
+
+        UpdateCampathPreview();
     }
 
     private void ClearViewport()
     {
         ViewportHost.Content = null;
+        UnsubscribeFrameTick();
         _viewport = null;
         _viewportControl = null;
     }
@@ -121,6 +145,94 @@ public partial class Viewport3DDockView : UserControl
     {
         _lastPins = pins;
         _viewport?.SetPins(pins);
+    }
+
+    private void OnCampathEditorChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(CampathEditorViewModel.PlayheadSample) ||
+            e.PropertyName == nameof(CampathEditorViewModel.PlayheadTime) ||
+            e.PropertyName == nameof(CampathEditorViewModel.IsPlaying) ||
+            e.PropertyName == nameof(CampathEditorViewModel.IsPreviewEnabled))
+        {
+            UpdateCampathPreview();
+        }
+    }
+
+    private ViewportFreecamState? CaptureFreecamState()
+    {
+        if (_viewport == null)
+            return null;
+
+        return _viewport.TryGetFreecamState(out var state) ? state : null;
+    }
+
+    private void UpdateCampathPreview()
+    {
+        if (_viewport == null || _viewModel == null)
+            return;
+
+        if (!_viewModel.Viewport3DSettings.ViewportCampathMode)
+        {
+            _viewport.ClearExternalCamera();
+            return;
+        }
+
+        var editor = _viewModel.CampathEditor;
+        if (!editor.IsPreviewEnabled && !editor.IsPlaying)
+        {
+            _viewport.ClearExternalCamera();
+            return;
+        }
+
+        var sample = editor.PlayheadSample;
+        if (sample == null)
+        {
+            _viewport.ClearExternalCamera();
+            return;
+        }
+
+        _viewport.SetExternalCamera(sample.Value.Position, sample.Value.Rotation, (float)sample.Value.Fov);
+    }
+
+    private void OnPreviewFreecamPose(Vector3 position, Quaternion rotation, float fov)
+    {
+        _viewport?.SetFreecamPose(position, rotation, fov);
+    }
+
+    private void OnPreviewFreecamEnded()
+    {
+        _viewport?.ClearFreecamPreview();
+    }
+
+    private void SubscribeFrameTick()
+    {
+        if (_viewport == null || _frameTickSubscribed || _viewModel == null)
+            return;
+
+        _viewport.FrameTick += OnViewportFrameTick;
+        _frameTickSubscribed = true;
+        _viewModel.CampathEditor.UseExternalPlaybackTicks = true;
+    }
+
+    private void UnsubscribeFrameTick()
+    {
+        if (_viewport == null || !_frameTickSubscribed || _viewModel == null)
+            return;
+
+        _viewport.FrameTick -= OnViewportFrameTick;
+        _frameTickSubscribed = false;
+        _viewModel.CampathEditor.UseExternalPlaybackTicks = false;
+    }
+
+    private void OnViewportFrameTick(double delta)
+    {
+        if (_viewModel == null)
+            return;
+
+        if (!_viewModel.CampathEditor.IsPlaying)
+            return;
+
+        Dispatcher.UIThread.Post(() => _viewModel.CampathEditor.AdvancePlayback(delta));
     }
 
     private void OnViewportKeyDown(object? sender, KeyEventArgs e)

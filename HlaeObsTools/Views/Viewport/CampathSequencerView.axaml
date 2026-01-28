@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HlaeObsTools.ViewModels.Docks"
+             xmlns:controls="using:HlaeObsTools.Controls"
+             x:Class="HlaeObsTools.Views.Viewport.CampathSequencerView"
+             x:DataType="vm:Viewport3DDockViewModel">
+    <Border Background="#0E0E0E" Padding="4">
+        <Grid ColumnDefinitions="Auto,*" Height="72">
+            <StackPanel Grid.Column="0"
+                        Spacing="6"
+                        VerticalAlignment="Center"
+                        Margin="4,0,6,0">
+
+                <Button Width="26"
+                        Height="22"
+                        Padding="0"
+                        Command="{Binding CampathEditor.TogglePlayCommand}"
+                        IsVisible="{Binding !CampathEditor.IsPlaying}">
+                    <TextBlock Text=">"
+                            FontSize="12"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            TextAlignment="Center"/>
+                </Button>
+
+                <Button Width="26"
+                        Height="22"
+                        Padding="0"
+                        Command="{Binding CampathEditor.TogglePlayCommand}"
+                        IsVisible="{Binding CampathEditor.IsPlaying}">
+                    <TextBlock Text="||"
+                            FontSize="12"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            TextAlignment="Center"/>
+                </Button>
+
+                <Button Width="26"
+                        Height="22"
+                        Padding="0"
+                        Command="{Binding AddKeyframeFromViewportCommand}">
+                    <TextBlock Text="+"
+                            FontSize="14"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            TextAlignment="Center"/>
+                </Button>
+
+            </StackPanel>
+
+            <controls:CampathTimelineControl x:Name="Timeline"
+                                             Grid.Column="1"
+                                             Items="{Binding CampathEditor.Keyframes}"
+                                             SelectedItem="{Binding CampathEditor.SelectedKeyframe, Mode=TwoWay}"
+                                             PlayheadTime="{Binding CampathEditor.PlayheadTime, Mode=TwoWay}"
+                                             Duration="{Binding CampathEditor.Duration}"
+                                             IsPlaying="{Binding CampathEditor.IsPlaying}"/>
+        </Grid>
+    </Border>
+</UserControl>

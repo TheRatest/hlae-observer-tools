@@ -26,6 +26,7 @@ namespace HlaeObsTools.ViewModels.Docks
         private readonly HudSettings _hudSettings;
         private readonly FreecamSettings _freecamSettings;
         private readonly Viewport3DSettings _viewport3DSettings;
+        private readonly CampathEditorViewModel _campathEditor;
         private readonly SettingsStorage _settingsStorage;
         private readonly HlaeWebSocketClient? _ws;
         private readonly Func<NetworkSettingsData, Task>? _applyNetworkSettingsAsync;
@@ -37,7 +38,7 @@ namespace HlaeObsTools.ViewModels.Docks
 
         public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, int GsiPort);
 
-        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null, VmixReplaySettings? vmixSettings = null, Action<bool>? setFocusInputGateDisabled = null)
+        public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null, VmixReplaySettings? vmixSettings = null, Action<bool>? setFocusInputGateDisabled = null, CampathEditorViewModel? campathEditor = null)
         {
             _radarSettings = radarSettings;
             _hudSettings = hudSettings;
@@ -48,6 +49,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _applyNetworkSettingsAsync = applyNetworkSettingsAsync;
             _vmixReplaySettings = vmixSettings ?? new VmixReplaySettings();
             _setFocusInputGateDisabled = setFocusInputGateDisabled;
+            _campathEditor = campathEditor ?? new CampathEditorViewModel();
 
             Title = "Settings";
             CanClose = false;
@@ -102,6 +104,7 @@ namespace HlaeObsTools.ViewModels.Docks
         public FreecamSettings FreecamSettings => _freecamSettings;
         public Viewport3DSettings Viewport3DSettings => _viewport3DSettings;
         public VmixReplaySettings VmixReplaySettings => _vmixReplaySettings;
+        public CampathEditorViewModel CampathEditor => _campathEditor;
         public AttachPresetAnimationDockViewModel AttachPresetAnimationEditor { get; }
 
         private bool _isEditingAttachPresetAnimation;
@@ -488,6 +491,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 ViewportSkipWaterEnabled = _viewport3DSettings.SkipWaterEnabled,
                 ViewportSkipTranslucentEnabled = _viewport3DSettings.SkipTranslucentEnabled,
                 ViewportShowFps = _viewport3DSettings.ShowFps,
+                ViewportCampathMode = _viewport3DSettings.ViewportCampathMode,
                 ViewportShadowTextureSize = _viewport3DSettings.ShadowTextureSize,
                 ViewportMaxTextureSize = _viewport3DSettings.MaxTextureSize,
                 ViewportRenderMode = _viewport3DSettings.RenderMode,

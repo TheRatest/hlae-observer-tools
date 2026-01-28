@@ -201,6 +201,13 @@ public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
     private FreecamTransform _freecamSmoothed;
     private FreecamConfig _freecamConfig = FreecamConfig.Default;
     private FreecamSettings? _freecamSettings;
+    private bool _freecamPreviewRollOverrideActive;
+    private float _freecamPreviewRollOverride;
+    private long _lastFrameTimestamp;
+    private bool _externalCameraActive;
+    private Vector3 _externalCameraPosition;
+    private Quaternion _externalCameraRotation = Quaternion.Identity;
+    private float _externalCameraFov = 90f;
     private HlaeInputSender? _inputSender;
     private readonly HashSet<Key> _keysDown = new();
     private bool _mouseButton4Down;
@@ -344,6 +351,8 @@ public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
 
     public bool IsFreecamActive => _freecamActive;
     public bool IsFreecamInputEnabled => _freecamInputEnabled;
+
+    public event Action<double>? FrameTick;
 
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
@@ -514,6 +523,53 @@ public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
     public void DisableFreecamInput()
     {
         EndFreecamInput();
+    }
+
+    public void SetExternalCamera(Vector3 position, Quaternion rotation, float fov)
+    {
+        _externalCameraPosition = position;
+        _externalCameraRotation = Quaternion.Normalize(rotation);
+        _externalCameraFov = fov;
+        _externalCameraActive = true;
+        RequestNextFrame();
+    }
+
+    public void ClearExternalCamera()
+    {
+        if (!_externalCameraActive)
+            return;
+
+        _externalCameraActive = false;
+        RequestNextFrame();
+    }
+
+    public void SetFreecamPose(Vector3 position, Quaternion rotation, float fov)
+    {
+        var wasActive = _freecamActive;
+        if (!_freecamActive)
+            BeginFreecam(new Point(Bounds.Width * 0.5, Bounds.Height * 0.5));
+
+        _freecamTransform.Position = position;
+        _freecamTransform.Orientation = Quaternion.Normalize(rotation);
+        UpdateAnglesFromQuat(_freecamTransform.Orientation, ref _freecamTransform);
+        _freecamTransform.Fov = fov;
+        _freecamPreviewRollOverride = _freecamTransform.Roll;
+        _freecamPreviewRollOverrideActive = true;
+        _freecamCurrentRoll = _freecamTransform.Roll;
+        _freecamTargetRoll = _freecamTransform.Roll;
+        _freecamRollVelocity = 0.0f;
+
+        _freecamSmoothed = _freecamTransform;
+        _freecamSmoothedQuat = _freecamSmoothed.Orientation;
+        ResetFreecamState();
+        if (!wasActive)
+            EndFreecamInput();
+        RequestNextFrame();
+    }
+
+    public void ClearFreecamPreview()
+    {
+        _freecamPreviewRollOverrideActive = false;
     }
 
     private void HandlePointerPressed(PointerPressedEventArgs e)
@@ -845,6 +901,7 @@ public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
             LogMessage($"RenderFrame size: {width}x{height} hwnd=0x{_hwnd.ToInt64():X}");
         }
 
+        UpdateFrameTick();
         UpdateFreecamForFrame();
         UpdateFpsCounter();
 
@@ -915,6 +972,26 @@ public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
             if (deviceLock != null)
                 Monitor.Exit(deviceLock);
         }
+    }
+
+    private void UpdateFrameTick()
+    {
+        if (FrameTick == null)
+            return;
+
+        var now = Stopwatch.GetTimestamp();
+        if (_lastFrameTimestamp == 0)
+        {
+            _lastFrameTimestamp = now;
+            return;
+        }
+
+        var delta = (float)Stopwatch.GetElapsedTime(_lastFrameTimestamp, now).TotalSeconds;
+        _lastFrameTimestamp = now;
+        if (delta <= 0f)
+            return;
+
+        FrameTick(delta);
     }
 
     private void OnMapPathChanged(AvaloniaPropertyChangedEventArgs e)
@@ -1237,6 +1314,16 @@ public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
     private Matrix4x4 CreateViewProjection(int width, int height)
     {
         var aspect = width / (float)height;
+        if (_externalCameraActive)
+        {
+            var fov = GetSourceVerticalFovRadians(_externalCameraFov);
+            var projection = Matrix4x4.CreatePerspectiveFieldOfView(fov, aspect, 0.05f, 100000f);
+            var forward = GetForwardFromQuat(_externalCameraRotation);
+            var up = GetUpFromQuat(_externalCameraRotation);
+            var view = Matrix4x4.CreateLookAt(_externalCameraPosition, _externalCameraPosition + forward, up);
+            return view * projection;
+        }
+
         if (_freecamActive)
         {
             var fov = GetSourceVerticalFovRadians(_freecamSmoothed.Fov);
@@ -1554,11 +1641,20 @@ public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
 
     private void UpdateFreecamRoll(float deltaTime)
     {
+        if (_freecamPreviewRollOverrideActive)
+        {
+            _freecamTargetRoll = _freecamPreviewRollOverride;
+            _freecamCurrentRoll = _freecamPreviewRollOverride;
+            _freecamRollVelocity = 0.0f;
+            _freecamTransform.Roll = _freecamPreviewRollOverride;
+            return;
+        }
+
         if (!_freecamConfig.SmoothEnabled)
         {
-            if (IsKeyDown(Key.Q))
-                _freecamTargetRoll += _freecamConfig.RollSpeed * deltaTime;
             if (IsKeyDown(Key.E))
+                _freecamTargetRoll += _freecamConfig.RollSpeed * deltaTime;
+            if (IsKeyDown(Key.Q))
                 _freecamTargetRoll -= _freecamConfig.RollSpeed * deltaTime;
         }
         else

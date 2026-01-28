@@ -8,6 +8,9 @@ using HlaeObsTools.Services.Viewport3D;
 using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.Services.Input;
 using System.Numerics;
+using System.Windows.Input;
+using System.Threading.Tasks;
+using HlaeObsTools.Services.Campaths;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -21,12 +24,15 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
     private readonly GsiServer? _gsiServer;
     private long _lastHeartbeat;
     private bool _awaitFreecamRelease;
+    private readonly DelegateCommand _addKeyframeFromViewportCommand;
+    private readonly DelegateCommand _removeSelectedKeyframeCommand;
+    private bool _freecamPreviewActive;
 
     private static readonly string[] AltBindLabels = { "Q", "E", "R", "T", "Z" };
 
     public event Action<IReadOnlyList<ViewportPin>>? PinsUpdated;
 
-    public Viewport3DDockViewModel(Viewport3DSettings settings, FreecamSettings freecamSettings, HlaeWebSocketClient? webSocketClient = null, VideoDisplayDockViewModel? videoDisplay = null, GsiServer? gsiServer = null)
+    public Viewport3DDockViewModel(Viewport3DSettings settings, FreecamSettings freecamSettings, CampathEditorViewModel? campathEditor = null, HlaeWebSocketClient? webSocketClient = null, VideoDisplayDockViewModel? videoDisplay = null, GsiServer? gsiServer = null)
     {
         _settings = settings;
         _freecamSettings = freecamSettings;
@@ -35,15 +41,35 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         _gsiServer = gsiServer;
         if (_gsiServer != null)
             _gsiServer.GameStateUpdated += OnGameStateUpdated;
+        _settings.PropertyChanged += OnViewportSettingsChanged;
+
+        CampathEditor = campathEditor ?? new CampathEditorViewModel();
 
         Title = "3D Viewport";
         CanFloat = true;
         CanPin = true;
+        CampathEditor.PropertyChanged += OnCampathEditorChanged;
+        _addKeyframeFromViewportCommand = new DelegateCommand(_ =>
+        {
+            AddKeyframeFromViewport();
+            return Task.CompletedTask;
+        });
+        _removeSelectedKeyframeCommand = new DelegateCommand(_ =>
+        {
+            CampathEditor.RemoveSelectedKeyframe();
+            return Task.CompletedTask;
+        }, _ => CampathEditor.SelectedKeyframe != null);
     }
 
     public Viewport3DSettings Viewport3DSettings => _settings;
     public FreecamSettings FreecamSettings => _freecamSettings;
     public HlaeInputSender? InputSender => _inputSender;
+    public CampathEditorViewModel CampathEditor { get; }
+    public Func<ViewportFreecamState?>? CampathStateProvider { get; set; }
+
+    public ICommand AddKeyframeFromViewportCommand => _addKeyframeFromViewportCommand;
+
+    public ICommand RemoveSelectedKeyframeCommand => _removeSelectedKeyframeCommand;
 
     public void SetInputSender(HlaeInputSender sender)
     {
@@ -129,6 +155,8 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
     {
         if (_gsiServer != null)
             _gsiServer.GameStateUpdated -= OnGameStateUpdated;
+        _settings.PropertyChanged -= OnViewportSettingsChanged;
+        CampathEditor.PropertyChanged -= OnCampathEditorChanged;
     }
 
     private void OnGameStateUpdated(object? sender, GsiGameState state)
@@ -156,6 +184,60 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         }
 
         Dispatcher.UIThread.Post(() => PinsUpdated?.Invoke(pins));
+    }
+
+    private void AddKeyframeFromViewport()
+    {
+        var state = CampathStateProvider?.Invoke();
+        if (state == null)
+            return;
+
+        CampathEditor.AddKeyframe(
+            CampathEditor.PlayheadTime,
+            state.Value.RawPosition,
+            state.Value.RawOrientation,
+            state.Value.RawFov);
+    }
+
+    public void ApplyFreecamPreviewAtTime(double time)
+    {
+        if (CampathStateProvider == null)
+            return;
+
+        var sample = CampathEditor.Curve.CanEvaluate()
+            ? CampathEditor.Curve.Evaluate(time)
+            : (CampathSample?)null;
+        if (sample == null)
+            return;
+
+        _freecamPreviewActive = true;
+        PreviewFreecamPose?.Invoke(sample.Value.Position, sample.Value.Rotation, (float)sample.Value.Fov);
+    }
+
+    public void EndFreecamPreview()
+    {
+        if (!_freecamPreviewActive)
+            return;
+
+        _freecamPreviewActive = false;
+        PreviewFreecamEnded?.Invoke();
+    }
+
+    public event Action<Vector3, Quaternion, float>? PreviewFreecamPose;
+    public event Action? PreviewFreecamEnded;
+
+    private void OnViewportSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(Viewport3DSettings.ViewportCampathMode) && !_settings.ViewportCampathMode)
+        {
+            CampathEditor.StopPlayback();
+        }
+    }
+
+    private void OnCampathEditorChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(CampathEditorViewModel.SelectedKeyframe))
+            _removeSelectedKeyframeCommand.RaiseCanExecuteChanged();
     }
 
     private static string GetSlotLabel(int slot, bool useAlt)
