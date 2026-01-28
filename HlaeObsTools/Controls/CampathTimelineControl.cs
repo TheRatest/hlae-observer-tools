@@ -33,6 +33,7 @@ public sealed class CampathTimelineControl : Control
     private CampathKeyframeViewModel? _draggingKeyframe;
     private bool _itemsHooked;
     private bool _freecamPreviewActive;
+    private bool _keyframesHooked;
 
     public CampathTimelineControl()
     {
@@ -357,15 +358,56 @@ public sealed class CampathTimelineControl : Control
         if (_itemsHooked && e.OldValue is INotifyCollectionChanged oldCollection)
             oldCollection.CollectionChanged -= OnItemsCollectionChanged;
 
+        UnhookKeyframeItems();
+
         _itemsHooked = false;
         if (e.NewValue is INotifyCollectionChanged newCollection)
         {
             newCollection.CollectionChanged += OnItemsCollectionChanged;
             _itemsHooked = true;
         }
+
+        HookKeyframeItems();
     }
 
     private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+        {
+            foreach (var item in e.OldItems.OfType<CampathKeyframeViewModel>())
+                item.PropertyChanged -= OnKeyframePropertyChanged;
+        }
+
+        if (e.NewItems != null)
+        {
+            foreach (var item in e.NewItems.OfType<CampathKeyframeViewModel>())
+                item.PropertyChanged += OnKeyframePropertyChanged;
+        }
+
+        InvalidateVisual();
+    }
+
+    private void HookKeyframeItems()
+    {
+        if (_keyframesHooked || Items == null)
+            return;
+
+        foreach (var item in Items.OfType<CampathKeyframeViewModel>())
+            item.PropertyChanged += OnKeyframePropertyChanged;
+        _keyframesHooked = true;
+    }
+
+    private void UnhookKeyframeItems()
+    {
+        if (!_keyframesHooked || Items == null)
+            return;
+
+        foreach (var item in Items.OfType<CampathKeyframeViewModel>())
+            item.PropertyChanged -= OnKeyframePropertyChanged;
+        _keyframesHooked = false;
+    }
+
+    private void OnKeyframePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         InvalidateVisual();
     }

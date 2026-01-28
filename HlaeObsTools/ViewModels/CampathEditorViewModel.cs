@@ -293,6 +293,9 @@ public sealed class CampathEditorViewModel : ViewModelBase
         if (Duration <= 0.0)
             return;
 
+        if (PlayheadTime >= Duration)
+            PlayheadTime = 0.0;
+
         _lastPlayTick = DateTime.UtcNow;
         IsPlaying = true;
         if (!UseExternalPlaybackTicks)
@@ -325,8 +328,7 @@ public sealed class CampathEditorViewModel : ViewModelBase
         if (PlayheadTime >= Duration)
         {
             PlayheadTime = Duration;
-            if (!Hold)
-                StopPlayback();
+            StopPlayback();
         }
     }
 
