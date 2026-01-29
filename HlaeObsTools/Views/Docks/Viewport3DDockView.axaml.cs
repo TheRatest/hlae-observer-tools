@@ -50,6 +50,7 @@ public partial class Viewport3DDockView : UserControl
             _viewModel.CampathStateProvider = null;
             _viewModel.PreviewFreecamPose -= OnPreviewFreecamPose;
             _viewModel.PreviewFreecamEnded -= OnPreviewFreecamEnded;
+            _viewModel.CampathPreviewOverrideChanged -= OnCampathPreviewOverrideChanged;
             UnsubscribeFrameTick();
             UnsubscribeGizmo();
         }
@@ -64,6 +65,7 @@ public partial class Viewport3DDockView : UserControl
             _viewModel.CampathStateProvider = CaptureFreecamState;
             _viewModel.PreviewFreecamPose += OnPreviewFreecamPose;
             _viewModel.PreviewFreecamEnded += OnPreviewFreecamEnded;
+            _viewModel.CampathPreviewOverrideChanged += OnCampathPreviewOverrideChanged;
         }
 
         EnsureViewport();
@@ -274,7 +276,7 @@ public partial class Viewport3DDockView : UserControl
         }
 
         var editor = _viewModel.CampathEditor;
-        if (!editor.IsPreviewEnabled && !editor.IsPlaying)
+        if (!editor.IsPreviewEnabled && !editor.IsPlaying && !_viewModel.IsCampathPreviewOverrideActive)
         {
             _viewport.ClearExternalCamera();
             return;
@@ -288,6 +290,11 @@ public partial class Viewport3DDockView : UserControl
         }
 
         _viewport.SetExternalCamera(sample.Value.Position, sample.Value.Rotation, (float)sample.Value.Fov);
+    }
+
+    private void OnCampathPreviewOverrideChanged()
+    {
+        UpdateCampathPreview();
     }
 
     private void UpdateCampathOverlay()

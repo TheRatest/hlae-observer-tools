@@ -33,6 +33,7 @@ public sealed class CampathTimelineControl : Control
     private CampathKeyframeViewModel? _draggingKeyframe;
     private bool _itemsHooked;
     private bool _freecamPreviewActive;
+    private bool _campathPreviewActive;
     private bool _keyframesHooked;
     private Point _pressPoint;
 
@@ -79,6 +80,8 @@ public sealed class CampathTimelineControl : Control
 
     public event Action<double>? FreecamPreviewRequested;
     public event Action? FreecamPreviewEnded;
+    public event Action? CampathPreviewRequested;
+    public event Action? CampathPreviewEnded;
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -143,6 +146,18 @@ public sealed class CampathTimelineControl : Control
 
             if (_freecamPreviewActive)
                 FreecamPreviewRequested?.Invoke(time);
+
+            var altDown = IsAltDown(e.KeyModifiers);
+            if (altDown && !ctrlDown && !_campathPreviewActive)
+            {
+                _campathPreviewActive = true;
+                CampathPreviewRequested?.Invoke();
+            }
+            else if ((!altDown || ctrlDown) && _campathPreviewActive)
+            {
+                _campathPreviewActive = false;
+                CampathPreviewEnded?.Invoke();
+            }
             e.Handled = true;
             return;
         }
@@ -170,6 +185,11 @@ public sealed class CampathTimelineControl : Control
             {
                 _freecamPreviewActive = false;
                 FreecamPreviewEnded?.Invoke();
+            }
+            if (_campathPreviewActive)
+            {
+                _campathPreviewActive = false;
+                CampathPreviewEnded?.Invoke();
             }
             e.Pointer.Capture(null);
             e.Handled = true;
@@ -356,6 +376,9 @@ public sealed class CampathTimelineControl : Control
 
     private static bool IsCtrlDown(KeyModifiers modifiers) =>
         modifiers.HasFlag(KeyModifiers.Control);
+
+    private static bool IsAltDown(KeyModifiers modifiers) =>
+        modifiers.HasFlag(KeyModifiers.Alt);
 
     private double? FindNearestKeyframeTime(double time)
     {

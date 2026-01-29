@@ -27,6 +27,7 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
     private readonly DelegateCommand _addKeyframeFromViewportCommand;
     private readonly DelegateCommand _removeSelectedKeyframeCommand;
     private bool _freecamPreviewActive;
+    private bool _campathPreviewOverrideActive;
 
     private static readonly string[] AltBindLabels = { "Q", "E", "R", "T", "Z" };
 
@@ -225,6 +226,27 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
 
     public event Action<Vector3, Quaternion, float>? PreviewFreecamPose;
     public event Action? PreviewFreecamEnded;
+    public event Action? CampathPreviewOverrideChanged;
+
+    public bool IsCampathPreviewOverrideActive => _campathPreviewOverrideActive;
+
+    public void BeginCampathPreviewOverride()
+    {
+        if (_campathPreviewOverrideActive)
+            return;
+
+        _campathPreviewOverrideActive = true;
+        CampathPreviewOverrideChanged?.Invoke();
+    }
+
+    public void EndCampathPreviewOverride()
+    {
+        if (!_campathPreviewOverrideActive)
+            return;
+
+        _campathPreviewOverrideActive = false;
+        CampathPreviewOverrideChanged?.Invoke();
+    }
 
     private void OnViewportSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {

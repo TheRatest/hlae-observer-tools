@@ -24,8 +24,12 @@ public partial class CampathSequencerView : UserControl
 
         timeline.FreecamPreviewRequested -= OnFreecamPreviewRequested;
         timeline.FreecamPreviewEnded -= OnFreecamPreviewEnded;
+        timeline.CampathPreviewRequested -= OnCampathPreviewRequested;
+        timeline.CampathPreviewEnded -= OnCampathPreviewEnded;
         timeline.FreecamPreviewRequested += OnFreecamPreviewRequested;
         timeline.FreecamPreviewEnded += OnFreecamPreviewEnded;
+        timeline.CampathPreviewRequested += OnCampathPreviewRequested;
+        timeline.CampathPreviewEnded += OnCampathPreviewEnded;
     }
 
     private void OnFreecamPreviewRequested(double time)
@@ -42,5 +46,21 @@ public partial class CampathSequencerView : UserControl
             return;
 
         vm.EndFreecamPreview();
+    }
+
+    private void OnCampathPreviewRequested()
+    {
+        if (DataContext is not Viewport3DDockViewModel vm)
+            return;
+
+        vm.BeginCampathPreviewOverride();
+    }
+
+    private void OnCampathPreviewEnded()
+    {
+        if (DataContext is not Viewport3DDockViewModel vm)
+            return;
+
+        vm.EndCampathPreviewOverride();
     }
 }
