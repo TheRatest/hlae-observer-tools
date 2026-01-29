@@ -26,6 +26,7 @@ public sealed class CampathEditorViewModel : ViewModelBase
     private bool _useExternalPlaybackTicks;
     private bool _hold = true;
     private double _timeOffset;
+    private bool _timeDragActive;
 
     public CampathEditorViewModel()
     {
@@ -121,6 +122,8 @@ public sealed class CampathEditorViewModel : ViewModelBase
         get => _hold;
         set => SetProperty(ref _hold, value);
     }
+
+    public bool IsTimeDragActive => _timeDragActive;
 
     public double TimeOffset
     {
@@ -360,7 +363,15 @@ public sealed class CampathEditorViewModel : ViewModelBase
             return;
 
         if (e.PropertyName == nameof(CampathKeyframeViewModel.Time))
+        {
+            if (_timeDragActive)
+            {
+                RebuildCurve();
+                return;
+            }
+
             Dispatcher.UIThread.Post(SortByTimeDeferred);
+        }
 
         RebuildCurve();
     }
@@ -379,12 +390,27 @@ public sealed class CampathEditorViewModel : ViewModelBase
         if (Keyframes.Count < 2)
             return;
 
-        _suppressCollectionEvents = true;
         var ordered = Keyframes.OrderBy(k => k.Time).ToList();
-        Keyframes.Clear();
-        foreach (var key in ordered)
-            Keyframes.Add(key);
+        var changed = false;
+
+        _suppressCollectionEvents = true;
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var target = ordered[i];
+            if (ReferenceEquals(Keyframes[i], target))
+                continue;
+
+            var currentIndex = Keyframes.IndexOf(target);
+            if (currentIndex < 0)
+                continue;
+
+            Keyframes.Move(currentIndex, i);
+            changed = true;
+        }
         _suppressCollectionEvents = false;
+
+        if (changed)
+            RebuildCurve();
     }
 
     private void InsertKeyframeSorted(CampathKeyframeViewModel vm)
@@ -406,6 +432,26 @@ public sealed class CampathEditorViewModel : ViewModelBase
     {
         _curve.SetKeyframes(Keyframes.Select(k => k.ToModel()));
         OnPropertyChanged(nameof(PlayheadSample));
+    }
+
+    public void BeginTimeDrag()
+    {
+        if (_timeDragActive)
+            return;
+
+        _timeDragActive = true;
+        OnPropertyChanged(nameof(IsTimeDragActive));
+    }
+
+    public void EndTimeDrag()
+    {
+        if (!_timeDragActive)
+            return;
+
+        _timeDragActive = false;
+        OnPropertyChanged(nameof(IsTimeDragActive));
+        SortByTimeDeferred();
+        RebuildCurve();
     }
 
     private bool ClampPlayhead()

@@ -31,11 +31,13 @@ public sealed class CampathTimelineControl : Control
     private readonly List<(Rect rect, CampathKeyframeViewModel keyframe)> _keyframeRects = new();
     private bool _draggingPlayhead;
     private CampathKeyframeViewModel? _draggingKeyframe;
+    private bool _keyframeDragActive;
     private bool _itemsHooked;
     private bool _freecamPreviewActive;
     private bool _campathPreviewActive;
     private bool _keyframesHooked;
     private Point _pressPoint;
+    private const double DragThreshold = 3.0;
 
     public CampathTimelineControl()
     {
@@ -82,6 +84,8 @@ public sealed class CampathTimelineControl : Control
     public event Action? FreecamPreviewEnded;
     public event Action? CampathPreviewRequested;
     public event Action? CampathPreviewEnded;
+    public event Action? KeyframeDragStarted;
+    public event Action? KeyframeDragEnded;
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -106,6 +110,7 @@ public sealed class CampathTimelineControl : Control
                 _pressPoint = pt;
                 SelectedItem = keyframe;
                 _draggingKeyframe = keyframe;
+                _keyframeDragActive = false;
                 e.Pointer.Capture(this);
                 e.Handled = true;
                 return;
@@ -166,10 +171,14 @@ public sealed class CampathTimelineControl : Control
         {
             var pt = e.GetPosition(this);
             var delta = pt - _pressPoint;
-            if (Math.Abs(delta.X) + Math.Abs(delta.Y) > 3.0)
+            if (!_keyframeDragActive && (Math.Abs(delta.X) + Math.Abs(delta.Y) > DragThreshold))
             {
+                _keyframeDragActive = true;
+                KeyframeDragStarted?.Invoke();
             }
-            _draggingKeyframe.Time = XToTime(pt.X);
+
+            if (_keyframeDragActive)
+                _draggingKeyframe.Time = XToTime(pt.X);
             e.Handled = true;
         }
     }
@@ -181,6 +190,11 @@ public sealed class CampathTimelineControl : Control
         {
             _draggingPlayhead = false;
             _draggingKeyframe = null;
+            if (_keyframeDragActive)
+            {
+                _keyframeDragActive = false;
+                KeyframeDragEnded?.Invoke();
+            }
             if (_freecamPreviewActive)
             {
                 _freecamPreviewActive = false;
