@@ -130,6 +130,12 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
     private bool _campathOverlayDirty;
     private CampathOverlayData? _campathOverlayData;
     private readonly object _campathOverlayLock = new();
+    private const float CampathOverlayLineThicknessPx = 4.0f;
+    private Vector3 _campathOverlayCameraPos;
+    private Vector3 _campathOverlayCameraForward;
+    private Vector3 _campathOverlayCameraUp;
+    private float _campathOverlayCameraFov;
+    private int _campathOverlayCameraHeight;
 
     private int _gizmoVao;
     private int _gizmoVbo;
@@ -2993,6 +2999,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 
             UpdateFreecamForFrame();
             ApplyCameraForFrame(width, height);
+            UpdateCampathOverlayCameraState();
 
             _renderer.Update(updateContext);
 
@@ -3450,11 +3457,14 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 
         if (_campathOverlayVertexCount > 0)
         {
+            var cullEnabled = GL.IsEnabled(EnableCap.CullFace);
+            if (cullEnabled)
+                GL.Disable(EnableCap.CullFace);
             GL.BindVertexArray(_campathOverlayVao);
-            GL.LineWidth(2.5f);
-            GL.DrawArrays(PrimitiveType.Lines, 0, _campathOverlayVertexCount);
-            GL.LineWidth(1f);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, _campathOverlayVertexCount);
             GL.BindVertexArray(0);
+            if (cullEnabled)
+                GL.Enable(EnableCap.CullFace);
         }
 
         if (_gizmoVisible)
@@ -3894,9 +3904,16 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
             return;
         }
 
-        var vertexData = new float[data.Vertices.Count * 6];
+        var vertices = BuildCampathOverlayTriangles(data.Vertices);
+        if (vertices.Count == 0)
+        {
+            _campathOverlayVertexCount = 0;
+            return;
+        }
+
+        var vertexData = new float[vertices.Count * 6];
         var idx = 0;
-        foreach (var vertex in data.Vertices)
+        foreach (var vertex in vertices)
         {
             vertexData[idx++] = vertex.Position.X;
             vertexData[idx++] = vertex.Position.Y;
@@ -3929,7 +3946,105 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 
         GL.BindVertexArray(0);
 
-        _campathOverlayVertexCount = data.Vertices.Count;
+        _campathOverlayVertexCount = vertices.Count;
+    }
+
+    private void UpdateCampathOverlayCameraState()
+    {
+        if (_renderer == null || _rendererContext == null)
+            return;
+
+        CampathOverlayData? data;
+        lock (_campathOverlayLock)
+        {
+            data = _campathOverlayData;
+        }
+
+        if (data == null || data.Vertices.Count == 0)
+            return;
+
+        var camera = _renderer.Camera;
+        var pos = camera.Location;
+        var forward = camera.Forward;
+        var up = camera.Up;
+        var fov = _rendererContext.FieldOfView;
+        var height = _renderHeight;
+
+        if (VectorsChanged(_campathOverlayCameraPos, pos) ||
+            VectorsChanged(_campathOverlayCameraForward, forward) ||
+            VectorsChanged(_campathOverlayCameraUp, up) ||
+            MathF.Abs(_campathOverlayCameraFov - fov) > 0.01f ||
+            _campathOverlayCameraHeight != height)
+        {
+            _campathOverlayCameraPos = pos;
+            _campathOverlayCameraForward = forward;
+            _campathOverlayCameraUp = up;
+            _campathOverlayCameraFov = fov;
+            _campathOverlayCameraHeight = height;
+            _campathOverlayDirty = true;
+        }
+    }
+
+    private static bool VectorsChanged(Vector3 a, Vector3 b)
+    {
+        return (a - b).LengthSquared() > 0.0001f;
+    }
+
+    private List<CampathOverlayVertex> BuildCampathOverlayTriangles(IReadOnlyList<CampathOverlayVertex> lineVertices)
+    {
+        var triangles = new List<CampathOverlayVertex>();
+        if (lineVertices.Count < 2 || _renderer == null || _rendererContext == null || _renderHeight <= 0)
+            return triangles;
+
+        var camera = _renderer.Camera;
+        var fovY = DegToRad(_rendererContext.FieldOfView);
+        var tanY = MathF.Tan(fovY * 0.5f);
+        if (tanY <= 1e-6f)
+            return triangles;
+
+        var halfPixel = CampathOverlayLineThicknessPx * 0.5f;
+        var height = Math.Max(_renderHeight, 1);
+
+        var count = lineVertices.Count - (lineVertices.Count % 2);
+        for (var i = 0; i < count; i += 2)
+        {
+            var v0 = lineVertices[i];
+            var v1 = lineVertices[i + 1];
+            var p0 = v0.Position;
+            var p1 = v1.Position;
+            var dir = p1 - p0;
+            var lenSq = dir.LengthSquared();
+            if (lenSq <= 1e-6f)
+                continue;
+
+            var mid = (p0 + p1) * 0.5f;
+            var toMid = mid - camera.Location;
+            var z = MathF.Max(0.01f, Vector3.Dot(camera.Forward, toMid));
+            var worldPerPixel = 2f * z * tanY / height;
+            var halfWidth = worldPerPixel * halfPixel;
+
+            var dirNorm = dir / MathF.Sqrt(lenSq);
+            var perp = Vector3.Cross(dirNorm, camera.Forward);
+            if (perp.LengthSquared() < 1e-6f)
+                perp = camera.Right;
+            perp = Vector3.Normalize(perp);
+            var offset = perp * halfWidth;
+
+            var p0a = p0 - offset;
+            var p0b = p0 + offset;
+            var p1a = p1 - offset;
+            var p1b = p1 + offset;
+
+            triangles.Add(new CampathOverlayVertex(p0a, v0.Color));
+            triangles.Add(new CampathOverlayVertex(p0b, v0.Color));
+            triangles.Add(new CampathOverlayVertex(p1b, v1.Color));
+
+            triangles.Add(new CampathOverlayVertex(p0a, v0.Color));
+            triangles.Add(new CampathOverlayVertex(p1b, v1.Color));
+            triangles.Add(new CampathOverlayVertex(p1a, v1.Color));
+        }
+
+        return triangles;
     }
 
     private void RebuildPins()

@@ -224,6 +224,8 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         PreviewFreecamEnded?.Invoke();
     }
 
+    public bool IsFreecamPreviewActive => _freecamPreviewActive;
+
     public event Action<Vector3, Quaternion, float>? PreviewFreecamPose;
     public event Action? PreviewFreecamEnded;
     public event Action? CampathPreviewOverrideChanged;

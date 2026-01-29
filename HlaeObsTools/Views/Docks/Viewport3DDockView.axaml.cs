@@ -198,7 +198,9 @@ public partial class Viewport3DDockView : UserControl
 
         if (e.PropertyName == nameof(CampathEditorViewModel.UseCubic) ||
             e.PropertyName == nameof(CampathEditorViewModel.Duration) ||
-            e.PropertyName == nameof(CampathEditorViewModel.PlayheadTime))
+            e.PropertyName == nameof(CampathEditorViewModel.PlayheadTime) ||
+            e.PropertyName == nameof(CampathEditorViewModel.IsPlaying) ||
+            e.PropertyName == nameof(CampathEditorViewModel.IsPreviewEnabled))
         {
             UpdateCampathOverlay();
         }
@@ -295,6 +297,7 @@ public partial class Viewport3DDockView : UserControl
     private void OnCampathPreviewOverrideChanged()
     {
         UpdateCampathPreview();
+        UpdateCampathOverlay();
     }
 
     private void UpdateCampathOverlay()
@@ -309,7 +312,11 @@ public partial class Viewport3DDockView : UserControl
             return;
         }
 
-        var overlay = BuildCampathOverlay(_campathEditor, _campathEditor.PlayheadTime);
+        var hidePlayheadFrustum = _campathEditor.IsPlaying
+            || _campathEditor.IsPreviewEnabled
+            || _viewModel.IsCampathPreviewOverrideActive
+            || _viewModel.IsFreecamPreviewActive;
+        var overlay = BuildCampathOverlay(_campathEditor, _campathEditor.PlayheadTime, hidePlayheadFrustum);
         _viewport.SetCampathOverlay(overlay);
     }
 
@@ -366,7 +373,7 @@ public partial class Viewport3DDockView : UserControl
         _campathEditor.SelectedKeyframe.Rotation = rotation;
     }
 
-    private static CampathOverlayData? BuildCampathOverlay(CampathEditorViewModel editor, double playheadTime)
+    private static CampathOverlayData? BuildCampathOverlay(CampathEditorViewModel editor, double playheadTime, bool hidePlayheadFrustum)
     {
         if (editor.Keyframes.Count == 0)
             return null;
@@ -391,7 +398,7 @@ public partial class Viewport3DDockView : UserControl
             }
         }
 
-        if (editor.Curve.CanEvaluate())
+        if (!hidePlayheadFrustum && editor.Curve.CanEvaluate())
         {
             var sample = editor.Curve.Evaluate(playheadTime);
             var color = new Vector3(0.9f, 0.95f, 1.0f);
@@ -476,11 +483,13 @@ public partial class Viewport3DDockView : UserControl
     private void OnPreviewFreecamPose(Vector3 position, Quaternion rotation, float fov)
     {
         _viewport?.SetFreecamPose(position, rotation, fov);
+        UpdateCampathOverlay();
     }
 
     private void OnPreviewFreecamEnded()
     {
         _viewport?.ClearFreecamPreview();
+        UpdateCampathOverlay();
     }
 
     private void SubscribeFrameTick()
