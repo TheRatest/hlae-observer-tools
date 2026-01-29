@@ -166,7 +166,6 @@ public sealed class CampathEditorViewModel : ViewModelBase
             existing.Position = position;
             existing.Rotation = rotation;
             existing.Fov = fov;
-            SelectedKeyframe = existing;
             RebuildCurve();
             return;
         }
@@ -179,7 +178,6 @@ public sealed class CampathEditorViewModel : ViewModelBase
             Fov = fov
         };
         InsertKeyframeSorted(vm);
-        SelectedKeyframe = vm;
     }
 
     public void RemoveSelectedKeyframe()

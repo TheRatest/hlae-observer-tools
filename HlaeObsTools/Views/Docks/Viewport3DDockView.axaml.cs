@@ -82,6 +82,7 @@ public partial class Viewport3DDockView : UserControl
         {
             UpdateCampathPreview();
             UpdateCampathOverlay();
+            UpdateCampathGizmo();
         }
         else if (e.PropertyName == nameof(Viewport3DSettings.CampathGizmoLocalSpace))
         {
