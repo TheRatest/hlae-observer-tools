@@ -11,6 +11,10 @@ using System.Numerics;
 using System.Windows.Input;
 using System.Threading.Tasks;
 using HlaeObsTools.Services.Campaths;
+using System.ComponentModel;
+using System.Globalization;
+using System.IO;
+using System.Linq;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -28,6 +32,8 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
     private readonly DelegateCommand _removeSelectedKeyframeCommand;
     private bool _freecamPreviewActive;
     private bool _campathPreviewOverrideActive;
+    private bool _gizmoDragActive;
+    private readonly string _campathSyncDirectory;
 
     private static readonly string[] AltBindLabels = { "Q", "E", "R", "T", "Z" };
 
@@ -45,11 +51,20 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         _settings.PropertyChanged += OnViewportSettingsChanged;
 
         CampathEditor = campathEditor ?? new CampathEditorViewModel();
+        _campathSyncDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "HlaeObsTools",
+            "campath-sync");
 
         Title = "3D Viewport";
         CanFloat = true;
         CanPin = true;
         CampathEditor.PropertyChanged += OnCampathEditorChanged;
+        CampathEditor.Keyframes.CollectionChanged += OnCampathKeyframesChanged;
+        foreach (var keyframe in CampathEditor.Keyframes)
+        {
+            keyframe.PropertyChanged += OnCampathKeyframePropertyChanged;
+        }
         _addKeyframeFromViewportCommand = new DelegateCommand(_ =>
         {
             AddKeyframeFromViewport();
@@ -158,6 +173,11 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
             _gsiServer.GameStateUpdated -= OnGameStateUpdated;
         _settings.PropertyChanged -= OnViewportSettingsChanged;
         CampathEditor.PropertyChanged -= OnCampathEditorChanged;
+        CampathEditor.Keyframes.CollectionChanged -= OnCampathKeyframesChanged;
+        foreach (var keyframe in CampathEditor.Keyframes)
+        {
+            keyframe.PropertyChanged -= OnCampathKeyframePropertyChanged;
+        }
     }
 
     private void OnGameStateUpdated(object? sender, GsiGameState state)
@@ -256,12 +276,170 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
         {
             CampathEditor.StopPlayback();
         }
+        else if (e.PropertyName == nameof(Viewport3DSettings.ViewportCampathSyncEnabled))
+        {
+            if (_settings.ViewportCampathSyncEnabled)
+                RequestCampathSync();
+        }
     }
 
     private void OnCampathEditorChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(CampathEditorViewModel.SelectedKeyframe))
             _removeSelectedKeyframeCommand.RaiseCanExecuteChanged();
+
+        if (!IsHlaeSyncActive())
+            return;
+
+        if (e.PropertyName == nameof(CampathEditorViewModel.IsPlaying))
+        {
+            var cmd = CampathEditor.IsPlaying ? "demo_resume" : "demo_pause";
+            _ = _webSocketClient?.SendExecCommandAsync(cmd);
+        }
+        else if (e.PropertyName == nameof(CampathEditorViewModel.IsTimeDragActive))
+        {
+            if (!CampathEditor.IsTimeDragActive)
+                RequestCampathSync();
+        }
+        else if (e.PropertyName == nameof(CampathEditorViewModel.TimeOffset))
+        {
+            RequestCampathSync();
+        }
+    }
+
+    private void OnCampathKeyframesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+        {
+            foreach (CampathKeyframeViewModel keyframe in e.OldItems)
+            {
+                keyframe.PropertyChanged -= OnCampathKeyframePropertyChanged;
+            }
+        }
+
+        if (e.NewItems != null)
+        {
+            foreach (CampathKeyframeViewModel keyframe in e.NewItems)
+            {
+                keyframe.PropertyChanged += OnCampathKeyframePropertyChanged;
+            }
+        }
+
+        if (!IsHlaeSyncActive())
+            return;
+
+        if (_gizmoDragActive || CampathEditor.IsTimeDragActive)
+            return;
+
+        RequestCampathSync();
+    }
+
+    private void OnCampathKeyframePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!IsHlaeSyncActive())
+            return;
+
+        if (_gizmoDragActive)
+            return;
+
+        if (e.PropertyName == nameof(CampathKeyframeViewModel.Time) && CampathEditor.IsTimeDragActive)
+            return;
+
+        if (e.PropertyName is nameof(CampathKeyframeViewModel.Time)
+            or nameof(CampathKeyframeViewModel.Position)
+            or nameof(CampathKeyframeViewModel.Rotation)
+            or nameof(CampathKeyframeViewModel.Fov))
+        {
+            RequestCampathSync();
+        }
+    }
+
+    public void NotifyPlayheadDragEnded()
+    {
+        if (!IsHlaeSyncActive())
+            return;
+
+        var seconds = CampathEditor.PlayheadTime + CampathEditor.TimeOffset;
+        var cmd = $"mirv_skip time toGame {seconds.ToString("G", CultureInfo.InvariantCulture)}";
+        _ = _webSocketClient?.SendExecCommandAsync(cmd);
+    }
+
+    public void NotifyGizmoDragActive()
+    {
+        _gizmoDragActive = true;
+    }
+
+    public void NotifyGizmoDragEnded()
+    {
+        if (_gizmoDragActive)
+            _gizmoDragActive = false;
+
+        if (!IsHlaeSyncActive())
+            return;
+
+        RequestCampathSync();
+    }
+
+    private bool IsHlaeSyncActive()
+    {
+        return _settings.ViewportCampathMode
+               && _settings.ViewportCampathSyncEnabled
+               && _webSocketClient != null
+               && _webSocketClient.IsConnected;
+    }
+
+    private void RequestCampathSync()
+    {
+        if (!IsHlaeSyncActive())
+            return;
+
+        if (CampathEditor.Keyframes.Count == 0)
+        {
+            _ = _webSocketClient?.SendExecCommandAsync("mirv_campath clear");
+            return;
+        }
+
+        Directory.CreateDirectory(_campathSyncDirectory);
+        var syncPath = GetSyncPath();
+        CampathFileIo.Save(syncPath, CampathEditor);
+        CleanupSyncFiles();
+        var cmd = $"mirv_campath load \"{syncPath}\"";
+        _ = _webSocketClient?.SendExecCommandAsync(cmd);
+    }
+
+    private string GetSyncPath()
+    {
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff", CultureInfo.InvariantCulture);
+        var id = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+        return Path.Combine(_campathSyncDirectory, $"viewport-campath-{stamp}-{id}.xml");
+    }
+
+    private void CleanupSyncFiles()
+    {
+        const int keepCount = 10;
+        try
+        {
+            var files = Directory.GetFiles(_campathSyncDirectory, "viewport-campath-*.xml")
+                .Select(path => new FileInfo(path))
+                .OrderByDescending(info => info.LastWriteTimeUtc)
+                .ToList();
+
+            for (var i = keepCount; i < files.Count; i++)
+            {
+                try
+                {
+                    files[i].Delete();
+                }
+                catch
+                {
+                    // Ignore cleanup failures.
+                }
+            }
+        }
+        catch
+        {
+            // Ignore cleanup failures.
+        }
     }
 
     private static string GetSlotLabel(int slot, bool useAlt)

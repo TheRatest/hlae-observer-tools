@@ -42,6 +42,7 @@ namespace HlaeObsTools.Controls;
 public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
 {
     public event Action<Vector3, Quaternion>? CampathGizmoPoseChanged;
+    public event Action? CampathGizmoDragEnded;
     private static readonly string LogPath = GetLogPath();
     private static bool _logPathAnnounced;
     private static bool _logWriteFailedLogged;

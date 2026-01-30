@@ -31,4 +31,5 @@ public interface IViewport3DControl
     void SetCampathGizmo(CampathGizmoState? state);
 
     event Action<Vector3, Quaternion>? CampathGizmoPoseChanged;
+    event Action? CampathGizmoDragEnded;
 }

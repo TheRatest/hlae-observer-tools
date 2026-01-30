@@ -38,6 +38,7 @@ namespace HlaeObsTools.Controls;
 public sealed class VRFViewport : NativeControlHost, IViewport3DControl
 {
     public event Action<Vector3, Quaternion>? CampathGizmoPoseChanged;
+    public event Action? CampathGizmoDragEnded;
     private const float MaxUncappedFps = 1000f;
     private static readonly string LogPath = GetLogPath();
     private static bool _logPathAnnounced;
@@ -563,6 +564,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         {
             _gizmoDragging = false;
             _gizmoMode = GizmoMode.None;
+            CampathGizmoDragEnded?.Invoke();
             e.Pointer.Capture(null);
             e.Handled = true;
             return;
@@ -804,6 +806,7 @@ public sealed class VRFViewport : NativeControlHost, IViewport3DControl
         {
             _gizmoDragging = false;
             _gizmoMode = GizmoMode.None;
+            CampathGizmoDragEnded?.Invoke();
             return;
         }
 

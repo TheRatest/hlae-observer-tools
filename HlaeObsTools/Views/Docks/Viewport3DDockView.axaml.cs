@@ -192,7 +192,7 @@ public partial class Viewport3DDockView : UserControl
         if (e.PropertyName == nameof(CampathEditorViewModel.PlayheadSample) ||
             e.PropertyName == nameof(CampathEditorViewModel.PlayheadTime) ||
             e.PropertyName == nameof(CampathEditorViewModel.IsPlaying) ||
-            e.PropertyName == nameof(CampathEditorViewModel.IsPreviewEnabled))
+            e.PropertyName == nameof(CampathEditorViewModel.PreviewDuringPlayback))
         {
             UpdateCampathPreview();
         }
@@ -201,7 +201,7 @@ public partial class Viewport3DDockView : UserControl
             e.PropertyName == nameof(CampathEditorViewModel.Duration) ||
             e.PropertyName == nameof(CampathEditorViewModel.PlayheadTime) ||
             e.PropertyName == nameof(CampathEditorViewModel.IsPlaying) ||
-            e.PropertyName == nameof(CampathEditorViewModel.IsPreviewEnabled))
+            e.PropertyName == nameof(CampathEditorViewModel.PreviewDuringPlayback))
         {
             UpdateCampathOverlay();
         }
@@ -279,7 +279,9 @@ public partial class Viewport3DDockView : UserControl
         }
 
         var editor = _viewModel.CampathEditor;
-        if (!editor.IsPreviewEnabled && !editor.IsPlaying && !_viewModel.IsCampathPreviewOverrideActive)
+        var allowPlaybackPreview = editor.IsPlaying && editor.PreviewDuringPlayback;
+        var allowPreview = allowPlaybackPreview || _viewModel.IsCampathPreviewOverrideActive;
+        if (!allowPreview)
         {
             _viewport.ClearExternalCamera();
             return;
@@ -313,8 +315,7 @@ public partial class Viewport3DDockView : UserControl
             return;
         }
 
-        var hidePlayheadFrustum = _campathEditor.IsPlaying
-            || _campathEditor.IsPreviewEnabled
+        var hidePlayheadFrustum = (_campathEditor.IsPlaying && _campathEditor.PreviewDuringPlayback)
             || _viewModel.IsCampathPreviewOverrideActive
             || _viewModel.IsFreecamPreviewActive;
         var overlay = BuildCampathOverlay(_campathEditor, _campathEditor.PlayheadTime, hidePlayheadFrustum);
@@ -353,6 +354,7 @@ public partial class Viewport3DDockView : UserControl
             return;
 
         _viewport.CampathGizmoPoseChanged += OnCampathGizmoPoseChanged;
+        _viewport.CampathGizmoDragEnded += OnCampathGizmoDragEnded;
         _gizmoSubscribed = true;
     }
 
@@ -362,6 +364,7 @@ public partial class Viewport3DDockView : UserControl
             return;
 
         _viewport.CampathGizmoPoseChanged -= OnCampathGizmoPoseChanged;
+        _viewport.CampathGizmoDragEnded -= OnCampathGizmoDragEnded;
         _gizmoSubscribed = false;
     }
 
@@ -370,8 +373,14 @@ public partial class Viewport3DDockView : UserControl
         if (_campathEditor?.SelectedKeyframe == null)
             return;
 
+        _viewModel?.NotifyGizmoDragActive();
         _campathEditor.SelectedKeyframe.Position = position;
         _campathEditor.SelectedKeyframe.Rotation = rotation;
+    }
+
+    private void OnCampathGizmoDragEnded()
+    {
+        _viewModel?.NotifyGizmoDragEnded();
     }
 
     private static CampathOverlayData? BuildCampathOverlay(CampathEditorViewModel editor, double playheadTime, bool hidePlayheadFrustum)

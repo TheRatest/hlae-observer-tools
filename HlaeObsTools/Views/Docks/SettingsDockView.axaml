@@ -118,12 +118,11 @@
                         <ToggleSwitch IsChecked="{Binding Viewport3DSettings.ViewportCampathMode, Mode=TwoWay}"
                                       Content="Viewport-Mode"
                                       Foreground="#E6E6E6"
-                                      Margin="0,8,0,0"/>
+                                      Margin="0,4,0,0"/>
 
-                        <StackPanel IsVisible="{Binding !Viewport3DSettings.ViewportCampathMode}">
                         <StackPanel Orientation="Horizontal"
                                     Spacing="6"
-                                    Margin="0,8,0,0"
+                                    Margin="0,4,0,0"
                                     VerticalAlignment="Center">
                             <ToggleSwitch IsChecked="{Binding IsCameraPathPreviewEnabled, Mode=TwoWay}"
                                         Content="Enable path preview"
@@ -135,9 +134,10 @@
                                             Foreground="#E6E6E6"/>
                         </StackPanel>
 
+                        <StackPanel IsVisible="{Binding !Viewport3DSettings.ViewportCampathMode}">
                         <StackPanel Orientation="Horizontal"
                                     Spacing="6"
-                                    Margin="0,8,0,0"
+                                    Margin="0,4,0,0"
                                     VerticalAlignment="Center">
                             <Button Content="Add point"
                                     Command="{Binding AddPointCommand}"/>
@@ -160,36 +160,49 @@
                         </StackPanel>
                         </StackPanel>
 
-                        <StackPanel IsVisible="{Binding Viewport3DSettings.ViewportCampathMode}" Spacing="6" Margin="0,8,0,0">
+                        <StackPanel IsVisible="{Binding Viewport3DSettings.ViewportCampathMode}" Spacing="6" Margin="0,4,0,0">
                             <TextBlock Text="Viewport campath editor"
                                        Foreground="#CCCCCC"
                                        FontWeight="SemiBold"/>
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <ToggleSwitch IsChecked="{Binding CampathEditor.IsPreviewEnabled, Mode=TwoWay}"
-                                              Content="Preview"
-                                              Foreground="#E6E6E6"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                                <ToggleSwitch IsChecked="{Binding CampathEditor.PreviewDuringPlayback, Mode=TwoWay}"
+                                              Content="Play-Preview"
+                                              Foreground="#E6E6E6"
+                                              Margin="0,0,10,0"/>
                                 <ToggleSwitch IsChecked="{Binding CampathEditor.UseCubic, Mode=TwoWay}"
                                               Content="Cubic Interp"
-                                              Foreground="#E6E6E6"/>
+                                              Foreground="#E6E6E6"
+                                              Margin="0,0,10,0"/>
                                 <ToggleSwitch IsChecked="{Binding CampathEditor.Hold, Mode=TwoWay}"
                                               Content="Hold"
                                               Foreground="#E6E6E6"/>
-                                <ToggleSwitch IsChecked="{Binding Viewport3DSettings.ViewportCampathOverlayEnabled, Mode=TwoWay}"
-                                              Content="Draw Path"
-                                              Foreground="#E6E6E6"/>
-                                <ToggleSwitch IsChecked="{Binding Viewport3DSettings.CampathGizmoLocalSpace, Mode=TwoWay}"
-                                              Content="Gizmo Local"
-                                              Foreground="#E6E6E6"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <TextBlock Text="Duration" Foreground="#AAAAAA"/>
-                                <TextBox Width="90"
-                                         Text="{Binding CampathEditor.Duration, Mode=TwoWay, StringFormat={}{0:F2}}"/>
-                                <TextBlock Text="Time Offset" Foreground="#AAAAAA" Margin="8,0,0,0"/>
-                                <TextBox Width="90"
-                                         Text="{Binding CampathEditor.TimeOffset, Mode=TwoWay, StringFormat={}{0:F2}}"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ToggleSwitch IsChecked="{Binding Viewport3DSettings.ViewportCampathOverlayEnabled, Mode=TwoWay}"
+                                              Content="Draw Path"
+                                              Foreground="#E6E6E6"
+                                              Margin="0,0,10,0"/>
+                                <ToggleSwitch IsChecked="{Binding Viewport3DSettings.CampathGizmoLocalSpace, Mode=TwoWay}"
+                                              Content="Gizmo Local"
+                                              Foreground="#E6E6E6"
+                                              Margin="0,0,10,0"/>
+                                <ToggleSwitch IsChecked="{Binding Viewport3DSettings.ViewportCampathSyncEnabled, Mode=TwoWay}"
+                                              Content="HLAE-Sync"
+                                              Foreground="#E6E6E6"
+                                              Margin="0,0,10,0"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,4,0,0">
+                                <TextBlock Text="Duration" Foreground="#AAAAAA" VerticalAlignment="Center"/>
+                                <TextBox Width="90"
+                                         Text="{Binding CampathEditor.Duration, Mode=TwoWay, StringFormat={}{0:F2}}"/>
+                                <TextBlock Text="Time Offset" Foreground="#AAAAAA" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox Width="90"
+                                         Text="{Binding CampathEditor.TimeOffset, Mode=TwoWay, StringFormat={}{0:F2}}"/>
+                                <Button Content="Get Current"
+                                        Command="{Binding GetCurrentTimeOffsetCommand}"
+                                        Margin="6,0,0,0"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
                                 <Button Content="Load"
                                         Command="{Binding LoadViewportCampathCommand}"/>
                                 <Button Content="Save"
@@ -198,10 +211,13 @@
                                         Command="{Binding CampathEditor.ClearCommand}"/>
                             </StackPanel>
                             <TextBlock Text="Keyframes"
-                                       Foreground="#AAAAAA"/>
+                                       Foreground="#AAAAAA"
+                                       Margin="0,4,0,0"/>
                             <ListBox ItemsSource="{Binding CampathEditor.Keyframes}"
                                      SelectedItem="{Binding CampathEditor.SelectedKeyframe, Mode=TwoWay}"
-                                     Height="180">
+                                     MaxHeight="220"
+                                     Width="220"
+                                     HorizontalAlignment="Left">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="6">

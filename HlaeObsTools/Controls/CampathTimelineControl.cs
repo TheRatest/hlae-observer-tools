@@ -86,6 +86,7 @@ public sealed class CampathTimelineControl : Control
     public event Action? CampathPreviewEnded;
     public event Action? KeyframeDragStarted;
     public event Action? KeyframeDragEnded;
+    public event Action? PlayheadDragEnded;
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -188,12 +189,17 @@ public sealed class CampathTimelineControl : Control
         base.OnPointerReleased(e);
         if (_draggingPlayhead || _draggingKeyframe != null)
         {
+            var playheadReleased = _draggingPlayhead;
             _draggingPlayhead = false;
             _draggingKeyframe = null;
             if (_keyframeDragActive)
             {
                 _keyframeDragActive = false;
                 KeyframeDragEnded?.Invoke();
+            }
+            if (playheadReleased)
+            {
+                PlayheadDragEnded?.Invoke();
             }
             if (_freecamPreviewActive)
             {

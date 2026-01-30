@@ -32,6 +32,7 @@ public sealed class Viewport3DSettings : ViewModelBase
     private bool _viewportCampathMode;
     private bool _viewportCampathOverlayEnabled = true;
     private bool _campathGizmoLocalSpace = true;
+    private bool _viewportCampathSyncEnabled;
     private int _shadowTextureSize = 1024;
     private int _maxTextureSize = 1024;
     private string _renderMode = "Default";
@@ -270,6 +271,15 @@ public sealed class Viewport3DSettings : ViewModelBase
     {
         get => _campathGizmoLocalSpace;
         set => SetProperty(ref _campathGizmoLocalSpace, value);
+    }
+
+    /// <summary>
+    /// Synchronize viewport campath edits to HLAE.
+    /// </summary>
+    public bool ViewportCampathSyncEnabled
+    {
+        get => _viewportCampathSyncEnabled;
+        set => SetProperty(ref _viewportCampathSyncEnabled, value);
     }
 
     /// <summary>

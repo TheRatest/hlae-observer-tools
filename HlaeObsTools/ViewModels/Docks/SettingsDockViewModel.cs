@@ -9,11 +9,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Dock.Model.Mvvm.Controls;
 using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.ViewModels;
 using HlaeObsTools.Services.Settings;
 using HlaeObsTools.Services.Campaths;
+using System.Text.Json;
 
 
 namespace HlaeObsTools.ViewModels.Docks
@@ -69,6 +71,7 @@ namespace HlaeObsTools.ViewModels.Docks
             if (_ws != null)
             {
                 _ws.Connected += OnWebSocketConnected;
+                _ws.MessageReceived += OnWebSocketMessage;
             }
 
             AttachPresetAnimationEditor = new AttachPresetAnimationDockViewModel();
@@ -380,6 +383,38 @@ namespace HlaeObsTools.ViewModels.Docks
             _ = SendAllFreecamConfigAsync();
         }
 
+        private void OnWebSocketMessage(object? sender, string message)
+        {
+            if (!_awaitingCurtime)
+                return;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(message);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("type", out var typeProp))
+                    return;
+
+                if (!string.Equals(typeProp.GetString(), "curtime", StringComparison.Ordinal))
+                    return;
+
+                _awaitingCurtime = false;
+
+                if (root.TryGetProperty("ok", out var okProp) && okProp.ValueKind == JsonValueKind.False)
+                    return;
+
+                if (!root.TryGetProperty("value", out var valueProp) || valueProp.ValueKind != JsonValueKind.Number)
+                    return;
+
+                var curtime = valueProp.GetDouble();
+                Dispatcher.UIThread.Post(() => _campathEditor.TimeOffset = curtime);
+            }
+            catch
+            {
+                _awaitingCurtime = false;
+            }
+        }
+
         private void SendAltPlayerBindsMode()
         {
             if (_ws == null) return;
@@ -494,6 +529,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 ViewportShowFps = _viewport3DSettings.ShowFps,
                 ViewportCampathMode = _viewport3DSettings.ViewportCampathMode,
                 ViewportCampathOverlayEnabled = _viewport3DSettings.ViewportCampathOverlayEnabled,
+                ViewportCampathSyncEnabled = _viewport3DSettings.ViewportCampathSyncEnabled,
                 CampathGizmoLocalSpace = _viewport3DSettings.CampathGizmoLocalSpace,
                 ViewportShadowTextureSize = _viewport3DSettings.ShadowTextureSize,
                 ViewportMaxTextureSize = _viewport3DSettings.MaxTextureSize,
@@ -663,6 +699,21 @@ namespace HlaeObsTools.ViewModels.Docks
 
             CampathFileIo.Save(path, _campathEditor);
         });
+
+        private bool _awaitingCurtime;
+        public ICommand GetCurrentTimeOffsetCommand => new AsyncRelay(GetCurrentTimeOffsetAsync);
+
+        private async Task GetCurrentTimeOffsetAsync()
+        {
+            if (_ws == null || !_ws.IsConnected)
+                return;
+
+            if (_awaitingCurtime)
+                return;
+
+            _awaitingCurtime = true;
+            await _ws.SendCommandAsync("curtime_get");
+        }
 
 
         #endregion

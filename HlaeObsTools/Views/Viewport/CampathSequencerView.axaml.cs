@@ -28,12 +28,14 @@ public partial class CampathSequencerView : UserControl
         timeline.CampathPreviewEnded -= OnCampathPreviewEnded;
         timeline.KeyframeDragStarted -= OnKeyframeDragStarted;
         timeline.KeyframeDragEnded -= OnKeyframeDragEnded;
+        timeline.PlayheadDragEnded -= OnPlayheadDragEnded;
         timeline.FreecamPreviewRequested += OnFreecamPreviewRequested;
         timeline.FreecamPreviewEnded += OnFreecamPreviewEnded;
         timeline.CampathPreviewRequested += OnCampathPreviewRequested;
         timeline.CampathPreviewEnded += OnCampathPreviewEnded;
         timeline.KeyframeDragStarted += OnKeyframeDragStarted;
         timeline.KeyframeDragEnded += OnKeyframeDragEnded;
+        timeline.PlayheadDragEnded += OnPlayheadDragEnded;
     }
 
     private void OnFreecamPreviewRequested(double time)
@@ -82,5 +84,13 @@ public partial class CampathSequencerView : UserControl
             return;
 
         vm.CampathEditor.EndTimeDrag();
+    }
+
+    private void OnPlayheadDragEnded()
+    {
+        if (DataContext is not Viewport3DDockViewModel vm)
+            return;
+
+        vm.NotifyPlayheadDragEnded();
     }
 }

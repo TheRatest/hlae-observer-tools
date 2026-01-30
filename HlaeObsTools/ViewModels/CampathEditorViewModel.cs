@@ -20,6 +20,7 @@ public sealed class CampathEditorViewModel : ViewModelBase
     private bool _suppressCollectionEvents;
     private bool _isPlaying;
     private bool _isPreviewEnabled = true;
+    private bool _previewDuringPlayback = true;
     private double _playbackRate = 1.0;
     private readonly DispatcherTimer _playTimer;
     private DateTime _lastPlayTick;
@@ -98,6 +99,12 @@ public sealed class CampathEditorViewModel : ViewModelBase
     {
         get => _isPreviewEnabled;
         set => SetProperty(ref _isPreviewEnabled, value);
+    }
+
+    public bool PreviewDuringPlayback
+    {
+        get => _previewDuringPlayback;
+        set => SetProperty(ref _previewDuringPlayback, value);
     }
 
     public double PlaybackRate
