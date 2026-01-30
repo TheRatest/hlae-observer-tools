@@ -7,7 +7,7 @@ HLAE Observer Tools is a (remote) observing control system for Counter-Strike 2 
 ## Getting Started
 
 1. Install .NET Desktop Runtime 10 https://dotnet.microsoft.com/en-us/download/dotnet/10.0
-2. Download the latest the custom HLAE and HOT build from  https://github.com/papesgit/hot/releases/latest
+2. Download the latest custom HLAE and HOT build from  https://github.com/papesgit/hot/releases/latest
 3. Launch CS2 with HLAE (File>Launch CS2, Example launch parameters: `-steam -insecure +sv_lan 1 -novid -console -afxDisableSteamStorage -allow_third_party_software -netconport 54545`)
 4. Launch HlaeObsTools.exe (as admin if used over LAN/remote)
    
@@ -46,25 +46,32 @@ For decoding of the RTP stream you need to download a shared 8.0 ffmpeg build ( 
 
 ---
 ---
+
 ## Third-Party Software
 
-This repository includes binaries from a modified fork of
-Half-Life Advanced Effects (HLAE), licensed under the MIT License.
+This application includes and depends on several third-party software components,
+including open-source libraries and tools.
 
-This application uses Avalonia UI, licensed under the MIT License.
+Notably:
 
-This application uses ValveResourceFormat libraries, licensed under the MIT License.
+- Binaries from a modified fork of Half-Life Advanced Effects (HLAE), licensed under the MIT License.
+- Avalonia UI and related UI components, licensed under the MIT License.
+- A modified fork of ValveResourceFormat, licensed under the MIT License.
+- Various additional NuGet dependencies, licensed under their respective open-source licenses.
 
-See `THIRD_PARTY_LICENSES.md` for details.
+See `THIRD_PARTY_LICENSES.md` for a complete list of third-party components,
+license texts, and attributions.
 
 
 ## License & Credits
 
 
-This project is licensed under the GNU General Public License v3.0.
+Versions up to and including v0.2.2 are licensed under GPLv3.
+
+Starting from v0.2.3, this project is licensed under a source-available license. See `LICENSE` for details.
 
 Some included assets (e.g. Counter-Strike HUD icons) are © Valve Corporation
-and are not covered by the GPLv3. See `THIRD_PARTY_LICENSES.md` for details.
+and are not covered by the included LICENSE. See `THIRD_PARTY_LICENSES.md` for details.
 
 Thanks to the HLAE team, this project would not be possible without their decades long contributions to the Counter-Strike scene.
 
