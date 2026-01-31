@@ -1,14 +1,11 @@
-using Avalonia.Media.Imaging;
 using Dock.Model.Mvvm.Controls;
 using HlaeObsTools.Services.Video;
 using HlaeObsTools.Services.Video.RTP;
 using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.Services.Input;
 using System;
-using System.Runtime.InteropServices;
 using System.Diagnostics;
 using Avalonia;
-using Avalonia.Platform;
 using Avalonia.Threading;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -24,24 +21,15 @@ namespace HlaeObsTools.ViewModels.Docks;
 public class VideoDisplayDockViewModel : Tool, IDisposable
 {
     private IVideoSource? _videoSource;
-    private WriteableBitmap? _currentFrame;
     private bool _isStreaming;
     private string _statusText = "Not Connected";
     private double _frameRate;
     private DateTime _lastFrameTime;
     private int _frameCount;
-    private VideoFrame? _pendingFrame;
-    private bool _updateScheduled;
-    private bool _useRtpSwapchain;
     private RtpSwapchainViewer? _rtpViewer;
-    private DateTime _lastLatencyLog = DateTime.MinValue;
     private IntPtr _rtpParentHwnd;
     private double _rtpFrameAspect;
 
-    // Double-buffering: alternate between two bitmaps to force reference change
-    private WriteableBitmap? _bitmap0;
-    private WriteableBitmap? _bitmap1;
-    private bool _useFirstBitmap;
 
     // Freecam state
     private bool _isFreecamActive;
@@ -57,20 +45,11 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
     private HudOverlayWindow? _hudOverlayWindow;
     private HudOverlayViewModel? _hudOverlay;
     private IntPtr _sharedTextureHandle;
+    private bool _isDisposing;
 
     public bool ShowNoSignal => !_isStreaming && !_useD3DHost;
     public bool CanStart => !_isStreaming && !_useD3DHost;
     public bool CanStop => _isStreaming && !_useD3DHost;
-
-    public WriteableBitmap? CurrentFrame
-    {
-        get => _currentFrame;
-        private set
-        {
-            _currentFrame = value;
-            OnPropertyChanged();
-        }
-    }
 
     public bool IsStreaming
     {
@@ -163,7 +142,6 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         CanClose = false;
         CanFloat = true;
         CanPin = true;
-        UseRtpSwapchain = true;
         _speedTicks = BuildTicks();
     }
 
@@ -272,17 +250,6 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         }
     }
 
-    public bool UseRtpSwapchain
-    {
-        get => _useRtpSwapchain;
-        set
-        {
-            if (_useRtpSwapchain == value) return;
-            _useRtpSwapchain = value;
-            OnPropertyChanged();
-        }
-    }
-
     /// <summary>
     /// Activate freecam (called when right mouse button pressed)
     /// </summary>
@@ -387,6 +354,11 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
             _videoSource = null;
         }
 
+        if (_rtpViewer != null)
+        {
+            _rtpViewer.RightButtonDown -= OnRtpViewerRightButtonDown;
+            _rtpViewer.RightButtonUp -= OnRtpViewerRightButtonUp;
+        }
         _rtpViewer?.Stop();
         _rtpViewer?.Dispose();
         _rtpViewer = null;
@@ -394,9 +366,6 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
 
         IsStreaming = false;
         StatusText = "Not Connected";
-        CurrentFrame = null;
-        _bitmap0 = null;
-        _bitmap1 = null;
         FrameRate = 0;
     }
 
@@ -413,31 +382,13 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
             _lastFrameTime = now;
         }
 
-        if (_useRtpSwapchain && _rtpViewer != null)
+        if (_rtpViewer != null)
         {
             UpdateRtpFrameAspect(frame.Width, frame.Height);
             _rtpViewer.PresentFrame(frame);
             return;
         }
-
-        // Always store the latest frame (drop old pending frames for low latency)
-        _pendingFrame = frame;
-
-        if (!_updateScheduled)
-        {
-            _updateScheduled = true;
-
-            // Use Send instead of InvokeAsync for lower latency
-            // This processes the frame immediately on the UI thread
-            Dispatcher.UIThread.Post(() =>
-            {
-                _updateScheduled = false;
-                if (_pendingFrame != null)
-                {
-                    UpdateBitmap(_pendingFrame);
-                }
-            }, DispatcherPriority.MaxValue);
-        }
+        // No Avalonia composited video path anymore; ignore frame when no swapchain.
     }
 
     private void UpdateRtpFrameAspect(int width, int height)
@@ -452,92 +403,14 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         Dispatcher.UIThread.Post(() => RtpFrameAspect = aspect, DispatcherPriority.Background);
     }
 
-    private void UpdateBitmap(VideoFrame frame)
-    {
-        try
-        {
-            // Double-buffering: alternate between two bitmaps to provide different reference each frame
-            // This forces Avalonia's Image control to detect the change while avoiding GC pressure
-            // Only 2 bitmaps total vs 60+ per second
-
-            var needsRecreate = _bitmap0 == null || _bitmap1 == null ||
-                                _bitmap0.PixelSize.Width != frame.Width ||
-                                _bitmap0.PixelSize.Height != frame.Height;
-
-            if (needsRecreate)
-            {
-                // Create both bitmaps with the same dimensions
-                _bitmap0 = new WriteableBitmap(
-                    new PixelSize(frame.Width, frame.Height),
-                    new Vector(96, 96),
-                    PixelFormat.Bgra8888);
-
-                _bitmap1 = new WriteableBitmap(
-                    new PixelSize(frame.Width, frame.Height),
-                    new Vector(96, 96),
-                    PixelFormat.Bgra8888);
-
-                _useFirstBitmap = true;
-            }
-
-            // Alternate between the two bitmaps
-            var targetBitmap = _useFirstBitmap ? _bitmap0! : _bitmap1!;
-            _useFirstBitmap = !_useFirstBitmap;
-
-            // Copy frame data to the target bitmap
-            using (var buffer = targetBitmap.Lock())
-            {
-                unsafe
-                {
-                    var dest = (byte*)buffer.Address;
-                    var destStride = buffer.RowBytes;
-
-                    // Copy line by line
-                    for (int y = 0; y < frame.Height; y++)
-                    {
-                        int srcOffset = y * frame.Stride;
-                        int destOffset = y * destStride;
-
-                        Marshal.Copy(
-                            frame.Data,
-                            srcOffset,
-                            (IntPtr)(dest + destOffset),
-                            Math.Min(frame.Stride, destStride));
-                    }
-                }
-            }
-
-            // Set the newly updated bitmap - different reference from last frame
-            CurrentFrame = targetBitmap;
-
-            if (frame.SourceTimestampUs > 0)
-            {
-                const long unixEpochTicks = 621355968000000000L; // DateTime ticks at Unix epoch
-                var nowUs = (DateTime.UtcNow.Ticks - unixEpochTicks) / 10; // microseconds since Unix epoch
-                var presentLatencyMs = Math.Max(0, (nowUs - frame.SourceTimestampUs) / 1000.0);
-                var captureToReceiveMs = frame.ReceivedTimestampUs > 0
-                    ? Math.Max(0, (frame.ReceivedTimestampUs - frame.SourceTimestampUs) / 1000.0)
-                    : double.NaN;
-
-                var now = DateTime.UtcNow;
-                if ((now - _lastLatencyLog).TotalSeconds >= 1.0)
-                {
-                    Console.WriteLine($"Present latency: {presentLatencyMs:F2} ms (capture->receive: {captureToReceiveMs:F2} ms)");
-                    _lastLatencyLog = now;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error updating bitmap: {ex.Message}");
-        }
-    }
-
     /// <summary>
     /// Show the HUD overlay window (called when using D3DHost mode)
     /// </summary>
     public void ShowHudOverlay()
     {
+        if (_isDisposing)
+            return;
+
         if (_hudOverlayWindow == null)
         {
             _hudOverlayWindow = new HudOverlayWindow
@@ -565,6 +438,8 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
             // Show with main window as owner so the overlay is only topmost relative to it
             if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
             {
+                if (desktop.MainWindow == null || !desktop.MainWindow.IsVisible)
+                    return;
                 _hudOverlayWindow.Show(desktop.MainWindow);
             }
             else
@@ -609,6 +484,16 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         OverlayRightButtonUp?.Invoke(this, EventArgs.Empty);
     }
 
+    public void NotifyOverlayRightButtonDown()
+    {
+        RaiseOverlayRightButtonDown();
+    }
+
+    public void NotifyOverlayRightButtonUp()
+    {
+        RaiseOverlayRightButtonUp();
+    }
+
     private void OnOverlayShiftKeyChanged(object? sender, bool isPressed)
     {
         OverlayShiftKeyChanged?.Invoke(this, isPressed);
@@ -643,6 +528,8 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
 
     public void Dispose()
     {
+        _isDisposing = true;
+
         if (_speedWebSocketClient != null)
         {
             _speedWebSocketClient.MessageReceived -= OnWebSocketMessage;
@@ -668,20 +555,19 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
 
     private void StartRtpInternal(RtpReceiverConfig? config = null)
     {
-        if (_useRtpSwapchain)
+        _rtpViewer?.Stop();
+        _rtpViewer?.Dispose();
+        _rtpViewer = new RtpSwapchainViewer(_rtpParentHwnd);
+        _rtpViewer.RightButtonDown += OnRtpViewerRightButtonDown;
+        _rtpViewer.RightButtonUp += OnRtpViewerRightButtonUp;
+        _rtpViewer.Start();
+        if (_rtpViewer.IsRunning && _rtpViewer.Hwnd != IntPtr.Zero)
         {
-            _rtpViewer?.Stop();
-            _rtpViewer?.Dispose();
-            _rtpViewer = new RtpSwapchainViewer(_rtpParentHwnd);
-            _rtpViewer.Start();
-            if (_rtpViewer.IsRunning && _rtpViewer.Hwnd != IntPtr.Zero)
-            {
-                RtpViewerWindowChanged?.Invoke(this, _rtpViewer.Hwnd);
-            }
-            else
-            {
-                RtpViewerWindowChanged?.Invoke(this, IntPtr.Zero);
-            }
+            RtpViewerWindowChanged?.Invoke(this, _rtpViewer.Hwnd);
+        }
+        else
+        {
+            RtpViewerWindowChanged?.Invoke(this, IntPtr.Zero);
         }
 
         var receiver = new RtpVideoReceiver(config ?? _rtpConfig);
@@ -694,6 +580,34 @@ public class VideoDisplayDockViewModel : Tool, IDisposable
         StatusText = $"Connected - {activeConfig.Address}:{activeConfig.Port}";
         _lastFrameTime = DateTime.Now;
         _frameCount = 0;
+    }
+
+    private void OnRtpViewerRightButtonDown(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_useD3DHost || !IsStreaming)
+                return;
+
+            if (_hudOverlayWindow != null && _hudOverlayWindow.IsVisible)
+                return;
+
+            NotifyOverlayRightButtonDown();
+        }, DispatcherPriority.Background);
+    }
+
+    private void OnRtpViewerRightButtonUp(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_useD3DHost || !IsStreaming)
+                return;
+
+            if (_hudOverlayWindow != null && _hudOverlayWindow.IsVisible)
+                return;
+
+            NotifyOverlayRightButtonUp();
+        }, DispatcherPriority.Background);
     }
 
     public double FreecamSpeed

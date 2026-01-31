@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
@@ -45,6 +46,8 @@ public sealed class RtpSwapchainViewer : IDisposable
 
     public bool IsRunning { get; private set; }
     public IntPtr Hwnd => _hwnd;
+    public event EventHandler? RightButtonDown;
+    public event EventHandler? RightButtonUp;
 
     public RtpSwapchainViewer(IntPtr parentHwnd = default)
     {
@@ -176,6 +179,8 @@ public sealed class RtpSwapchainViewer : IDisposable
         {
             Console.WriteLine($"RTP viewer window created: hwnd=0x{_hwnd.ToInt64():X}");
         }
+
+        RegisterViewerWindow(_hwnd, this);
 
         if (!CreateDeviceAndFactory())
         {
@@ -466,6 +471,7 @@ public sealed class RtpSwapchainViewer : IDisposable
     private static WndProcDelegate? _wndProc;
     private static IntPtr _wndProcPtr = IntPtr.Zero;
     private static readonly object _classLock = new();
+    private static readonly Dictionary<IntPtr, WeakReference<RtpSwapchainViewer>> _viewerMap = new();
     private static string? _wndClassName;
 
     private static void EnsureClass()
@@ -601,6 +607,7 @@ public sealed class RtpSwapchainViewer : IDisposable
     {
         if (_hwnd != IntPtr.Zero)
         {
+            UnregisterViewerWindow(_hwnd);
             DestroyWindow(_hwnd);
             _hwnd = IntPtr.Zero;
         }
@@ -610,7 +617,29 @@ public sealed class RtpSwapchainViewer : IDisposable
 
     private static IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
+        const uint WM_RBUTTONDOWN = 0x0204;
+        const uint WM_RBUTTONUP = 0x0205;
         const uint WM_DESTROY = 0x0002;
+        if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP)
+        {
+            RtpSwapchainViewer? viewer = null;
+            lock (_classLock)
+            {
+                if (_viewerMap.TryGetValue(hWnd, out var weak) && weak.TryGetTarget(out var target))
+                {
+                    viewer = target;
+                }
+            }
+
+            if (viewer != null)
+            {
+                if (msg == WM_RBUTTONDOWN)
+                    viewer.RightButtonDown?.Invoke(viewer, EventArgs.Empty);
+                else
+                    viewer.RightButtonUp?.Invoke(viewer, EventArgs.Empty);
+                return IntPtr.Zero;
+            }
+        }
         if (msg == WM_DESTROY)
         {
             PostQuitMessage(0);
@@ -721,6 +750,22 @@ public sealed class RtpSwapchainViewer : IDisposable
     [DllImport("user32.dll")]
     private static extern IntPtr DispatchMessage([In] ref MSG lpmsg);
     #endregion
+
+    private static void RegisterViewerWindow(IntPtr hwnd, RtpSwapchainViewer viewer)
+    {
+        lock (_classLock)
+        {
+            _viewerMap[hwnd] = new WeakReference<RtpSwapchainViewer>(viewer);
+        }
+    }
+
+    private static void UnregisterViewerWindow(IntPtr hwnd)
+    {
+        lock (_classLock)
+        {
+            _viewerMap.Remove(hwnd);
+        }
+    }
 
     public void Dispose()
     {

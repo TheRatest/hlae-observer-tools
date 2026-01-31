@@ -23,7 +23,6 @@ public partial class VideoDisplayDockView : UserControl
 {
     private Point? _lockedCursorCenter;
     private bool _isRightButtonDown;
-    private Point? _lastMousePosition;
     private INotifyPropertyChanged? _currentVmNotifier;
     private VideoDisplayDockViewModel? _currentViewModel;
     private INotifyPropertyChanged? _currentHudOverlayNotifier;
@@ -82,6 +81,8 @@ public partial class VideoDisplayDockView : UserControl
         if (SharedTextureHost != null)
         {
             SharedTextureHost.SharedHandleInvalidated += OnSharedHandleInvalidated;
+            SharedTextureHost.RightButtonDown += OnSharedTextureRightButtonDown;
+            SharedTextureHost.RightButtonUp += OnSharedTextureRightButtonUp;
         }
         if (RtpSwapchainAspect != null)
         {
@@ -98,6 +99,9 @@ public partial class VideoDisplayDockView : UserControl
         KeyUp += OnKeyUp;
 
         DataContextChanged += OnDataContextChanged;
+
+        PointerPressed += OnDockPointerPressed;
+        PointerReleased += OnDockPointerReleased;
 
         _analogSprintTimer = new DispatcherTimer
         {
@@ -242,7 +246,7 @@ public partial class VideoDisplayDockView : UserControl
         if (DataContext is not VideoDisplayDockViewModel vm)
             return;
 
-        if (IsHudOverlayVisible(vm) && (vm.UseD3DHost || (vm.UseRtpSwapchain && !vm.UseD3DHost)))
+        if (IsHudOverlayVisible(vm) && (vm.UseD3DHost || (!vm.UseD3DHost && vm.IsStreaming)))
         {
             vm.ShowHudOverlay();
             if (vm.UseD3DHost)
@@ -268,7 +272,7 @@ public partial class VideoDisplayDockView : UserControl
 
     private void OnOverlayRightButtonDown(object? sender, EventArgs e)
     {
-        if (DataContext is VideoDisplayDockViewModel vm && (vm.UseD3DHost || (vm.UseRtpSwapchain && !vm.UseD3DHost)))
+        if (DataContext is VideoDisplayDockViewModel vm && (vm.UseD3DHost || (!vm.UseD3DHost && vm.IsStreaming)))
         {
             _isRightButtonDown = true;
             BeginFreecam();
@@ -323,7 +327,7 @@ public partial class VideoDisplayDockView : UserControl
 
     private void OnParentWindowPositionChanged(object? sender, PixelPointEventArgs e)
     {
-        if (DataContext is VideoDisplayDockViewModel vm && vm.UseRtpSwapchain && !vm.UseD3DHost)
+        if (DataContext is VideoDisplayDockViewModel vm && !vm.UseD3DHost && vm.IsStreaming)
         {
             UpdateRtpSwapchainBounds();
         }
@@ -340,7 +344,7 @@ public partial class VideoDisplayDockView : UserControl
             // Delay update slightly to allow window to finish state transition
             Dispatcher.UIThread.Post(() =>
             {
-                if (DataContext is VideoDisplayDockViewModel vm && vm.UseRtpSwapchain && !vm.UseD3DHost)
+                if (DataContext is VideoDisplayDockViewModel vm && !vm.UseD3DHost && vm.IsStreaming)
                 {
                     UpdateRtpSwapchainBounds();
                 }
@@ -403,61 +407,6 @@ public partial class VideoDisplayDockView : UserControl
         }
     }
 
-    private void VideoContainer_PointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        var pointer = e.GetCurrentPoint(this);
-
-        // Right mouse button pressed - activate freecam
-        if (pointer.Properties.IsRightButtonPressed && !_isRightButtonDown)
-        {
-            _isRightButtonDown = true;
-            (sender as IInputElement)?.Focus();
-
-            BeginFreecam();
-            e.Handled = true;
-        }
-    }
-
-    private void VideoContainer_PointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        var pointer = e.GetCurrentPoint(this);
-
-        // Right mouse button released - deactivate freecam
-        if (!pointer.Properties.IsRightButtonPressed && _isRightButtonDown)
-        {
-            _isRightButtonDown = false;
-
-            EndFreecam();
-            e.Handled = true;
-        }
-    }
-
-    private void VideoContainer_PointerMoved(object? sender, PointerEventArgs e)
-    {
-        // When freecam is active, lock cursor to center and send mouse deltas
-        if (_lockedCursorCenter.HasValue && VideoContainer != null && DataContext is VideoDisplayDockViewModel vm)
-        {
-            // Get current screen position (before re-centering)
-            var currentPos = e.GetPosition(VideoContainer);
-            var screenPosPixel = VideoContainer.PointToScreen(currentPos);
-            var screenPos = new Point(screenPosPixel.X, screenPosPixel.Y);
-
-            // Calculate delta from last position
-            if (_lastMousePosition.HasValue)
-            {
-                int dx = (int)(screenPos.X - _lastMousePosition.Value.X);
-                int dy = (int)(screenPos.Y - _lastMousePosition.Value.Y);
-                // Raw mouse deltas are provided by RawInputHandler; this only locks the cursor.
-            }
-
-            // Update last position to center (where we're about to move cursor)
-            _lastMousePosition = _lockedCursorCenter.Value;
-
-            // Re-center cursor
-            SetCursorPosition((int)_lockedCursorCenter.Value.X, (int)_lockedCursorCenter.Value.Y);
-        }
-    }
-
     // P/Invoke for setting cursor position
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool SetCursorPos(int X, int Y);
@@ -484,20 +433,26 @@ public partial class VideoDisplayDockView : UserControl
         SetCursorPos(x, y);
     }
 
-    // Forwarders for the shared texture overlay to reuse the existing freecam handling.
-    private void SharedTextureOverlay_PointerPressed(object? sender, PointerPressedEventArgs e)
+    private void OnSharedTextureRightButtonDown(object? sender, EventArgs e)
     {
-        VideoContainer_PointerPressed(VideoContainer, e);
+        if (DataContext is not VideoDisplayDockViewModel vm || !vm.UseD3DHost)
+            return;
+
+        if (IsHudOverlayVisible(vm))
+            return;
+
+        vm.NotifyOverlayRightButtonDown();
     }
 
-    private void SharedTextureOverlay_PointerReleased(object? sender, PointerReleasedEventArgs e)
+    private void OnSharedTextureRightButtonUp(object? sender, EventArgs e)
     {
-        VideoContainer_PointerReleased(VideoContainer, e);
-    }
+        if (DataContext is not VideoDisplayDockViewModel vm || !vm.UseD3DHost)
+            return;
 
-    private void SharedTextureOverlay_PointerMoved(object? sender, PointerEventArgs e)
-    {
-        VideoContainer_PointerMoved(VideoContainer, e);
+        if (IsHudOverlayVisible(vm))
+            return;
+
+        vm.NotifyOverlayRightButtonUp();
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -569,7 +524,7 @@ public partial class VideoDisplayDockView : UserControl
     {
         if (RtpSwapchainAspect == null || VideoContainer == null || DataContext is not VideoDisplayDockViewModel vm)
             return;
-        if (!vm.UseRtpSwapchain || vm.UseD3DHost)
+        if (vm.UseD3DHost || !vm.IsStreaming)
             return;
 
         var bounds = VideoContainer.Bounds;
@@ -593,7 +548,7 @@ public partial class VideoDisplayDockView : UserControl
     {
         if (RtpSwapchainHost == null || DataContext is not VideoDisplayDockViewModel vm)
             return;
-        if (!vm.UseRtpSwapchain || vm.UseD3DHost)
+        if (vm.UseD3DHost || !vm.IsStreaming)
             return;
 
         if (!this.IsAttachedToVisualTree())
@@ -632,7 +587,7 @@ public partial class VideoDisplayDockView : UserControl
         RtpSwapchainHost.SetChildLayout(0, 0, w, h);
         RtpSwapchainHost.UpdateChildBounds();
 
-        if (IsHudOverlayVisible(vm) && vm.UseRtpSwapchain && !vm.UseD3DHost)
+        if (IsHudOverlayVisible(vm) && !vm.UseD3DHost && vm.IsStreaming)
         {
             try
             {
@@ -680,13 +635,22 @@ public partial class VideoDisplayDockView : UserControl
         {
             targetControl = SharedTextureAspect;
         }
-        else if (vm.UseRtpSwapchain && !vm.UseD3DHost && RtpSwapchainHost != null)
+        else if (!vm.UseD3DHost && vm.IsStreaming && RtpSwapchainHost != null)
         {
             targetControl = RtpSwapchainHost;
         }
-        else if (VideoContainer != null)
+        else if (NoSignalOverlay != null && NoSignalOverlay.IsVisible
+            && NoSignalOverlay.Bounds.Width > 0 && NoSignalOverlay.Bounds.Height > 0)
+        {
+            targetControl = NoSignalOverlay;
+        }
+        else if (VideoContainer != null && VideoContainer.Bounds.Width > 0 && VideoContainer.Bounds.Height > 0)
         {
             targetControl = VideoContainer;
+        }
+        else
+        {
+            targetControl = this;
         }
 
         if (targetControl == null)
@@ -698,8 +662,6 @@ public partial class VideoDisplayDockView : UserControl
         var screenCenter = new Point(screenCenterPixel.X, screenCenterPixel.Y);
 
         _lockedCursorCenter = screenCenter;
-        _lastMousePosition = screenCenter;
-
         if (_lockedCursorCenter.HasValue)
         {
             SetCursorPosition((int)_lockedCursorCenter.Value.X, (int)_lockedCursorCenter.Value.Y);
@@ -708,6 +670,50 @@ public partial class VideoDisplayDockView : UserControl
 
         Cursor = new Cursor(StandardCursorType.None);
         this.Focus();
+    }
+
+    private void OnDockPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not VideoDisplayDockViewModel vm)
+            return;
+
+        if (vm.UseD3DHost || vm.IsStreaming)
+            return;
+
+        var pointer = e.GetCurrentPoint(this);
+        if (pointer.Properties.IsRightButtonPressed && !_isRightButtonDown)
+        {
+            _isRightButtonDown = true;
+            BeginFreecam();
+            e.Handled = true;
+        }
+    }
+
+    private void OnDockPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (DataContext is not VideoDisplayDockViewModel vm)
+            return;
+
+        if (vm.UseD3DHost || vm.IsStreaming)
+            return;
+
+        var pointer = e.GetCurrentPoint(this);
+        if (!pointer.Properties.IsRightButtonPressed && _isRightButtonDown)
+        {
+            _isRightButtonDown = false;
+            EndFreecam();
+            e.Handled = true;
+        }
+    }
+
+    private void NoSignalOverlay_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        OnDockPointerPressed(sender, e);
+    }
+
+    private void NoSignalOverlay_PointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        OnDockPointerReleased(sender, e);
     }
 
     private void EndFreecam()
@@ -719,7 +725,6 @@ public partial class VideoDisplayDockView : UserControl
         Cursor = Cursor.Default;
         UnlockCursor();
         _lockedCursorCenter = null;
-        _lastMousePosition = null;
     }
 
     private void LockCursorToPoint(Point screenPoint)
@@ -793,7 +798,7 @@ public partial class VideoDisplayDockView : UserControl
                 SharedTextureHost?.SetSharedTextureHandle(vm.SharedTextureHandle);
                 UpdateHudOverlayVisibility();
             }
-            else if (vm.UseRtpSwapchain)
+            else if (!vm.UseD3DHost)
             {
                 UpdateHudOverlayVisibility();
             }
@@ -820,15 +825,6 @@ public partial class VideoDisplayDockView : UserControl
                     SharedTextureHost?.StopRenderer();
                     UpdateHudOverlayVisibility();
                 }
-            }
-        }
-        else if (e.PropertyName == nameof(VideoDisplayDockViewModel.UseRtpSwapchain))
-        {
-            if (DataContext is VideoDisplayDockViewModel vm)
-            {
-                UpdateRtpSwapchainAspectSize();
-                UpdateRtpSwapchainBounds();
-                UpdateHudOverlayVisibility();
             }
         }
         else if (e.PropertyName == nameof(VideoDisplayDockViewModel.HudOverlay))
@@ -858,12 +854,13 @@ public partial class VideoDisplayDockView : UserControl
         {
             UpdateRtpSwapchainAspectSize();
             UpdateRtpSwapchainBounds();
+            UpdateHudOverlayVisibility();
         }
     }
 
     private Canvas? GetActiveSpeedScaleCanvas()
     {
-        if (DataContext is VideoDisplayDockViewModel vm && (vm.UseD3DHost || (vm.UseRtpSwapchain && !vm.UseD3DHost)))
+        if (DataContext is VideoDisplayDockViewModel vm && (vm.UseD3DHost || (!vm.UseD3DHost && vm.IsStreaming)))
         {
             // Get canvas from overlay window when using D3DHost
             return vm.GetOverlaySpeedScaleCanvas();
