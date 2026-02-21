@@ -35,6 +35,7 @@
     <PackageReference Include="Vortice.DXGI" Version="3.6.2" />
     <PackageReference Include="Vortice.Direct2D1" Version="3.6.2" />
     <PackageReference Include="OpenTK.Windowing.Desktop" Version="4.9.4" />
+    <PackageReference Include="Watson" Version="6.5.5" />
   </ItemGroup>
 
   <ItemGroup>

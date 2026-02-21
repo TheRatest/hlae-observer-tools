@@ -71,6 +71,7 @@ public class AppSettingsData
     public int WebSocketPort { get; set; } = 31338;
     public int UdpPort { get; set; } = 31339;
     public int RtpPort { get; set; } = 5000;
+    public string GsiBindAddress { get; set; } = "0.0.0.0";
     public int GsiPort { get; set; } = 31337;
     public string MapObjPath { get; set; } = string.Empty;
     public bool ViewportUseLegacyD3D11 { get; set; }

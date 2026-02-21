@@ -100,3 +100,4 @@ ClientBin/
 *.pfx
 *.publishsettings
 orleans.codegen.cs
+HlaeObsTools/Properties/PublishProfiles

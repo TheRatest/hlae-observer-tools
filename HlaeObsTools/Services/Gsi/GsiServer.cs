@@ -7,6 +7,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using WatsonWebserver;
+using WatsonWebserver.Core;
+using WatsonWebserver.Extensions.HostBuilderExtension;
 
 namespace HlaeObsTools.Services.Gsi;
 
@@ -15,9 +18,7 @@ namespace HlaeObsTools.Services.Gsi;
 /// </summary>
 public sealed class GsiServer : IDisposable
 {
-    private HttpListener? _listener;
-    private CancellationTokenSource? _cts;
-    private Task? _loopTask;
+    private Webserver? _listener;
     private long _heartbeat;
     private static readonly Dictionary<string, int> LastKnownObserverSlots = new(StringComparer.Ordinal);
 
@@ -34,21 +35,20 @@ public sealed class GsiServer : IDisposable
 
         bool started = false;
         string requestedHost = host;
-        bool useWildcard = string.Equals(requestedHost, "0.0.0.0", StringComparison.OrdinalIgnoreCase) || requestedHost == "*";
-        string prefixHost = useWildcard ? "+" : requestedHost;
+        bool useWildcard = requestedHost == "0.0.0.0" || requestedHost == "*";
+        string prefixHost = useWildcard ? "*" : requestedHost;
 
-        _listener = new HttpListener();
+        _listener = new HostBuilder(requestedHost, port, false, WebserverDefaultRoute)
+                    .MapStaticRoute(HttpMethod.POST, normalizedPath, WebserverGSIRoute)
+                    .Build();
 
         // Try requested host first (may require URL ACL for non-loopback).
         try
         {
-            _listener.Prefixes.Clear();
-            _listener.Prefixes.Add($"http://{prefixHost}:{port}{normalizedPath}");
-            _listener.Prefixes.Add($"http://{prefixHost}:{port}/");
             _listener.Start();
             started = true;
         }
-        catch (HttpListenerException ex)
+        catch (Exception ex)
         {
             Console.WriteLine($"GSI listener failed on {requestedHost}:{port} ({ex.Message}). If you need non-loopback, run as administrator or add a URL ACL: netsh http add urlacl url=http://{requestedHost}:{port}/ user=Everyone");
         }
@@ -58,85 +58,41 @@ public sealed class GsiServer : IDisposable
         {
             try
             {
-                _listener = new HttpListener();
-                _listener.Prefixes.Add($"http://127.0.0.1:{port}{normalizedPath}");
-                _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+                _listener = new HostBuilder("127.0.0.1", port, false, WebserverDefaultRoute)
+                                .MapStaticRoute(HttpMethod.POST, normalizedPath, WebserverGSIRoute)
+                                .Build();
                 _listener.Start();
                 started = true;
                 host = "127.0.0.1";
             }
-            catch (HttpListenerException ex)
+            catch (Exception ex)
             {
                 Console.WriteLine($"GSI listener fallback to loopback failed: {ex.Message}");
             }
         }
 
         if (!started)
-        {
             return;
-        }
 
-        _cts = new CancellationTokenSource();
-        _loopTask = Task.Run(() => ListenLoopAsync(_cts.Token));
         Console.WriteLine($"GSI listener started on http://{host}:{port}{path}");
     }
 
     public void Stop()
     {
-        try
-        {
-            _cts?.Cancel();
-            _listener.Stop();
-            _loopTask?.Wait(TimeSpan.FromSeconds(1));
-        }
-        catch
-        {
-            // ignore
-        }
-        finally
-        {
-            _cts?.Dispose();
-            _cts = null;
-        }
+        if(IsRunning)
+            _listener!.Stop();
     }
 
-    private async Task ListenLoopAsync(CancellationToken token)
+    static public async Task WebserverDefaultRoute(HttpContextBase ctx)
     {
-        while (!token.IsCancellationRequested)
-        {
-            HttpListenerContext? ctx = null;
-            try
-            {
-                if (_listener == null) break;
-                ctx = await _listener.GetContextAsync().ConfigureAwait(false);
-            }
-            catch when (token.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"GSI listener error: {ex.Message}");
-            }
-
-            if (ctx == null) continue;
-
-            _ = Task.Run(() => HandleRequestAsync(ctx), token);
-        }
+        await ctx.Response.Send("This is the default route; POST on the right path for submitting GSI data (/gsi/ by default)");
     }
 
-    private async Task HandleRequestAsync(HttpListenerContext ctx)
+    private async Task WebserverGSIRoute(HttpContextBase ctx)
     {
         try
         {
-            if (ctx.Request.HttpMethod != "POST")
-            {
-                ctx.Response.StatusCode = (int)HttpStatusCode.MethodNotAllowed;
-                ctx.Response.Close();
-                return;
-            }
-
-            using var reader = new StreamReader(ctx.Request.InputStream, Encoding.UTF8);
+            using var reader = new StreamReader(ctx.Request.Data, Encoding.UTF8);
             var body = await reader.ReadToEndAsync().ConfigureAwait(false);
 
             // Increment heartbeat on each GSI update
@@ -144,12 +100,10 @@ public sealed class GsiServer : IDisposable
 
             var state = ParseState(body, currentHeartbeat);
             if (state != null)
-            {
                 GameStateUpdated?.Invoke(this, state);
-            }
 
             ctx.Response.StatusCode = (int)HttpStatusCode.OK;
-            ctx.Response.Close();
+            await ctx.Response.Send();
         }
         catch (Exception ex)
         {
@@ -157,7 +111,7 @@ public sealed class GsiServer : IDisposable
             try
             {
                 ctx.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                ctx.Response.Close();
+                await ctx.Response.Send();
             }
             catch { }
         }
@@ -530,7 +484,7 @@ public sealed class GsiServer : IDisposable
         Stop();
         if (_listener != null)
         {
-            _listener.Close();
+            _listener.Dispose();
             _listener = null;
         }
     }
