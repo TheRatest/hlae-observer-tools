@@ -19,7 +19,6 @@ namespace HlaeObsTools.Services.Gsi;
 public sealed class GsiServer : IDisposable
 {
     private Webserver? _listener;
-    private Task? _loopTask;
     private long _heartbeat;
     private static readonly Dictionary<string, int> LastKnownObserverSlots = new(StringComparer.Ordinal);
 
@@ -36,15 +35,16 @@ public sealed class GsiServer : IDisposable
 
         bool started = false;
         string requestedHost = host;
-        bool useWildcard = string.Equals(requestedHost, "0.0.0.0", StringComparison.OrdinalIgnoreCase) || requestedHost == "*";
-        string prefixHost = useWildcard ? "+" : requestedHost;
+        bool useWildcard = requestedHost == "0.0.0.0" || requestedHost == "*";
+        string prefixHost = useWildcard ? "*" : requestedHost;
 
-        _listener = new Webserver(new WebserverSettings(requestedHost, port), WebserverDefaultRoute);
+        _listener = new HostBuilder(requestedHost, port, false, WebserverDefaultRoute)
+                    .MapStaticRoute(HttpMethod.POST, normalizedPath, WebserverGSIRoute)
+                    .Build();
 
         // Try requested host first (may require URL ACL for non-loopback).
         try
         {
-            _listener.Routes.PreAuthentication.Static.Add(HttpMethod.POST, normalizedPath, WebserverGSIRoute);
             _listener.Start();
             started = true;
         }
@@ -58,8 +58,9 @@ public sealed class GsiServer : IDisposable
         {
             try
             {
-                _listener = new Webserver(new WebserverSettings("127.0.0.1", port), WebserverDefaultRoute);
-                _listener.Routes.PreAuthentication.Static.Add(HttpMethod.POST, normalizedPath, WebserverGSIRoute);
+                _listener = new HostBuilder("127.0.0.1", port, false, WebserverDefaultRoute)
+                                .MapStaticRoute(HttpMethod.POST, normalizedPath, WebserverGSIRoute)
+                                .Build();
                 _listener.Start();
                 started = true;
                 host = "127.0.0.1";
@@ -84,7 +85,7 @@ public sealed class GsiServer : IDisposable
 
     static public async Task WebserverDefaultRoute(HttpContextBase ctx)
     {
-        await ctx.Response.Send("This is the default route; use the intented path for submitting GSI data (/gsi/ by default)");
+        await ctx.Response.Send("This is the default route; POST on the right path for submitting GSI data (/gsi/ by default)");
     }
 
     private async Task WebserverGSIRoute(HttpContextBase ctx)
@@ -99,9 +100,7 @@ public sealed class GsiServer : IDisposable
 
             var state = ParseState(body, currentHeartbeat);
             if (state != null)
-            {
                 GameStateUpdated?.Invoke(this, state);
-            }
 
             ctx.Response.StatusCode = (int)HttpStatusCode.OK;
             await ctx.Response.Send();

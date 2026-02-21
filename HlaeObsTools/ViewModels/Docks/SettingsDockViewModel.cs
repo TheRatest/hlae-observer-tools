@@ -39,7 +39,7 @@ namespace HlaeObsTools.ViewModels.Docks
         private bool _suppressSettingsSave;
         private bool _isLoadingPresets;
 
-        public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, int GsiPort);
+        public record NetworkSettingsData(string WebSocketHost, int WebSocketPort, int UdpPort, int RtpPort, string GsiBindAddress, int GsiPort);
 
         public SettingsDockViewModel(RadarSettings radarSettings, HudSettings hudSettings, FreecamSettings freecamSettings, Viewport3DSettings viewport3DSettings, SettingsStorage settingsStorage, HlaeWebSocketClient wsClient, Func<NetworkSettingsData, Task>? applyNetworkSettingsAsync = null, AppSettingsData? storedSettings = null, VmixReplaySettings? vmixSettings = null, Action<bool>? setFocusInputGateDisabled = null, CampathEditorViewModel? campathEditor = null)
         {
@@ -65,6 +65,7 @@ namespace HlaeObsTools.ViewModels.Docks
             _webSocketPort = settings.WebSocketPort;
             _udpPort = settings.UdpPort;
             _rtpPort = settings.RtpPort;
+            _gsiBindAddress = settings.GsiBindAddress;
             _gsiPort = settings.GsiPort;
             _disableFocusInputGate = settings.DisableFocusInputGate;
 
@@ -175,6 +176,20 @@ namespace HlaeObsTools.ViewModels.Docks
             }
         }
 
+        private string _gsiBindAddress = "127.0.0.1";
+        public string GsiBindAddress
+        {
+            get => _gsiBindAddress;
+            set
+            {
+                if (_gsiBindAddress != value)
+                {
+                    _gsiBindAddress = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         private int _gsiPort = 31337;
         public int GsiPort
         {
@@ -196,7 +211,7 @@ namespace HlaeObsTools.ViewModels.Docks
             SaveSettings();
             if (_applyNetworkSettingsAsync != null)
             {
-                var payload = new NetworkSettingsData(WebSocketHost, WebSocketPort, UdpPort, RtpPort, GsiPort);
+                var payload = new NetworkSettingsData(WebSocketHost, WebSocketPort, UdpPort, RtpPort, GsiBindAddress, GsiPort);
                 await _applyNetworkSettingsAsync(payload);
             }
         }
@@ -506,6 +521,7 @@ namespace HlaeObsTools.ViewModels.Docks
                 WebSocketPort = WebSocketPort,
                 UdpPort = UdpPort,
                 RtpPort = RtpPort,
+                GsiBindAddress = GsiBindAddress,
                 GsiPort = GsiPort,
                 MapObjPath = _viewport3DSettings.MapObjPath,
                 ViewportUseLegacyD3D11 = _viewport3DSettings.UseLegacyD3D11Viewport,
