@@ -36,4 +36,13 @@ public partial class RadarDockView : UserControl
             vm.SetCampathHighlight(path, false);
         }
     }
+    private void RadarPlayer_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is RadarDockViewModel vm && sender is Control ctrl && ctrl.DataContext is RadarPlayerViewModel player)
+        {
+            // Not implemented yet
+            // Console.WriteLine($"Player {player.DisplayNumber} pressed (ID: {player.Id})");
+            e.Handled = true;
+        }
+    }
 }

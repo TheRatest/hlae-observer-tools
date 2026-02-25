@@ -118,10 +118,12 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
+			<!-- Alive player markers -->
           <ItemsControl ItemsSource="{Binding Players}"
                         Width="1024"
                         Height="1024"
-                        IsHitTestVisible="False"
+                        IsHitTestVisible="True"
+						Cursor="Hand"
                         x:CompileBindings="False">
             <ItemsControl.Styles>
               <Style Selector="ContentPresenter">
@@ -138,7 +140,8 @@
               <DataTemplate x:DataType="vm:RadarPlayerViewModel">
                 <Canvas Width="36"
                         Height="36"
-                        RenderTransformOrigin="0.5,0.5">
+                        RenderTransformOrigin="0.5,0.5"
+						PointerPressed="RadarPlayer_PointerPressed">
                   <Canvas.RenderTransform>
                     <ScaleTransform ScaleX="{Binding MarkerScale}"
                                     ScaleY="{Binding MarkerScale}" />
