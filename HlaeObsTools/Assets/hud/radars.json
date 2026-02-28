@@ -49,6 +49,7 @@
 
 	"de_ancient": {
 		"radarImageTransparentBackgrond": true,
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_ancient.png",
 		"pos_x": -2953,
 		"pos_y": 2164,
 		"scale": 5
@@ -56,6 +57,7 @@
 
 	"de_anubis": {
 		"radarImageTransparentBackgrond": true,
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_anubis.png",
 		"pos_x": -2796,
 		"pos_y": 3328,
 		"scale": 5.22
@@ -71,6 +73,7 @@
 	"de_dust2": {
 		"radarImageTransparentBackgrond": true,
 		"radarImageUrl": "/hud/img/radars/simpleradar/de_dust2.webp",
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_dust2.png",
 
 		"pos_x": -2476,
 		"pos_y": 3239,
@@ -86,6 +89,7 @@
 
 	"de_inferno": {
 		"radarImageTransparentBackgrond": true,
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_inferno.png",
 		"pos_x": -2087,
 		"pos_y": 3870,
 		"scale": 4.9
@@ -94,7 +98,7 @@
 	"de_mirage": {
 		"radarImageTransparentBackgrond": true,
 		"radarImageUrl": "/hud/img/radars/simpleradar/de_mirage.webp",
-
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_mirage.png",
 		"pos_x": -3230,
 		"pos_y": 1713,
 		"scale": 5
@@ -103,7 +107,7 @@
 	"de_nuke": {
 		"radarImageTransparentBackgrond": true,
 		"radarImageUrl": "/hud/img/radars/simpleradar/de_nuke.webp",
-
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_nuke.png",
 		"pos_x": -3453,
 		"pos_y": 2887,
 		"scale": 7,
@@ -129,6 +133,7 @@
 
 	"de_overpass": {
 		"radarImageTransparentBackgrond": true,
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_overpass.png",
 		"pos_x": -4831,
 		"pos_y": 1781,
 		"scale": 5.2
@@ -160,7 +165,7 @@
 	"de_train": {
 		"radarImageTransparentBackgrond": true,
 		"radarImageUrl": "/hud/img/radars/ingame/de_train_lower.png",
-
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_train.png",
 		"pos_x": -2308,
 		"pos_y": 2078,
 		"scale": 4.082077,
@@ -180,6 +185,7 @@
 
 	"de_vertigo": {
 		"radarImageTransparentBackgrond": true,
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_vertigo.png",
 		"pos_x": "-3168",
 		"pos_y": 1762,
 		"scale": 4,
@@ -209,7 +215,7 @@
 	"de_cache": {
 		"radarImageTransparentBackgrond": true,
 		"radarImageUrl": "/hud/img/radars/simpleradar/de_cache.webp",
-
+		"radarImageUrlAlt": "/hud/img/radars/alt/de_cache.png",
 		"pos_x": -2000,
 		"pos_y": 3250,
 		"scale": 5.5
