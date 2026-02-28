@@ -1003,8 +1003,11 @@ public sealed class RadarDockViewModel : Tool, IDisposable
             new System.Numerics.Vector3(
                 (float)player.IngamePosition.X,
                 (float)player.IngamePosition.Y,
-                (float)player.IngamePosition.Z),
-            Quaternion.Identity,
+                (float)player.IngamePosition.Z + 64), // eye height. probably.
+            Quaternion.CreateFromYawPitchRoll(
+                (float)(player.Rotation / 180.0 * double.Pi),
+                0,
+                0),
             (float)_viewportVm.FreecamSettings.DefaultFov
             );
     }
