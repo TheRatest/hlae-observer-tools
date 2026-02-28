@@ -262,3 +262,7 @@ Counter-Strike and are the property of Valve Corporation.
 
 These assets are used for compatibility and familiarity purposes and
 are **not covered by this project's LICENSE**.
+
+### Echo HUD radar images (cshuds.com)
+Alternative radar background images were taken from the "Echo HUD"
+project and are property of João Gil (joao.gil@cshuds.com)

@@ -14,6 +14,7 @@ public sealed class RadarSettings : ViewModelBase
     private bool _useAltPlayerBinds;
     private bool _displayNumbersTopmost = true;
     private bool _showPlayerNames = true;
+    private bool _useAlternativeRadarImages = false;
 
     /// <summary>
     /// Scale factor for player markers on the radar.
@@ -66,5 +67,14 @@ public sealed class RadarSettings : ViewModelBase
     {
         get => _showPlayerNames;
         set => SetProperty(ref _showPlayerNames, value);
+    }
+
+    /// <summary>
+    /// Whether to use alternative radar background images for the main competetive maps.
+    /// </summary>
+    public bool UseAltRadarImages
+    {
+        get => _useAlternativeRadarImages;
+        set => SetProperty(ref _useAlternativeRadarImages, value);
     }
 }

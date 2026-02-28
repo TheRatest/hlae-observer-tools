@@ -1078,7 +1078,9 @@ public sealed class RadarDockViewModel : Tool, IDisposable
 
         try
         {
-            var relative = cfg.ImagePath ?? $"/hud/img/radars/ingame/{RadarConfigProvider.Sanitize(mapName)}.png";
+            var existingPath = _settings.UseAltRadarImages ? cfg.ImagePathAlt : cfg.ImagePath;
+            // fallback to radars/ingame/map.png if the requested image doesn't exist
+            var relative = existingPath ?? $"/hud/img/radars/ingame/{RadarConfigProvider.Sanitize(mapName)}.png";
 
             // Our assets live under Assets/hud/... (no extra /img segment). Normalize if needed.
             if (relative.StartsWith("/hud/img/", StringComparison.OrdinalIgnoreCase))
@@ -1130,6 +1132,11 @@ public sealed class RadarDockViewModel : Tool, IDisposable
             {
                 player.UseAltBindings = _settings.UseAltPlayerBinds;
             }
+        }
+        else if (e.PropertyName == nameof(RadarSettings.UseAltRadarImages))
+        {
+            if(_currentMap != null)
+                LoadRadarResources(_currentMap);
         }
         else if (e.PropertyName == nameof(RadarSettings.HeightScaleMultiplier))
         {
