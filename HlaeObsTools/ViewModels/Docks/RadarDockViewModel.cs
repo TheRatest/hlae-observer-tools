@@ -15,6 +15,9 @@ using Dock.Model.Mvvm.Controls;
 using HlaeObsTools.Services.Gsi;
 using HlaeObsTools.Services.Campaths;
 using HlaeObsTools.Services.WebSocket;
+using HlaeObsTools.Views.Docks;
+using HlaeObsTools.Controls;
+using System.Numerics;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -23,6 +26,7 @@ public sealed class RadarPlayerViewModel : ViewModelBase
     private const double MarkerWidth = 36.0;
     private double _relativeX;
     private double _relativeY;
+    private Vec3 _ingamePos;
     private double _rotation;
     private bool _isAlive;
     private bool _hasBomb;
@@ -128,6 +132,12 @@ public sealed class RadarPlayerViewModel : ViewModelBase
     {
         get => _relativeY;
         set => SetProperty(ref _relativeY, value);
+    }
+
+    public Vec3 IngamePosition
+    {
+        get => _ingamePos;
+        set => SetProperty(ref _ingamePos, value);
     }
 
     public double Rotation
@@ -482,6 +492,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
     private readonly Dictionary<string, RadarDeadPlayerViewModel> _deadPlayerMarkers = new();
     private readonly Dictionary<string, Vec3> _lastAlivePositions = new();
     private readonly Dictionary<string, int> _playerHeightBuckets = new();
+    private readonly Viewport3DDockViewModel _viewportVm;
     private readonly CampathsDockViewModel? _campathsVm;
     private readonly HlaeWebSocketClient? _webSocketClient;
     private readonly RadarSettings _settings;
@@ -522,7 +533,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
 
     public RadarSettings RadarSettings => _settings;
 
-    public RadarDockViewModel(GsiServer gsiServer, RadarConfigProvider configProvider, RadarSettings settings, CampathsDockViewModel? campathsVm, HlaeWebSocketClient? webSocketClient)
+    public RadarDockViewModel(GsiServer gsiServer, RadarConfigProvider configProvider, RadarSettings settings, CampathsDockViewModel? campathsVm, HlaeWebSocketClient? webSocketClient, Viewport3DDockViewModel viewportVM)
     {
         _gsiServer = gsiServer;
         _configProvider = configProvider;
@@ -530,6 +541,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         _campathsVm = campathsVm;
         _webSocketClient = webSocketClient;
         _projector = new RadarProjector(configProvider);
+        _viewportVm = viewportVM;
 
         Title = "Radar";
         CanClose = false;
@@ -667,6 +679,7 @@ public sealed class RadarDockViewModel : Tool, IDisposable
                 vm.Slot = p.Slot;
                 vm.RelativeX = x;
                 vm.RelativeY = y;
+                vm.IngamePosition = new Vec3(p.Position.X, p.Position.Y, p.Position.Z);
                 vm.CanvasX = x * 1024.0 - 18.0; // center the 36px marker on the projected point
                 vm.CanvasY = y * 1024.0 - 22.0;
                 vm.Rotation = NormalizeDegrees(Math.Atan2(p.Forward.X, p.Forward.Y) * 180.0 / Math.PI);
@@ -968,6 +981,32 @@ public sealed class RadarDockViewModel : Tool, IDisposable
         {
             RefreshCampathOverlay();
         }
+    }
+
+    public void SwitchToPlayer(RadarPlayerViewModel player)
+    {
+        if (_webSocketClient == null)
+            return;
+
+        _webSocketClient.SendExecCommandAsync($"spec_player {player.Name}");
+    }
+
+    public void TeleportViewportCameraToPlayer(RadarPlayerViewModel player)
+    {
+        if (_viewportVm == null)
+            return;
+
+        if (_viewportVm.Viewport == null)
+            return;
+
+        _viewportVm.Viewport.TeleportCamera(
+            new System.Numerics.Vector3(
+                (float)player.IngamePosition.X,
+                (float)player.IngamePosition.Y,
+                (float)player.IngamePosition.Z),
+            Quaternion.Identity,
+            (float)_viewportVm.FreecamSettings.DefaultFov
+            );
     }
 
     private void OnFlashCleanupTick(object? sender, EventArgs e)

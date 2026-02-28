@@ -185,7 +185,6 @@ public class MainDockFactory : Factory, IDisposable
 
         // Create the docks (top-right hosts the CS2 console)
         var bottomRight = new CampathsDockViewModel { Id = "BottomRight", Title = "Campaths" };
-        var topLeft = new RadarDockViewModel(_gsiServer, _radarConfigProvider, radarSettings, bottomRight, _webSocketClient) { Id = "TopLeft", Title = "Radar" };
         _videoDisplayVm = new VideoDisplayDockViewModel { Id = "TopCenter", Title = "Video Stream" };
         var topRight = new NetConsoleDockViewModel { Id = "TopRight", Title = "Console" };
         var bottomLeft = new SettingsDockViewModel(
@@ -202,6 +201,8 @@ public class MainDockFactory : Factory, IDisposable
             campathEditor: campathEditor)
         { Id = "BottomLeft", Title = "Settings" };
         var bottomCenter = new Viewport3DDockViewModel(viewport3DSettings, freecamSettings, campathEditor, _webSocketClient, _videoDisplayVm, _gsiServer) { Id = "BottomCenter", Title = "3D Viewport" };
+        var topLeft = new RadarDockViewModel(_gsiServer, _radarConfigProvider, radarSettings, bottomRight, _webSocketClient, bottomCenter) { Id = "TopLeft", Title = "Radar" };
+
         bottomCenter.SetInputSender(_inputSender);
 
         // Inject WebSocket and UDP services into video display

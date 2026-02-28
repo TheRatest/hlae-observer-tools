@@ -22,6 +22,7 @@ public interface IViewport3DControl
 
     bool TryGetFreecamState(out ViewportFreecamState state);
     void DisableFreecamInput();
+    void TeleportCamera(Vector3 position, Quaternion rotation, float fov);
     void SetExternalCamera(Vector3 position, Quaternion rotation, float fov);
     void ClearExternalCamera();
     void SetFreecamPose(Vector3 position, Quaternion rotation, float fov);

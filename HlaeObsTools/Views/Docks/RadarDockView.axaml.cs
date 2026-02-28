@@ -1,7 +1,10 @@
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
+using Avalonia.Markup.Xaml;
+using HlaeObsTools.Services.WebSocket;
 using HlaeObsTools.ViewModels.Docks;
+using System.Security.Cryptography;
 
 namespace HlaeObsTools.Views.Docks;
 
@@ -40,8 +43,11 @@ public partial class RadarDockView : UserControl
     {
         if (DataContext is RadarDockViewModel vm && sender is Control ctrl && ctrl.DataContext is RadarPlayerViewModel player)
         {
-            // Not implemented yet
-            // Console.WriteLine($"Player {player.DisplayNumber} pressed (ID: {player.Id})");
+            if(e.Properties.IsLeftButtonPressed)
+                vm.SwitchToPlayer(player);
+            else if(e.Properties.IsMiddleButtonPressed)
+                vm.TeleportViewportCameraToPlayer(player);
+
             e.Handled = true;
         }
     }

@@ -18,7 +18,11 @@ namespace HlaeObsTools.Views.Docks;
 public partial class Viewport3DDockView : UserControl
 {
     private Viewport3DDockViewModel? _viewModel;
-    private IViewport3DControl? _viewport;
+    private IViewport3DControl? _viewport
+    {
+        get => _viewModel?.Viewport;
+        set => _viewModel?.Viewport = value;
+    }
     private Control? _viewportControl;
     private IReadOnlyList<ViewportPin>? _lastPins;
     private CampathEditorViewModel? _campathEditor;

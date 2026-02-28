@@ -15,6 +15,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using HlaeObsTools.Controls;
 
 namespace HlaeObsTools.ViewModels.Docks;
 
@@ -78,6 +79,7 @@ public sealed class Viewport3DDockViewModel : Tool, IDisposable
     }
 
     public Viewport3DSettings Viewport3DSettings => _settings;
+    public IViewport3DControl? Viewport { get; set; }
     public FreecamSettings FreecamSettings => _freecamSettings;
     public HlaeInputSender? InputSender => _inputSender;
     public CampathEditorViewModel CampathEditor { get; }

@@ -528,6 +528,13 @@ public sealed class D3D11Viewport : NativeControlHost, IViewport3DControl
         EndFreecamInput();
     }
 
+    public void TeleportCamera(Vector3 position, Quaternion rotation, float fov)
+    {
+        _freecamTransform.Position = position;
+        _freecamTransform.Orientation = rotation;
+        _freecamTransform.Fov = fov;
+        _externalCameraActive = false;
+    }
     public void SetExternalCamera(Vector3 position, Quaternion rotation, float fov)
     {
         _externalCameraPosition = position;
