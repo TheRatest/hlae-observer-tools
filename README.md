@@ -4,6 +4,7 @@ HLAE Observer Tools is a (remote) observing control system for Counter-Strike 2 
 This repository is a **temporary fork** of the HLAE Observer Tools project with the following changes:
 - HttpListener->Watson Webserver replacement
 - Additional radar background images
+- Clickable radar players
 
 ---
 
