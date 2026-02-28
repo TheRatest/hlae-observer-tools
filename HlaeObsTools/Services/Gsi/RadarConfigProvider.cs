@@ -17,6 +17,7 @@ public sealed class RadarConfig
     public double Scale { get; init; }
     public bool TransparentBackground { get; init; }
     public string? ImagePath { get; init; }
+    public string? ImagePathAlt { get; init; }
     public double? ScaleMinAltitude { get; init; }
     public double? ScaleMaxAltitude { get; init; }
     public IReadOnlyList<RadarLevel> Levels { get; init; } = Array.Empty<RadarLevel>();
@@ -75,6 +76,7 @@ public sealed class RadarConfigProvider
                 var scale = obj.TryGetProperty("scale", out var sc) ? GetDouble(sc) : 1;
                 var transparent = obj.TryGetProperty("radarImageTransparentBackgrond", out var tb) && tb.GetBoolean();
                 string? imageUrl = obj.TryGetProperty("radarImageUrl", out var ru) ? ru.GetString() : null;
+                string? imageUrlAlt = obj.TryGetProperty("radarImageUrlAlt", out var rua) ? rua.GetString() : null;
                 var scaleMinAltitude = GetNullableDouble(obj, "ScaleMinAltitude", "ScaleAltitudeMin");
                 var scaleMaxAltitude = GetNullableDouble(obj, "ScaleMaxAltitude", "ScaleAltitudeMax");
 
@@ -112,6 +114,7 @@ public sealed class RadarConfigProvider
                     Scale = scale,
                     TransparentBackground = transparent,
                     ImagePath = imageUrl,
+                    ImagePathAlt = imageUrlAlt,
                     ScaleMinAltitude = scaleMinAltitude,
                     ScaleMaxAltitude = scaleMaxAltitude,
                     Levels = levels.OrderByDescending(l => l.AltitudeMin).ToList()
